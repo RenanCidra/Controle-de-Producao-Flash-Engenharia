@@ -8,7 +8,7 @@ import {
   protheusProductionOrders,
   protheusProductionAppointments,
 } from '../../db/schema.ts';
-import { sql, eq, desc, and } from 'drizzle-orm';
+import { sql, eq, desc, and, ilike, or } from 'drizzle-orm';
 import {
   NormalizedProduct,
   NormalizedStructure,
@@ -559,5 +559,50 @@ export class ProtheusSyncRepository {
       .from(protheusImportBatches)
       .orderBy(desc(protheusImportBatches.id))
       .limit(limit);
+  }
+
+  public static async listNormalizedTableData(params: { entity: string; search: string; page: number; pageSize: number }) {
+    const sourceMap: Record<string, { table: any; searchColumns: any[] }> = {
+      salesOrders: {
+        table: protheusSalesOrders,
+        searchColumns: [protheusSalesOrders.numeroPv, protheusSalesOrders.itemPv, protheusSalesOrders.clienteNome, protheusSalesOrders.codigoProduto, protheusSalesOrders.descricaoProduto],
+      },
+      productionOrders: {
+        table: protheusProductionOrders,
+        searchColumns: [protheusProductionOrders.numeroOp, protheusProductionOrders.codigoProduto, protheusProductionOrders.descricaoProduto, protheusProductionOrders.numeroPv],
+      },
+      products: {
+        table: protheusProducts,
+        searchColumns: [protheusProducts.codigoProduto, protheusProducts.descricao, protheusProducts.tipo],
+      },
+      structures: {
+        table: protheusProductStructures,
+        searchColumns: [protheusProductStructures.codigoProdutoPai, protheusProductStructures.codigoComponente, protheusProductStructures.descricaoComponente],
+      },
+      routings: {
+        table: protheusRoutings,
+        searchColumns: [protheusRoutings.codigoProduto, protheusRoutings.codigoRoteiro, protheusRoutings.sequenciaOperacao, protheusRoutings.codigoOperacao, protheusRoutings.descricaoOperacao, protheusRoutings.postoTrabalho],
+      },
+      appointments: {
+        table: protheusProductionAppointments,
+        searchColumns: [protheusProductionAppointments.numeroOp, protheusProductionAppointments.sequenciaOperacao, protheusProductionAppointments.codigoOperacao, protheusProductionAppointments.descricaoOperacao, protheusProductionAppointments.postoTrabalho, protheusProductionAppointments.operador],
+      },
+    };
+    const source = sourceMap[params.entity];
+    if (!source) throw new Error('UNKNOWN_PROTHEUS_ENTITY');
+
+    const page = Math.max(1, Math.floor(params.page));
+    const pageSize = Math.min(100, Math.max(1, Math.floor(params.pageSize)));
+    const offset = (page - 1) * pageSize;
+    const search = params.search.trim().slice(0, 100);
+    const condition = search
+      ? or(...source.searchColumns.map((column) => ilike(column, `%${search}%`)))
+      : undefined;
+
+    const [rows, countRows] = await Promise.all([
+      db.select().from(source.table).where(condition).orderBy(desc(source.table.id)).limit(pageSize).offset(offset),
+      db.select({ count: sql<number>`count(*)` }).from(source.table).where(condition),
+    ]);
+    return { rows, page, pageSize, total: Number(countRows[0]?.count || 0) };
   }
 }

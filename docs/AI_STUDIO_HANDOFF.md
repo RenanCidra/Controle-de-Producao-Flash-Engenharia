@@ -40,6 +40,10 @@ Quando o acesso à origem for definido, implementar sincronização incremental 
 - Painel consulta automaticamente as estatísticas a cada cinco minutos enquanto estiver aberto e oferece botão **Atualizar painel**.
 - Painel mostra o horário da última consulta, data/tipo/entidade/quantidade da carga mais recente e erro de atualização. A interface deixa explícito que atualizar painel não equivale a buscar dados no Protheus.
 - Nenhuma chave de apontamento foi presumida ou adicionada sem amostra da tabela de origem.
+- Navegação principal enxugada: painel, pedidos/OPs (rastreabilidade Protheus) e configurações. Estoque e qualidade deixam de aparecer como módulos operacionais nesta fase; seus módulos e dados locais são preservados no código/banco para evitar exclusão destrutiva.
+- Sensores/APIs, conectores e cadastros legados de linhas de produção passam para configurações e ficam restritos a perfis privilegiados na interface. As linhas locais são identificadas como legado, pois ainda não representam o mapeamento oficial de recursos/subsetores do Protheus.
+- Em Configurações → Conectores Protheus, as tabelas normalizadas disponíveis são clicáveis e abrem uma grade paginada com busca: pedidos (SC5/SC6), OPs (SC2), produtos (SB1), estruturas (SG1), roteiros (SG2) e apontamentos (SH6). SC5 e SC6 estão consolidadas no mesmo armazenamento de pedidos/itens; a tela mostra explicitamente que é dado normalizado local, não dump bruto da tabela física.
+- A navegação de dados usa `protheus-data:read` no servidor (ADMIN, SUPERVISOR e AUDITOR; OPERATOR sem acesso). Ingestão manual requer `integrations:write`. As relações de empenhos e de recursos/setores aparecem como pendentes, sem inventar tabela/campos que ainda não foram fornecidos.
 
 ## Arquitetura de acesso já existente
 

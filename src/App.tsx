@@ -146,14 +146,24 @@ export default function App() {
         const res = await api.getIntegrations();
         setIntegrations(res);
       } else if (tab === 'settings') {
-        const [org, usr, logs] = await Promise.all([
-          api.getOrg(),
-          api.getUsers(),
-          api.getAuditLogs({ limit: 100 }),
-        ]);
+        const org = await api.getOrg();
         setFactoryProfile(org);
-        setUsers(usr);
-        setAuditLogs(logs);
+        if (['ADMIN', 'SUPERVISOR', 'AUDITOR'].includes(currentUser?.role || '')) {
+          const logs = await api.getAuditLogs({ limit: 100 });
+          setAuditLogs(logs);
+        }
+        if (currentUser?.role === 'ADMIN') {
+          const usr = await api.getUsers();
+          setUsers(usr);
+        }
+        if (['ADMIN', 'SUPERVISOR'].includes(currentUser?.role || '')) {
+          const [productionLines, configuredIntegrations] = await Promise.all([
+            api.getProductionLines(),
+            api.getIntegrations(),
+          ]);
+          setLines(productionLines);
+          setIntegrations(configuredIntegrations);
+        }
       }
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -264,6 +274,10 @@ export default function App() {
           users={users}
           currentUser={currentUser}
           auditLogs={auditLogs}
+          lines={lines}
+          integrations={integrations}
+          onReloadLines={() => api.getProductionLines().then(setLines).catch((err) => showToast(err.message, 'error'))}
+          onReloadIntegrations={() => api.getIntegrations().then(setIntegrations).catch((err) => showToast(err.message, 'error'))}
           onReloadAudit={() =>
             api.getAuditLogs({ limit: 100 }).then(setAuditLogs).catch((err) => showToast(err.message, 'error'))
           }
@@ -288,7 +302,6 @@ export default function App() {
             onOpenAuth={() => setAuthModalOpen(true)}
             onLogout={handleLogout}
             onOpenSettings={handleNavigateToSettings}
-            stats={stats}
           />
 
           <main className="flex-1 flex flex-col overflow-hidden bg-[#F1F4F7]">

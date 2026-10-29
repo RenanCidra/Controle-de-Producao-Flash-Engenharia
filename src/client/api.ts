@@ -376,6 +376,16 @@ class ApiService {
     return this.request<any[]>(`/protheus/batches?limit=${limit}`);
   }
 
+  public getProtheusTableData(entity: string, params?: { search?: string; page?: number; pageSize?: number }) {
+    const query = new URLSearchParams();
+    if (params?.search) query.set('search', params.search);
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.pageSize) query.set('pageSize', String(params.pageSize));
+    return this.request<{ rows: Record<string, unknown>[]; page: number; pageSize: number; total: number }>(
+      `/protheus/table-data/${encodeURIComponent(entity)}?${query.toString()}`,
+    );
+  }
+
   // ==========================================
   // MODULE 2: ADVANCED TRACEABILITY ENGINE
   // ==========================================

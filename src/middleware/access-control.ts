@@ -4,6 +4,7 @@ import type { AuthenticatedRequest } from './auth.middleware.ts';
 
 export const PERMISSIONS = [
   'audit:read', 'integrations:read', 'integrations:write', 'integrations:delete',
+  'protheus-data:read',
   'organization:read', 'organization:manage', 'accounts:manage',
   'production-lines:read', 'production-lines:write', 'production-lines:delete',
   'inventory:read', 'inventory:create', 'inventory:update', 'inventory:delete',
@@ -18,12 +19,12 @@ const ROLE_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>> = {
   ADMIN: new Set(PERMISSIONS),
   SUPERVISOR: new Set(PERMISSIONS.filter((permission) => !['accounts:manage', 'organization:manage', 'integrations:delete'].includes(permission))),
   OPERATOR: new Set([
-    'integrations:read', 'organization:read', 'production-lines:read',
+    'integrations:read', 'organization:read',
     'inventory:read', 'inventory:update', 'production-orders:read', 'production-orders:update', 'quality:read',
   ]),
   AUDITOR: new Set([
     'audit:read', 'integrations:read', 'organization:read', 'production-lines:read',
-    'inventory:read', 'production-orders:read', 'quality:read',
+    'inventory:read', 'production-orders:read', 'quality:read', 'protheus-data:read',
   ]),
 };
 

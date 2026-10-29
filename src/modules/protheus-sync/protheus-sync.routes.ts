@@ -1,20 +1,22 @@
 import { Router } from 'express';
 import { ProtheusSyncController } from './protheus-sync.controller.ts';
+import { requirePermission } from '../../middleware/access-control.ts';
 
 const protheusRouter = Router();
 
 // Ingestion endpoints (Both REST API JSON & File Import)
-protheusRouter.post('/sync/rest', ProtheusSyncController.syncRest);
-protheusRouter.post('/sync/upload', ProtheusSyncController.syncUpload);
+protheusRouter.post('/sync/rest', requirePermission('integrations:write'), ProtheusSyncController.syncRest);
+protheusRouter.post('/sync/upload', requirePermission('integrations:write'), ProtheusSyncController.syncUpload);
 
 // Traceability & Query endpoints
-protheusRouter.get('/pv', ProtheusSyncController.getSalesOrders);
-protheusRouter.get('/pv/:numeroPv', ProtheusSyncController.getSalesOrderDetail);
+protheusRouter.get('/pv', requirePermission('protheus-data:read'), ProtheusSyncController.getSalesOrders);
+protheusRouter.get('/pv/:numeroPv', requirePermission('protheus-data:read'), ProtheusSyncController.getSalesOrderDetail);
 
-protheusRouter.get('/op', ProtheusSyncController.getProductionOrders);
-protheusRouter.get('/op/:numeroOp', ProtheusSyncController.getProductionOrderDetail);
+protheusRouter.get('/op', requirePermission('protheus-data:read'), ProtheusSyncController.getProductionOrders);
+protheusRouter.get('/op/:numeroOp', requirePermission('protheus-data:read'), ProtheusSyncController.getProductionOrderDetail);
 
-protheusRouter.get('/products', ProtheusSyncController.getProducts);
-protheusRouter.get('/batches', ProtheusSyncController.getBatches);
+protheusRouter.get('/products', requirePermission('protheus-data:read'), ProtheusSyncController.getProducts);
+protheusRouter.get('/batches', requirePermission('protheus-data:read'), ProtheusSyncController.getBatches);
+protheusRouter.get('/table-data/:entity', requirePermission('protheus-data:read'), ProtheusSyncController.getTableData);
 
 export default protheusRouter;

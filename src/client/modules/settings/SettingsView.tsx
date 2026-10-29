@@ -23,6 +23,9 @@ import {
   FileText,
 } from 'lucide-react';
 import { ProtheusSyncView } from '../protheus-sync/ProtheusSyncView.tsx';
+import { ProtheusTableBrowser } from '../protheus-sync/ProtheusTableBrowser.tsx';
+import { ProductionLinesView } from '../production-lines/ProductionLinesView.tsx';
+import { IntegrationsView } from '../integrations/IntegrationsView.tsx';
 import { FactoryView } from '../factory/FactoryView.tsx';
 import { UsersView } from '../users/UsersView.tsx';
 import { AuditView } from '../audit/AuditView.tsx';
@@ -35,6 +38,8 @@ export type SettingsSubTab =
   | 'general'
   | 'cloudsql'
   | 'connectors'
+  | 'production-lines'
+  | 'integrations'
   | 'security';
 
 interface SettingsViewProps {
@@ -51,6 +56,10 @@ interface SettingsViewProps {
   onError: (msg: string) => void;
   auditLogs: any[];
   onReloadAudit: () => void;
+  lines: any[];
+  integrations: any[];
+  onReloadLines: () => void;
+  onReloadIntegrations: () => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -67,15 +76,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onError,
   auditLogs,
   onReloadAudit,
+  lines,
+  integrations,
+  onReloadLines,
+  onReloadIntegrations,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>(initialSubTab);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAuditEvents, setShowAuditEvents] = useState(false);
+  const [selectedProtheusTable, setSelectedProtheusTable] = useState<{ entity: string; table: string } | null>(null);
 
   // General Settings state
   const [language, setLanguage] = useState(getAppLanguage());
   const [timezone, setTimezone] = useState(factoryProfile?.timezone || 'America/Sao_Paulo');
-  const [syncInterval, setSyncInterval] = useState('30s');
   const [autoSaveAudit, setAutoSaveAudit] = useState(true);
 
   interface MenuItem {
@@ -112,6 +125,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           icon: Users,
           badge: users?.length ? `${users.length}` : undefined,
         },
+        { id: 'production-lines', label: 'Setores e postos', icon: Layers },
       ],
     },
     {
@@ -132,6 +146,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           label: 'Conectores Protheus',
           icon: Cpu,
         },
+        { id: 'integrations', label: 'Sensores e APIs', icon: Cpu },
         {
           id: 'security',
           label: 'Auditoria & Segurança',
@@ -145,7 +160,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const visibleGroups = menuGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => item.id !== 'users' || currentUser?.role === 'ADMIN'),
+      items: group.items.filter((item) => {
+        if (item.id === 'users' || item.id === 'cloudsql') return currentUser?.role === 'ADMIN';
+        if (['data-sync', 'production-lines', 'integrations'].includes(item.id)) return ['ADMIN', 'SUPERVISOR'].includes(currentUser?.role);
+        if (item.id === 'connectors' || item.id === 'security') return ['ADMIN', 'SUPERVISOR', 'AUDITOR'].includes(currentUser?.role);
+        return true;
+      }),
     }))
     .filter((group) => group.items.length > 0);
 
@@ -379,23 +399,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
               </div>
 
-              {/* Setting Box 5: Atualização de Apontamentos */}
+              {/* Setting Box 5: Consulta do espelho */}
               <div className="p-4 rounded-xl bg-[#141B24] border border-[#202936] flex items-center justify-between">
                 <div>
-                  <h4 className="text-xs font-bold text-white">Ciclo de Atualização em Tempo Real</h4>
+                  <h4 className="text-xs font-bold text-white">Atualização do painel</h4>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Intervalo de polling para apontamentos de postos de trabalho e OPs
+                    Consulta as métricas do espelho local; a busca direta no Protheus ainda não está conectada.
                   </p>
                 </div>
-                <select
-                  value={syncInterval}
-                  onChange={(e) => setSyncInterval(e.target.value)}
-                  className="rounded-lg bg-[#1D2733] border border-[#2D3A4B] px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#FFAA00] cursor-pointer"
-                >
-                  <option value="15s">15 segundos</option>
-                  <option value="30s">30 segundos (Padrão)</option>
-                  <option value="60s">1 minuto</option>
-                </select>
+                <span className="rounded-lg border border-[#2D3A4B] bg-[#1D2733] px-3 py-1.5 text-xs font-semibold text-[#FFAA00]">A cada 5 minutos</span>
               </div>
             </div>
           )}
@@ -509,15 +521,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <div className="space-y-2 text-xs text-slate-300">
                     <div className="flex justify-between py-1 border-b border-[#202936]">
                       <span className="text-slate-400">Total de Pedidos (PV):</span>
-                      <span className="font-mono font-bold text-white">{stats?.totalProtheusPv ?? 48}</span>
+                      <span className="font-mono font-bold text-white">{stats?.totalProtheusPv ?? '—'}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-[#202936]">
                       <span className="text-slate-400">Total de Ordens (OP):</span>
-                      <span className="font-mono font-bold text-white">{stats?.totalProtheusOp ?? 24}</span>
-                    </div>
-                    <div className="flex justify-between py-1">
-                      <span className="text-slate-400">Itens em Estoque:</span>
-                      <span className="font-mono font-bold text-white">{stats?.totalInventoryItems ?? 312}</span>
+                      <span className="font-mono font-bold text-white">{stats?.totalProtheusOp ?? '—'}</span>
                     </div>
                   </div>
                 </div>
@@ -533,34 +541,53 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 Mapeamento das tabelas de produção TOTVS e normalização Flash Standard.
               </p>
 
-              <div className="space-y-3">
-                {[
-                  { table: 'SC5', desc: 'Cabeçalho de Pedidos de Venda (PVs, clientes e datas)' },
-                  { table: 'SC6', desc: 'Itens de Pedidos de Venda (produtos, quantidades e prazos)' },
-                  { table: 'SC2', desc: 'Ordens de Produção (número da OP, roteiro, empenhos e status)' },
-                  { table: 'SG1', desc: 'Estruturas de Produtos (BOM de insumos e matérias-primas)' },
-                  { table: 'SG2', desc: 'Roteiros de Operações e Postos de Trabalho Fabris' },
-                  { table: 'SD3', desc: 'Apontamentos de Chão de Fábrica e Produção Realizada' },
-                ].map((item) => (
-                  <div
-                    key={item.table}
-                    className="p-4 rounded-xl bg-[#141B24] border border-[#202936] flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono font-bold text-sm text-[#FFAA00] bg-[#1E2734] px-2.5 py-1 rounded border border-[#FFAA00]/30">
-                        {item.table}
+              {selectedProtheusTable ? (
+                <ProtheusTableBrowser
+                  entity={selectedProtheusTable.entity}
+                  tableLabel={selectedProtheusTable.table}
+                  onBack={() => setSelectedProtheusTable(null)}
+                />
+              ) : (
+                <div className="space-y-3">
+                  {[
+                    { table: 'SC5 / SC6', desc: 'Pedidos de venda e seus itens: cliente, produto, quantidades e prazos.', entity: 'salesOrders' },
+                    { table: 'SC2', desc: 'Ordens de produção e vínculo com pedido, produto e roteiro.', entity: 'productionOrders' },
+                    { table: 'SB1', desc: 'Cadastro de produtos espelhado.', entity: 'products' },
+                    { table: 'SG1', desc: 'Estrutura de produto: relação entre produto pai e componente.', entity: 'structures' },
+                    { table: 'SG2', desc: 'Roteiros e operações por produto, com posto/recurso quando fornecido.', entity: 'routings' },
+                    { table: 'SH6', desc: 'Apontamentos de operações de produção recebidos do Protheus.', entity: 'appointments' },
+                  ].map((item) => (
+                    <button key={item.table} onClick={() => setSelectedProtheusTable({ entity: item.entity, table: item.table })} className="flex w-full items-center justify-between rounded-xl border border-[#202936] bg-[#141B24] p-4 text-left transition hover:border-[#FFAA00]/60 hover:bg-[#19222D]">
+                      <span className="flex items-center gap-3">
+                        <span className="rounded border border-[#FFAA00]/30 bg-[#1E2734] px-2.5 py-1 font-mono text-sm font-bold text-[#FFAA00]">{item.table}</span>
+                        <span><span className="block text-xs font-semibold text-white">Consultar dados normalizados</span><span className="mt-0.5 block text-xs text-slate-400">{item.desc}</span></span>
                       </span>
-                      <div>
-                        <h4 className="text-xs font-semibold text-white">Tabela {item.table}</h4>
-                        <p className="text-xs text-slate-400 mt-0.5">{item.desc}</p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
-                      Normalizado
-                    </span>
+                      <span className="text-xs font-semibold text-[#FFAA00]">Ver dados →</span>
+                    </button>
+                  ))}
+                  <div className="grid gap-3 pt-2 sm:grid-cols-2">
+                    {[
+                      { label: 'Empenhos entre OPs', detail: 'Aguardando amostra/campos da tabela para identificar OP pai e OP filha.' },
+                      { label: 'Recursos e setores', detail: 'Aguardando a relação oficial de recursos/postos com setores e subsetores.' },
+                    ].map((item) => <div key={item.label} className="rounded-xl border border-dashed border-[#344154] bg-[#111720] p-4"><h4 className="text-xs font-semibold text-slate-300">{item.label} · pendente</h4><p className="mt-1 text-xs text-slate-500">{item.detail}</p></div>)}
                   </div>
-                ))}
-              </div>
+                  <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-relaxed text-amber-200/80">A consulta exibe os dados normalizados armazenados neste sistema, não uma cópia bruta das tabelas físicas do Protheus. SC5 e SC6 estão consolidadas no mesmo conjunto de pedidos/itens. A API do Protheus ainda não está conectada para buscar registros sob demanda.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeSubTab === 'production-lines' && (
+            <div className="mx-auto max-w-6xl space-y-5">
+                <div><h3 className="text-xl font-bold text-white">Linhas de produção (cadastro local)</h3><p className="mt-1 text-xs text-slate-400">Configuração legada para perfis privilegiados. Ainda não representa o mapeamento oficial de recursos e subsetores do Protheus.</p></div>
+              <ProductionLinesView lines={lines} onReload={onReloadLines} onSuccess={onSuccess} onError={onError} />
+            </div>
+          )}
+
+          {activeSubTab === 'integrations' && (
+            <div className="mx-auto max-w-6xl space-y-5">
+              <div><h3 className="text-xl font-bold text-white">Sensores e APIs</h3><p className="mt-1 text-xs text-slate-400">Conectores e endpoints são configurações técnicas, restritas a perfis privilegiados.</p></div>
+              <IntegrationsView integrations={integrations} onReload={onReloadIntegrations} onSuccess={onSuccess} onError={onError} />
             </div>
           )}
 
@@ -586,7 +613,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div>
                   <h4 className="text-xs font-bold text-white">Políticas de Acesso (RBAC)</h4>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Restringe permissões por operador, inspetor de qualidade e administrador
+                    Restringe permissões por operador, supervisor, auditor e administrador
                   </p>
                 </div>
                 <button

@@ -4,12 +4,6 @@ import {
   GitBranch,
   Database,
   FileText,
-  Factory,
-  ShieldCheck,
-  Boxes,
-  Building,
-  Users,
-  Webhook,
   Settings,
   ChevronDown,
   ChevronRight,
@@ -18,7 +12,6 @@ import {
   LogIn,
   LucideIcon,
   Zap,
-  HardDrive,
 } from 'lucide-react';
 import { AuthUser } from '../api.ts';
 
@@ -39,16 +32,6 @@ interface SidebarProps {
   onOpenAuth: () => void;
   onLogout: () => void;
   onOpenSettings?: (subTab?: any) => void;
-  stats: {
-    totalUsers?: number;
-    totalInventoryItems?: number;
-    totalProductionLines?: number;
-    totalProductionOrders?: number;
-    totalQualityInspections?: number;
-    totalIntegrations?: number;
-    totalProtheusPv?: number;
-    totalProtheusOp?: number;
-  } | null;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -58,25 +41,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenAuth,
   onLogout,
   onOpenSettings,
-  stats,
 }) => {
   const navItems: { id: ActiveTab; label: string; icon: LucideIcon; badge?: number }[] = [
     { id: 'dashboard', label: 'Painel Geral', icon: Home },
-    {
-      id: 'traceability',
-      label: 'Rastreabilidade PV ↔ OP',
-      icon: GitBranch,
-    },
-    { id: 'production-orders', label: 'Ordens de Produção', icon: FileText },
-    { id: 'production-lines', label: 'Linhas e Postos', icon: Factory },
-    { id: 'quality', label: 'Controle de Qualidade', icon: ShieldCheck },
-    { id: 'inventory', label: 'Estoque de Insumos', icon: Boxes },
-    {
-      id: 'integrations',
-      label: 'Sensores e APIs',
-      icon: Webhook,
-      badge: stats?.totalIntegrations || 54,
-    },
+    { id: 'traceability', label: 'Pedidos e OPs', icon: GitBranch },
+    { id: 'settings', label: 'Configurações', icon: Settings },
   ];
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -150,7 +119,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           return (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => {
+                if (item.id === 'settings' && onOpenSettings) onOpenSettings('general');
+                else setActiveTab(item.id);
+              }}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition-all group ${
                 isActive
                   ? 'bg-[#2A2316] text-[#FFAA00] border border-[#FFAA00]/70 shadow-sm font-semibold'
