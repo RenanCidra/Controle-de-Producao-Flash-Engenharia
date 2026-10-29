@@ -36,7 +36,7 @@ interface DashboardViewProps {
   refreshError: string | null;
   statsUpdatedAt: string | null;
   onRefresh: () => void;
-  onNavigate: (tab: ActiveTab, subTab?: 'data-sync' | 'factory' | 'users' | 'general') => void;
+  onNavigate: (tab: ActiveTab) => void;
 }
 
 const formatDateTime = (date: string | null | undefined) => {
@@ -56,12 +56,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigate,
 }) => {
   const metrics = [
-    { label: 'Pedidos de venda', value: stats?.totalProtheusPv, icon: FileText, color: '#C27803', tab: 'traceability' as ActiveTab },
-    { label: 'Ordens de produção', value: stats?.totalProtheusOp, icon: GitBranch, color: '#1E293B', tab: 'traceability' as ActiveTab },
-    { label: 'Apontamentos recebidos', value: stats?.totalProtheusAppointments, icon: ClipboardList, color: '#0284C7', tab: 'traceability' as ActiveTab },
-    { label: 'Produtos espelhados', value: stats?.totalProtheusProducts, icon: Boxes, color: '#9333EA', tab: 'settings' as ActiveTab, subTab: 'data-sync' as const },
-    { label: 'Componentes de estrutura', value: stats?.totalProtheusStructures, icon: Layers, color: '#159B72', tab: 'settings' as ActiveTab, subTab: 'data-sync' as const },
-    { label: 'Operações de roteiro', value: stats?.totalProtheusRoutings, icon: Activity, color: '#475569', tab: 'settings' as ActiveTab, subTab: 'data-sync' as const },
+    { label: 'Pedidos de venda', value: stats?.totalProtheusPv, icon: FileText, color: '#C27803' },
+    { label: 'Ordens de produção', value: stats?.totalProtheusOp, icon: GitBranch, color: '#1E293B' },
+    { label: 'Apontamentos recebidos', value: stats?.totalProtheusAppointments, icon: ClipboardList, color: '#0284C7' },
+    { label: 'Produtos espelhados', value: stats?.totalProtheusProducts, icon: Boxes, color: '#9333EA' },
+    { label: 'Componentes de estrutura', value: stats?.totalProtheusStructures, icon: Layers, color: '#159B72' },
+    { label: 'Operações de roteiro', value: stats?.totalProtheusRoutings, icon: Activity, color: '#475569' },
   ];
   const latestImport = stats?.latestProtheusImport;
 
@@ -84,9 +84,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="flex shrink-0 flex-wrap items-center gap-3">
             <button onClick={() => onNavigate('traceability')} className="inline-flex items-center gap-2 rounded-lg bg-[#FFAA00] px-4 py-2.5 text-xs font-bold text-[#151C25] shadow-sm transition hover:bg-[#e69900]">
               <GitBranch className="h-4 w-4" /><span>Rastreabilidade de PV → OP</span><ChevronRight className="h-4 w-4" />
-            </button>
-            <button onClick={() => onNavigate('settings', 'data-sync')} className="inline-flex items-center gap-2 rounded-lg border border-[#384656] bg-[#1B232E]/90 px-4 py-2.5 text-xs font-semibold text-white backdrop-blur-xs transition hover:bg-[#253242]">
-              <Database className="h-4 w-4" /><span>Cargas recebidas</span>
             </button>
           </div>
         </div>
@@ -113,8 +110,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </section>
 
       <section aria-label="Indicadores do espelho Protheus" className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
-        {metrics.map(({ label, value, icon: Icon, color, tab, subTab }) => (
-          <button key={label} type="button" onClick={() => onNavigate(tab, subTab)} className="group flex items-center justify-between rounded-lg border border-l-4 border-[#DCE3EB] bg-white p-4 text-left shadow-xs transition hover:border-slate-300 hover:shadow-md" style={{ borderLeftColor: color }}>
+        {metrics.map(({ label, value, icon: Icon, color }) => (
+          <div key={label} className="flex items-center rounded-lg border border-l-4 border-[#DCE3EB] bg-white p-4 text-left shadow-xs" style={{ borderLeftColor: color }}>
             <span className="flex min-w-0 items-center gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white shadow-xs" style={{ backgroundColor: color }}><Icon className="h-5 w-5" /></span>
               <span>
@@ -122,8 +119,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <span className="mt-1 block font-mono text-xl font-bold leading-none text-[#263548]">{value === undefined ? '—' : value.toLocaleString('pt-BR')}</span>
               </span>
             </span>
-            <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-[#FFAA00]" />
-          </button>
+          </div>
         ))}
       </section>
     </div>

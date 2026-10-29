@@ -306,7 +306,6 @@ export default function App() {
 
           <main className="flex-1 flex flex-col overflow-hidden bg-[#F1F4F7]">
             <Header
-              activeTab={activeTab}
               plantCode={factoryProfile?.plantCode}
               currentUser={currentUser}
               loading={loading || statsLoading}
@@ -315,7 +314,6 @@ export default function App() {
                 else void loadTabData(activeTab);
               }}
               onOpenAuth={() => setAuthModalOpen(true)}
-              onOpenSettings={handleNavigateToSettings}
             />
 
             <div className="flex-1 overflow-y-auto p-6 bg-[#F1F4F7]">
@@ -326,19 +324,12 @@ export default function App() {
                   refreshError={statsError}
                   statsUpdatedAt={statsUpdatedAt}
                   onRefresh={() => void loadStats()}
-                  onNavigate={(tab, subTab) => {
-                    if (tab === 'settings') {
-                      handleNavigateToSettings(subTab || 'data-sync');
-                    } else {
-                      setActiveTab(tab);
-                    }
-                  }}
+                  onNavigate={(tab) => setActiveTab(tab)}
                 />
               )}
 
               {activeTab === 'traceability' && (
                 <TraceabilityView
-                  onNavigateToSync={() => handleNavigateToSettings('data-sync')}
                   onSuccess={(msg) => showToast(msg, 'success')}
                   onError={(msg) => showToast(msg, 'error')}
                 />

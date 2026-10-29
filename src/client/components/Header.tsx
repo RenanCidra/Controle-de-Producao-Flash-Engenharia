@@ -4,34 +4,27 @@ import {
   Calendar,
   Bell,
   MapPin,
-  ChevronDown,
   RefreshCw,
   ShieldCheck,
   Lock,
-  Settings,
 } from 'lucide-react';
 import { AuthUser } from '../api.ts';
-import { ActiveTab } from './Sidebar.tsx';
 import { getIntlLocale } from '../i18n/index.ts';
 
 interface HeaderProps {
-  activeTab: ActiveTab;
   plantCode?: string | null;
   currentUser: AuthUser | null;
   loading: boolean;
   onRefresh: () => void;
   onOpenAuth: () => void;
-  onOpenSettings?: (subTab?: 'data-sync' | 'factory' | 'users' | 'general') => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  activeTab,
   plantCode,
   currentUser,
   loading,
   onRefresh,
   onOpenAuth,
-  onOpenSettings,
 }) => {
   const [currentDateTime, setCurrentDateTime] = useState('');
 
@@ -78,7 +71,7 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Date and time display */}
         <div className="hidden sm:flex items-center gap-2 text-xs text-[#64748B] font-mono">
           <Calendar className="h-4 w-4 text-slate-400" />
-          <span>{currentDateTime || '28/10/2026 12:37'}</span>
+          <span>{currentDateTime}</span>
         </div>
 
         {/* Notifications with amber badge */}
@@ -90,29 +83,11 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-[#FFAA00] ring-2 ring-white"></span>
         </button>
 
-        {/* Plant Selector - clicks to open plant settings */}
-        <button
-          onClick={() => onOpenSettings?.('factory')}
-          title="Ver configurações da planta industrial"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#DCE3EB] bg-white text-xs font-medium text-[#263548] hover:bg-slate-50 transition cursor-pointer shadow-xs"
-        >
+        {/* Current plant context (settings are opened only from the profile menu) */}
+        <div title="Planta atual" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#DCE3EB] bg-white text-xs font-medium text-[#263548] shadow-xs">
           <MapPin className="h-3.5 w-3.5 text-[#FFAA00]" />
           <span>{plantCode || 'Planta Sorocaba'}</span>
-          <ChevronDown className="h-3.5 w-3.5 text-slate-400 ml-1" />
-        </button>
-
-        {/* System Settings Shortcut */}
-        <button
-          onClick={() => onOpenSettings?.()}
-          title="Configurações do Sistema"
-          className={`p-1.5 rounded-md border border-[#DCE3EB] transition ${
-            activeTab === 'settings'
-              ? 'bg-[#151C25] text-[#FFAA00] border-[#151C25]'
-              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
-          }`}
-        >
-          <Settings className="h-3.5 w-3.5" />
-        </button>
+        </div>
 
         {/* Refresh button */}
         <button

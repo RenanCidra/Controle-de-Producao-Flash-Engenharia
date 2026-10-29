@@ -44,6 +44,13 @@ Quando o acesso à origem for definido, implementar sincronização incremental 
 - Sensores/APIs, conectores e cadastros legados de linhas de produção passam para configurações e ficam restritos a perfis privilegiados na interface. As linhas locais são identificadas como legado, pois ainda não representam o mapeamento oficial de recursos/subsetores do Protheus.
 - Em Configurações → Conectores Protheus, as tabelas normalizadas disponíveis são clicáveis e abrem uma grade paginada com busca: pedidos (SC5/SC6), OPs (SC2), produtos (SB1), estruturas (SG1), roteiros (SG2) e apontamentos (SH6). SC5 e SC6 estão consolidadas no mesmo armazenamento de pedidos/itens; a tela mostra explicitamente que é dado normalizado local, não dump bruto da tabela física.
 - A navegação de dados usa `protheus-data:read` no servidor (ADMIN, SUPERVISOR e AUDITOR; OPERATOR sem acesso). Ingestão manual requer `integrations:write`. As relações de empenhos e de recursos/setores aparecem como pendentes, sem inventar tabela/campos que ainda não foram fornecidos.
+- Configurações devem ser abertas somente pelo menu do perfil do usuário. Remover/evitar atalhos para configurações no menu principal, cabeçalho, dashboard e telas operacionais. A barra lateral principal deve crescer com funções de produção; atualmente reserva entradas visíveis, desabilitadas e marcadas “Planejado” para Gestão de Ocorrências e PMP.
+
+## Direção conceitual para módulos futuros
+
+- **PMP — Mestre da Produção:** transformar a planilha mestre em uma visão operacional consolidada, não em uma cópia editável de planilha. Como hipótese inicial, relacionar demanda/PVs priorizados às OPs e quantidades, prazos, roteiro esperado, apontamentos já recebidos, próxima etapa/lacunas e dependências de OP filha. O MVP deve refletir dados Protheus e indicar origem/atualização. Não assumir que o sistema emitirá ou reprogramará OPs, criará um calendário/capacidade finita ou escreverá de volta no ERP sem decisão explícita da Flash.
+- **Gestão de ocorrências:** futuro módulo para registrar e acompanhar desvios/ocorrências associados a PV, OP, produto, operação, data e recurso/setor quando conhecido; manter status e ações de contenção/correção para evitar redigitação em planilhas/folhas de verificação. Categorias, responsáveis, aprovações, indicadores e formulários ainda precisam ser levantados com a empresa.
+- Antes de desenvolver esses módulos, pedir ao usuário exemplo da planilha mestre atual e descrição de como priorizam pedidos e decidem sequência; para ocorrências, pedir a folha de verificação e campos/indicadores atuais. Usar exemplos anonimizados.
 
 ## Arquitetura de acesso já existente
 

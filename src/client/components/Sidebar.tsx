@@ -3,7 +3,8 @@ import {
   Home,
   GitBranch,
   Database,
-  FileText,
+  ClipboardList,
+  CalendarDays,
   Settings,
   ChevronDown,
   ChevronRight,
@@ -42,10 +43,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
   onOpenSettings,
 }) => {
-  const navItems: { id: ActiveTab; label: string; icon: LucideIcon; badge?: number }[] = [
+  const navItems: { id?: ActiveTab; label: string; icon: LucideIcon; badge?: string; planned?: boolean }[] = [
     { id: 'dashboard', label: 'Painel Geral', icon: Home },
     { id: 'traceability', label: 'Pedidos e OPs', icon: GitBranch },
-    { id: 'settings', label: 'Configurações', icon: Settings },
+    { label: 'Gestão de ocorrências', icon: ClipboardList, badge: 'Planejado', planned: true },
+    { label: 'PMP · Mestre da Produção', icon: CalendarDays, badge: 'Planejado', planned: true },
   ];
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -115,15 +117,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <nav className="flex-1 overflow-y-auto px-3 py-1 space-y-1">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = activeTab === item.id;
+          const isActive = item.id !== undefined && activeTab === item.id;
           return (
             <button
-              key={item.id}
-              onClick={() => {
-                if (item.id === 'settings' && onOpenSettings) onOpenSettings('general');
-                else setActiveTab(item.id);
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition-all group ${
+              key={item.id || item.label}
+              disabled={item.planned}
+              title={item.planned ? 'Módulo planejado para uma próxima etapa' : undefined}
+              onClick={() => item.id && setActiveTab(item.id)}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition-all group ${item.planned ? 'cursor-not-allowed text-slate-500 border border-transparent' : ''} ${
                 isActive
                   ? 'bg-[#2A2316] text-[#FFAA00] border border-[#FFAA00]/70 shadow-sm font-semibold'
                   : 'text-slate-300 hover:text-white hover:bg-[#1C2532] border border-transparent'
@@ -144,7 +145,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full min-w-[18px] text-center ${
                     isActive
                       ? 'bg-[#FFAA00] text-[#151C25]'
-                      : 'bg-[#263342] text-slate-400'
+                      : item.planned ? 'bg-[#263342] text-slate-500' : 'bg-[#263342] text-slate-400'
                   }`}
                 >
                   {item.badge}

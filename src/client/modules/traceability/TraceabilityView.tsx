@@ -11,7 +11,6 @@ import {
   CheckCircle2,
   Clock,
   Layers,
-  ArrowRight,
   TrendingUp,
   XCircle,
   Building,
@@ -23,13 +22,11 @@ import { TraceabilityDetailModal } from './TraceabilityDetailModal.tsx';
 import { getIntlLocale } from '../../i18n/index.ts';
 
 interface TraceabilityViewProps {
-  onNavigateToSync?: () => void;
   onSuccess: (msg: string) => void;
   onError: (msg: string) => void;
 }
 
 export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
-  onNavigateToSync,
   onSuccess,
   onError,
 }) => {
@@ -461,14 +458,6 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
                   className="px-4 py-2 rounded-lg bg-[#1C2532] hover:bg-[#253242] text-white font-semibold text-xs border border-[#263342] transition shadow-xs"
                 >
                   Limpar Filtros de Busca
-                </button>
-              ) : onNavigateToSync ? (
-                <button
-                  onClick={onNavigateToSync}
-                  className="px-4 py-2 rounded-lg bg-[#FFAA00] hover:bg-[#e69900] text-[#151C25] font-bold text-xs transition flex items-center gap-2 shadow-xs"
-                >
-                  <ArrowRight className="h-4 w-4" />
-                  Ir para Inserção de Dados (Configurações)
                 </button>
               ) : null}
             </div>
