@@ -1,5 +1,7 @@
 # Simulação local da API Protheus
 
+**Revisado em 2026-10-29.** Esta API continua sendo uma simulação local baseada nos relatórios Excel fornecidos; a instalação não está conectada ao Protheus real. A validação de fluxo é sob demanda e seus resultados podem mudar conforme os arquivos disponibilizados no computador. Não trate o último status registrado em documentação ou tela como confirmação de integração real.
+
 ## Objetivo e limites
 
 `tools/protheus_mock_api.py` expõe uma API HTTP local somente para leitura, alimentada diretamente pelos relatórios Excel selecionados. Os arquivos permanecem na pasta indicada pelo operador: o mock não copia os arquivos, não conecta ao banco da aplicação, não chama o Protheus real e não possui rotas de gravação.
