@@ -11,6 +11,15 @@ const __dirname = path.dirname(__filename);
 async function startServer() {
   const app = express();
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  const frameAncestors = new Set(["'self'", 'https://aistudio.google.com']);
+  for (const origin of (process.env.CSP_FRAME_ANCESTORS || '').split(/\s+/).filter(Boolean)) {
+    try {
+      const parsed = new URL(origin);
+      if (parsed.protocol === 'https:' && parsed.origin === origin) frameAncestors.add(origin);
+    } catch {
+      // Ignore malformed values instead of weakening the frame policy.
+    }
+  }
   const trustedProxyHops = Number.parseInt(process.env.TRUST_PROXY_HOPS || '0', 10);
   app.set('trust proxy', Number.isInteger(trustedProxyHops) && trustedProxyHops > 0 ? trustedProxyHops : false);
   app.disable('x-powered-by');
@@ -28,11 +37,10 @@ async function startServer() {
   }));
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
-    res.setHeader('Content-Security-Policy', "base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'");
+    res.setHeader('Content-Security-Policy', `base-uri 'self'; object-src 'none'; frame-ancestors ${[...frameAncestors].join(' ')}; form-action 'self'`);
     if (process.env.NODE_ENV === 'production') {
       res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     }
