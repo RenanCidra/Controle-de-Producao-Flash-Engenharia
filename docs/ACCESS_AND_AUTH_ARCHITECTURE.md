@@ -2,7 +2,7 @@
 
 **Estado atual:** identidade interna, schema de colaboradores, primeira camada centralizada de permissões, página dedicada de autenticação e preferências pessoais implementados no código. A aplicação da migração depende do banco de destino e precisa ser confirmada nesse ambiente. Sessões revogáveis, permissões configuráveis e escopo por organização/planta continuam pendentes.
 
-As contas autenticadas podem trocar a própria senha pela tela de perfil informando a senha atual. O servidor confere o hash existente, exige nova senha com pelo menos 12 caracteres e registra a alteração na auditoria sem armazenar senhas nos detalhes. O caminho autenticado é `POST /api/auth/change-password`. A credencial de prévia local não representa uma conta persistida e não habilita essa ação.
+As contas autenticadas podem trocar a própria senha pela tela de perfil informando a senha atual. O servidor confere o hash existente, exige nova senha com pelo menos 12 caracteres e no máximo 72 bytes e registra a alteração na auditoria sem armazenar senhas nos detalhes. O caminho autenticado é `POST /api/auth/change-password`. A credencial de prévia local não representa uma conta persistida e não habilita essa ação.
 
 O menu **Meu perfil** permite escolher/remover uma foto e selecionar o idioma preferido. Foto e idioma ficam no `localStorage` deste navegador, associados ao UID da conta; não são enviados ao servidor nem sincronizados entre dispositivos. A imagem aceita JPG, PNG ou WebP e o limite é 1 MB. Nome e identificador de acesso são administrados pela equipe responsável. A tela de login usa a imagem industrial em `public/assets/login-production.webp`; no layout mobile o formulário aparece antes do painel visual. O subtítulo que anteriormente aparecia sob a marca foi removido.
 
@@ -97,7 +97,17 @@ A migração `src/db/migrations/20261029_access_accounts.sql` cria `organization
 - **Migração — situação do ambiente:** o repositório contém a migração `src/db/migrations/20261029_access_accounts.sql` e o comando para executá-la. O estado do PostgreSQL/Cloud SQL não pode ser confirmado pelo código; verifique no banco de destino antes do uso real. Não execute novamente sem identificar o ambiente e revisar a situação existente.
 - **Pendente — multiorganização:** `login_name` ainda é único globalmente e as contas não têm associação a organizações/plantas. Implementar `organization_memberships` antes de operar várias empresas no mesmo banco.
 - **Pendente — sessões:** o access token continua guardado em `sessionStorage`; logout limpa o navegador, mas não revoga o JWT no servidor antes de sua expiração de 8 horas. Refresh token rotativo, sessões persistidas e troca obrigatória no primeiro acesso ainda não foram implementados.
-- **Pendente — hardening adicional:** limitação de tentativas por IP/conta e autorização granular por permissões/escopo de planta.
+- **Pendente — autorização granular:** escopo por organização/planta e administração configurável de permissões.
+
+### Proteções de requisição e formulários (2026-10-29)
+
+- **Aplicado — proteção contra tentativas automatizadas:** limites por IP e identificador no login (20 por IP e 30 por identificador em 15 minutos), bootstrap inicial (3 por IP em 30 minutos), troca de senha (20 por IP e 5 por conta em uma hora) e mutações autenticadas (120 por IP em 15 minutos). Há ainda limite geral da API (900 por IP em 15 minutos). As respostas usam HTTP 429 e `Retry-After`.
+- **Aplicado — validação de formulários:** limite do corpo HTTP, profundidade, quantidade de campos/listas e tamanho de texto; rejeição de estruturas inválidas e chaves perigosas de protótipo. Rotas de autenticação, contas, estoque, ordens, linhas, qualidade, organização, integrações e importação de arquivo aceitam somente campos previstos. O login valida formato/tamanho antes de executar bcrypt; senhas novas mantêm mínimo de 12 caracteres e máximo de 72 bytes, compatível com bcrypt.
+- **Aplicado — SQL injection:** consultas de aplicação usam Drizzle ORM e parâmetros vinculados; valores de formulário não são concatenados como SQL. A única execução SQL textual de migração lê um arquivo SQL estático versionado, e os usos de `sql` nas consultas são templates parametrizados ou expressões constantes. Identificadores/colunas dinâmicos vêm de mapeamentos fixos.
+- **Aplicado — cabeçalhos e origem:** desativado `X-Powered-By`, cabeçalhos de segurança e allowlist de CORS por `CORS_ALLOWED_ORIGINS`. `TRUST_PROXY_HOPS` deve refletir exatamente a topologia do proxy reverso; não habilite confiança genérica em cabeçalhos enviados pelo cliente.
+- **Aplicado — dados sensíveis:** auditoria não registra identificador digitado em tentativa de login nem senhas/chaves; APIs de integrações devolvem somente chave mascarada. Testes de integração aceitam HTTP/HTTPS, bloqueiam redirecionamentos e, em produção, exigem host em `INTEGRATION_ALLOWED_HOSTS`.
+- **Limitação operacional — rate limit:** contadores ficam em memória por processo e reiniciam com o servidor; em múltiplas instâncias não são compartilhados. Antes de escalar horizontalmente, mover os limites para armazenamento compartilhado (por exemplo Redis) ou gateway equivalente. Configurar limites do proxy/WAF também é recomendado.
+- **Pendente — validação semântica por campo:** importação REST do Protheus aceita esquemas de dados variáveis e ainda precisa de validação específica por entidade/campo antes de conectar a fonte oficial. A validação no servidor continua sendo obrigatória; filtros da interface são apenas conveniência.
 
 ### Validação do código atual
 

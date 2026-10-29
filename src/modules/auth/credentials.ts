@@ -62,5 +62,8 @@ export function validatePassword(value: string): void {
   if (value.length < 12) {
     throw new Error('A senha deve possuir no mínimo 12 caracteres.');
   }
+  if (Buffer.byteLength(value, 'utf8') > 72) {
+    throw new Error('A senha deve possuir no máximo 72 bytes.');
+  }
 }
 

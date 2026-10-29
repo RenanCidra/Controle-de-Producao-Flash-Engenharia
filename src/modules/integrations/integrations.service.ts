@@ -2,18 +2,19 @@ import { IntegrationsRepository } from './integrations.repository.ts';
 import { IntegrationClientService } from '../../services/integration-client.service.ts';
 import { AuditService } from '../../services/audit.service.ts';
 
+function publicIntegration<T extends { apiKey?: string | null }>(item: T) {
+  const { apiKey, ...safe } = item;
+  return {
+    ...safe,
+    apiKeyMasked: apiKey ? (apiKey.length > 8 ? `${apiKey.slice(0, 4)}••••••••${apiKey.slice(-4)}` : '••••••••') : null,
+  };
+}
+
 export class IntegrationsService {
   public static async list() {
     const list = await IntegrationsRepository.findAll();
     // Mask API keys for security in UI responses
-    return list.map((item) => ({
-      ...item,
-      apiKeyMasked: item.apiKey
-        ? item.apiKey.length > 8
-          ? item.apiKey.substring(0, 4) + '••••••••' + item.apiKey.substring(item.apiKey.length - 4)
-          : '••••••••'
-        : null,
-    }));
+    return list.map(publicIntegration);
   }
 
   public static async create(
@@ -40,10 +41,10 @@ export class IntegrationsService {
       action: 'CREATE',
       entity: 'INTEGRATION',
       entityId: String(created.id),
-      details: { name: created.name, provider: created.provider, baseUrl: created.baseUrl },
+      details: { name: created.name, provider: created.provider },
     });
 
-    return created;
+    return publicIntegration(created);
   }
 
   public static async update(
@@ -73,10 +74,20 @@ export class IntegrationsService {
       action: 'UPDATE',
       entity: 'INTEGRATION',
       entityId: String(id),
-      details: { previousName: existing.name, changes: { ...data, apiKey: data.apiKey ? '***' : undefined } },
+      details: {
+        previousName: existing.name,
+        changes: {
+          name: data.name,
+          provider: data.provider,
+          authType: data.authType,
+          headerName: data.headerName,
+          status: data.status,
+          apiKey: data.apiKey ? '***REDACTED***' : undefined,
+        },
+      },
     });
 
-    return updated;
+    return updated ? publicIntegration(updated) : updated;
   }
 
   public static async delete(actorId: string, actorEmail: string, id: number) {
@@ -131,7 +142,6 @@ export class IntegrationsService {
       entityId: String(id),
       details: {
         provider: integration.provider,
-        baseUrl: integration.baseUrl,
         latencyMs: result.latencyMs,
         statusCode: result.statusCode,
         success: result.success,
