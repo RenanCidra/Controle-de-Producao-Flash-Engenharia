@@ -60,7 +60,7 @@ export class AuditRepository {
           .select()
           .from(auditLogs)
           .where(whereClause)
-          .orderBy(desc(auditLogs.createdAt))
+          .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id))
           .limit(pageSize)
           .offset(offset),
         db

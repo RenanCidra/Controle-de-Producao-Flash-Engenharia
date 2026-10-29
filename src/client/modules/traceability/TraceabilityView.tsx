@@ -52,6 +52,7 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
 
   // Data state
   const [items, setItems] = useState<any[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<{
     totalOps: number;
     totalPvs: number;
@@ -59,7 +60,7 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
     opsConcluidas: number;
     opsAtrasadas: number;
     opsComRefugo: number;
-    taxaEntregaPrazoPercentual: number;
+    taxaEntregaPrazoPercentual: number | null;
   } | null>(null);
 
   // Modal inspection
@@ -71,6 +72,7 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
 
   const loadData = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [matrixRes, metricsRes] = await Promise.all([
         api.getTraceabilityMatrix({
@@ -95,7 +97,12 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
       setTotal(matrixRes.total);
       setMetrics(metricsRes);
     } catch (err: any) {
-      onError(err.message || 'Erro ao carregar dados de rastreabilidade');
+      const message = err.message || 'Erro ao carregar dados de rastreabilidade';
+      setItems([]);
+      setTotal(0);
+      setMetrics(null);
+      setLoadError(message);
+      onError(message);
     } finally {
       setLoading(false);
     }
@@ -191,12 +198,12 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
 
   const totalPages = Math.ceil(total / limit) || 1;
   const metricCards = [
-    { label: 'Ordens (OP)', value: metrics?.totalOps ?? 0, caption: 'Cadastradas no Protheus', icon: Layers, color: '#1E293B' },
-    { label: 'Pedidos (PV)', value: metrics?.totalPvs ?? 0, caption: 'Pedidos vinculáveis', icon: Building, color: '#C27803' },
-    { label: 'Em Andamento', value: metrics?.opsEmAndamento ?? 0, caption: 'Com saldo aberto', icon: TrendingUp, color: '#0284C7' },
-    { label: 'Concluídas', value: metrics?.opsConcluidas ?? 0, caption: 'Status finalizado', icon: CheckCircle2, color: '#159B72' },
-    { label: 'Atrasadas', value: metrics?.opsAtrasadas ?? 0, caption: 'Passaram do prazo', icon: AlertTriangle, color: '#D64545' },
-    { label: 'Entrega no Prazo', value: metrics ? `${metrics.taxaEntregaPrazoPercentual}%` : '-', caption: 'Índice real apurado', icon: Clock, color: '#159B72' },
+    { label: 'Ordens (OP)', value: metrics?.totalOps ?? '—', caption: 'Cadastradas no Protheus', icon: Layers, color: '#1E293B' },
+    { label: 'Pedidos (PV)', value: metrics?.totalPvs ?? '—', caption: 'Pedidos vinculáveis', icon: Building, color: '#C27803' },
+    { label: 'Em Andamento', value: metrics?.opsEmAndamento ?? '—', caption: 'Com saldo aberto', icon: TrendingUp, color: '#0284C7' },
+    { label: 'Concluídas', value: metrics?.opsConcluidas ?? '—', caption: 'Status finalizado', icon: CheckCircle2, color: '#159B72' },
+    { label: 'Atrasadas', value: metrics?.opsAtrasadas ?? '—', caption: 'Passaram do prazo', icon: AlertTriangle, color: '#D64545' },
+    { label: 'Entrega no Prazo', value: metrics?.taxaEntregaPrazoPercentual == null ? '—' : `${metrics.taxaEntregaPrazoPercentual}%`, caption: metrics?.taxaEntregaPrazoPercentual == null ? 'Sem conclusões com datas válidas' : 'OPs concluídas com prazo conhecido', icon: Clock, color: '#159B72' },
   ];
 
   return (
@@ -414,7 +421,15 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
 
       {/* Traceability Matrix Table Card Container */}
       <div className="bg-[#151C25] border border-[#202936] rounded-xl overflow-hidden shadow-sm">
-        {items.length === 0 ? (
+        {loadError ? (
+          <div role="alert" className="p-8 text-center">
+            <h3 className="text-base font-bold text-rose-300">Falha ao carregar rastreabilidade</h3>
+            <p className="mt-2 text-xs text-slate-300">{loadError}</p>
+            <button onClick={loadData} className="mt-4 rounded-lg border border-[#263342] bg-[#1C2532] px-4 py-2 text-xs font-semibold text-white">Tentar novamente</button>
+          </div>
+        ) : loading && items.length === 0 ? (
+          <div className="p-10 text-center text-sm text-slate-400">Carregando dados de produção…</div>
+        ) : items.length === 0 ? (
           <div className="p-12 text-center">
             <div className="h-12 w-12 rounded-xl bg-[#1C2532] border border-[#263342] flex items-center justify-center mx-auto mb-3 text-slate-400">
               <Layers className="h-6 w-6" />
@@ -559,20 +574,11 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
                     {/* Physical Progress */}
                     <td className="py-3 px-3.5 min-w-[130px]">
                       <div className="flex items-center justify-between text-[11px] mb-1">
-                        <span className="font-mono font-bold text-white">{row.percentualConclusao}%</span>
+                        <span className="font-mono font-bold text-white">{row.percentualConclusao == null ? '—' : `${row.percentualConclusao}%`}</span>
                       </div>
-                      <div className="w-full h-1.5 bg-[#1C2532] rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${
-                            row.percentualConclusao === 100
-                              ? 'bg-[#159B72]'
-                              : row.percentualConclusao > 0
-                              ? 'bg-[#FFAA00]'
-                              : 'bg-slate-700'
-                          }`}
-                          style={{ width: `${row.percentualConclusao}%` }}
-                        />
-                      </div>
+                      {row.percentualConclusao != null && <div className="w-full h-1.5 bg-[#1C2532] rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${row.percentualConclusao === 100 ? 'bg-[#159B72]' : row.percentualConclusao > 0 ? 'bg-[#FFAA00]' : 'bg-slate-700'}`} style={{ width: `${row.percentualConclusao}%` }} />
+                      </div>}
                     </td>
 
                     {/* Deadline Status */}

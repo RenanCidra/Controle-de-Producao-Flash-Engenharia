@@ -29,6 +29,58 @@ export interface ProtheusSyncResult {
   createdAt: string;
 }
 
+export interface ProtheusMockValidationReport {
+  mode: 'SIMULATION_READ_ONLY';
+  status: 'READY' | 'LIMITED' | 'BLOCKED';
+  connected: boolean;
+  simulation: true;
+  readOnly: true;
+  connectsToProtheus: false;
+  writesToApplication: false;
+  databaseWritePerformed: false;
+  checkedAt: string;
+  datasets: Array<{
+    entity: string;
+    status: 'OK' | 'FAILED';
+    sourceFile?: string;
+    sourceSheet?: string;
+    sourceRows?: number;
+    firstPageRecords?: number;
+    cursorPaginationVerified?: boolean;
+    fields?: string[];
+    error?: string;
+  }>;
+  limitations: Array<{ endpoint: string; message: string }>;
+}
+
+export interface ProtheusMockDataPage {
+  mode: 'SIMULATION_READ_ONLY';
+  entity: string;
+  simulation: true;
+  readOnly: true;
+  writesToApplication: false;
+  databaseWritePerformed: false;
+  sourceFile: string;
+  sourceSheet: string;
+  sourceRows: number;
+  page: number;
+  pageSize: number;
+  recordsReturned: number;
+  nextCursor: string | null;
+  records: Array<Record<string, unknown>>;
+}
+
+export interface ProtheusMockFlowCheck {
+  mode: 'SIMULATION_DRY_RUN';
+  status: 'READY' | 'BLOCKED';
+  databaseWritePerformed: false;
+  sourceConnection: string;
+  datasets: Record<string, Record<string, unknown>>;
+  checks: Record<string, Record<string, unknown>>;
+  blockers: string[];
+  warnings: string[];
+}
+
 class ApiService {
   private token: string | null = null;
   private user: AuthUser | null = null;
@@ -160,6 +212,13 @@ class ApiService {
         loginName: identifier,
         password: credentials.password,
       }),
+    });
+  }
+
+  public changeOwnPassword(payload: { currentPassword: string; newPassword: string }) {
+    return this.request<{ success: boolean; message: string }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
   }
 
@@ -375,6 +434,29 @@ class ApiService {
     return this.request<ProtheusSyncResult>('/protheus/sync/rest', {
       method: 'POST',
       body: JSON.stringify(payload),
+    });
+  }
+
+  public validateProtheusMock() {
+    return this.request<ProtheusMockValidationReport>('/protheus/mock/validate', {
+      method: 'GET',
+      cache: 'no-store',
+    });
+  }
+
+  public getProtheusMockData(entity: string, cursor?: string, pageSize = 10) {
+    const query = new URLSearchParams({ entity, pageSize: String(pageSize) });
+    if (cursor) query.set('cursor', cursor);
+    return this.request<ProtheusMockDataPage>(`/protheus/mock/data?${query.toString()}`, {
+      method: 'GET',
+      cache: 'no-store',
+    });
+  }
+
+  public getProtheusMockFlowCheck() {
+    return this.request<ProtheusMockFlowCheck>('/protheus/mock/flow-check', {
+      method: 'GET',
+      cache: 'no-store',
     });
   }
 

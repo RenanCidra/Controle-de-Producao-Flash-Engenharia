@@ -16,6 +16,7 @@ import {
   LucideIcon,
 } from 'lucide-react';
 import { AuthUser } from '../api.ts';
+import { readUserPreferences, subscribeToUserPreferences } from '../modules/auth/user-preferences.ts';
 
 export type ActiveTab =
   | 'dashboard'
@@ -32,6 +33,7 @@ interface SidebarProps {
   setActiveTab: (tab: ActiveTab) => void;
   currentUser: AuthUser | null;
   onOpenAuth: () => void;
+  onOpenProfile: () => void;
   onLogout: () => void;
   onOpenSettings?: (subTab?: any) => void;
   collapsed: boolean;
@@ -45,6 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setActiveTab,
   currentUser,
   onOpenAuth,
+  onOpenProfile,
   onLogout,
   onOpenSettings,
   collapsed,
@@ -60,6 +63,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -78,6 +82,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [userMenuOpen]);
+
+  useEffect(() => {
+    const refresh = () => setAvatarDataUrl(readUserPreferences(currentUser?.uid).avatarDataUrl);
+    refresh();
+    return subscribeToUserPreferences(refresh);
+  }, [currentUser?.uid]);
 
   const initials = currentUser?.name
     ? currentUser.name
@@ -160,14 +170,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div
             onClick={() => {
               setUserMenuOpen(false);
-              onOpenAuth();
+              onOpenProfile();
             }}
             className="p-2.5 rounded-xl hover:bg-[#232E3D] transition cursor-pointer flex items-center justify-between group"
           >
             <div className="flex items-center gap-2.5 truncate">
-              <div className="h-9 w-9 rounded-full bg-[#273547] border border-[#3E4F63] text-white flex items-center justify-center font-bold text-xs uppercase shrink-0 group-hover:border-[#FFAA00]/70 transition">
-                {initials}
-              </div>
+              {avatarDataUrl
+                ? <img src={avatarDataUrl} alt="" className="h-9 w-9 rounded-full border border-[#3E4F63] object-cover" />
+                : <div className="h-9 w-9 rounded-full bg-[#273547] border border-[#3E4F63] text-white flex items-center justify-center font-bold text-xs uppercase shrink-0 group-hover:border-[#FFAA00]/70 transition">{initials}</div>}
               <div className="truncate text-left">
                 <p className="font-semibold text-white truncate text-xs">
                   {currentUser?.name || 'Renan Cidra'}
@@ -187,12 +197,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               onClick={() => {
                 setUserMenuOpen(false);
-                onOpenAuth();
+                onOpenProfile();
               }}
               className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-[#232E3D] transition text-left"
             >
               <UserIcon className="h-4 w-4 text-slate-400" />
-              <span className="font-medium">Perfil & Credenciais</span>
+              <span className="font-medium">Meu perfil</span>
             </button>
 
             <button
@@ -247,9 +257,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           title={collapsed ? `Opções do usuário · ${currentUser?.name || 'Conta'}` : 'Opções do Usuário'}
         >
           <div className={`flex min-w-0 items-center overflow-hidden ${collapsed ? '' : 'gap-2.5'}`}>
-            <div className="h-8 w-8 rounded-full bg-[#1E293B] border border-[#334155] text-slate-200 flex items-center justify-center font-bold text-xs uppercase shrink-0 group-hover:border-[#FFAA00]/70 transition">
-              {initials}
-            </div>
+            {avatarDataUrl
+              ? <img src={avatarDataUrl} alt="" className="h-8 w-8 rounded-full border border-[#334155] object-cover" />
+              : <div className="h-8 w-8 rounded-full bg-[#1E293B] border border-[#334155] text-slate-200 flex items-center justify-center font-bold text-xs uppercase shrink-0 group-hover:border-[#FFAA00]/70 transition">{initials}</div>}
             {!collapsed && <div className="truncate text-left">
               <p className="text-xs font-semibold text-white truncate leading-tight">
                 {currentUser?.name || 'Renan Cidra'}

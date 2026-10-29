@@ -45,9 +45,10 @@ export class ProtheusSyncRepository {
     batchId: number,
     recordsCount: number,
     status: 'PROCESSED' | 'FAILED',
-    summary: string
+    summary: string,
+    executor: any = db
   ) {
-    await db
+    await executor
       .update(protheusImportBatches)
       .set({
         recordsCount,
@@ -57,13 +58,13 @@ export class ProtheusSyncRepository {
       .where(eq(protheusImportBatches.id, batchId));
   }
 
-  public static async upsertProducts(products: NormalizedProduct[], batchId: number) {
+  public static async upsertProducts(products: NormalizedProduct[], batchId: number, executor: any = db) {
     if (products.length === 0) return 0;
 
     let affected = 0;
     for (const p of products) {
       if (!p.codigoProduto) continue;
-      await db
+      await executor
         .insert(protheusProducts)
         .values({
           codigoProduto: p.codigoProduto,
@@ -92,13 +93,13 @@ export class ProtheusSyncRepository {
     return affected;
   }
 
-  public static async upsertStructures(structures: NormalizedStructure[], batchId: number) {
+  public static async upsertStructures(structures: NormalizedStructure[], batchId: number, executor: any = db) {
     if (structures.length === 0) return 0;
 
     let affected = 0;
     for (const s of structures) {
       if (!s.codigoProdutoPai || !s.codigoComponente) continue;
-      await db
+      await executor
         .insert(protheusProductStructures)
         .values({
           codigoProdutoPai: s.codigoProdutoPai,
@@ -131,13 +132,13 @@ export class ProtheusSyncRepository {
     return affected;
   }
 
-  public static async upsertRoutings(routings: NormalizedRouting[], batchId: number) {
+  public static async upsertRoutings(routings: NormalizedRouting[], batchId: number, executor: any = db) {
     if (routings.length === 0) return 0;
 
     let affected = 0;
     for (const r of routings) {
       if (!r.codigoProduto || !r.codigoRoteiro || !r.sequenciaOperacao) continue;
-      await db
+      await executor
         .insert(protheusRoutings)
         .values({
           codigoProduto: r.codigoProduto,
@@ -170,13 +171,13 @@ export class ProtheusSyncRepository {
     return affected;
   }
 
-  public static async upsertSalesOrders(orders: NormalizedSalesOrder[], batchId: number) {
+  public static async upsertSalesOrders(orders: NormalizedSalesOrder[], batchId: number, executor: any = db) {
     if (orders.length === 0) return 0;
 
     let affected = 0;
     for (const o of orders) {
       if (!o.numeroPv || !o.itemPv) continue;
-      await db
+      await executor
         .insert(protheusSalesOrders)
         .values({
           numeroPv: o.numeroPv,
@@ -218,13 +219,13 @@ export class ProtheusSyncRepository {
     return affected;
   }
 
-  public static async upsertProductionOrders(orders: NormalizedProductionOrder[], batchId: number) {
+  public static async upsertProductionOrders(orders: NormalizedProductionOrder[], batchId: number, executor: any = db) {
     if (orders.length === 0) return 0;
 
     let affected = 0;
     for (const o of orders) {
       if (!o.numeroOp) continue;
-      await db
+      await executor
         .insert(protheusProductionOrders)
         .values({
           numeroOp: o.numeroOp,
@@ -273,13 +274,13 @@ export class ProtheusSyncRepository {
     return affected;
   }
 
-  public static async insertAppointments(appointments: NormalizedAppointment[], batchId: number) {
+  public static async insertAppointments(appointments: NormalizedAppointment[], batchId: number, executor: any = db) {
     if (appointments.length === 0) return 0;
 
     let count = 0;
     for (const a of appointments) {
       if (!a.numeroOp || !a.sequenciaOperacao) continue;
-      await db.insert(protheusProductionAppointments).values({
+      await executor.insert(protheusProductionAppointments).values({
         numeroOp: a.numeroOp,
         sequenciaOperacao: a.sequenciaOperacao,
         codigoOperacao: a.codigoOperacao,
@@ -298,86 +299,7 @@ export class ProtheusSyncRepository {
       count++;
     }
 
-    // Recalculate stages and accumulated quantities for affected OPs
-    const distinctOps = [...new Set(appointments.map((a) => a.numeroOp))];
-    for (const opNumber of distinctOps) {
-      await this.recalculateOpStage(opNumber);
-    }
-
     return count;
-  }
-
-  public static async recalculateOpStage(numeroOp: string) {
-    const opResult = await db
-      .select()
-      .from(protheusProductionOrders)
-      .where(eq(protheusProductionOrders.numeroOp, numeroOp))
-      .limit(1);
-
-    if (opResult.length === 0) return;
-    const op = opResult[0];
-
-    // Find routing operations for this product
-    const routings = await db
-      .select()
-      .from(protheusRoutings)
-      .where(eq(protheusRoutings.codigoProduto, op.codigoProduto))
-      .orderBy(protheusRoutings.sequenciaOperacao);
-
-    // Find all appointments registered for this OP
-    const appointments = await db
-      .select()
-      .from(protheusProductionAppointments)
-      .where(eq(protheusProductionAppointments.numeroOp, numeroOp))
-      .orderBy(desc(protheusProductionAppointments.id));
-
-    let etapaAtual = 'Aguardando Início';
-    let totalProduzido = 0;
-    let totalRefugo = 0;
-
-    if (appointments.length > 0) {
-      // Calculate totals
-      for (const ap of appointments) {
-        totalProduzido += Number(ap.quantidadeProduzida || 0);
-        totalRefugo += Number(ap.quantidadeRefugo || 0);
-      }
-
-      // Check the latest appointment
-      const latest = appointments[0];
-      if (latest.descricaoOperacao) {
-        etapaAtual = `Operação ${latest.sequenciaOperacao} - ${latest.descricaoOperacao}`;
-      } else if (routings.length > 0) {
-        const matchingRoute = routings.find((r) => r.sequenciaOperacao === latest.sequenciaOperacao);
-        if (matchingRoute) {
-          etapaAtual = `Operação ${matchingRoute.sequenciaOperacao} - ${matchingRoute.descricaoOperacao}`;
-        } else {
-          etapaAtual = `Operação ${latest.sequenciaOperacao}`;
-        }
-      } else {
-        etapaAtual = `Operação ${latest.sequenciaOperacao}`;
-      }
-
-      // Check if finished according to planned qty
-      const qtdPlanejada = Number(op.quantidadePlanejada);
-      if (qtdPlanejada > 0 && totalProduzido >= qtdPlanejada) {
-        etapaAtual = 'Concluído em Produção';
-      }
-    } else if (routings.length > 0) {
-      etapaAtual = `Fila Operação 01 - ${routings[0].descricaoOperacao}`;
-    }
-
-    const saldo = Math.max(0, Number(op.quantidadePlanejada) - totalProduzido);
-
-    await db
-      .update(protheusProductionOrders)
-      .set({
-        etapaAtual,
-        quantidadeProduzida: String(totalProduzido),
-        quantidadeRefugo: String(totalRefugo),
-        saldoAProduzir: String(saldo),
-        updatedAt: new Date(),
-      })
-      .where(eq(protheusProductionOrders.numeroOp, numeroOp));
   }
 
   // ==================== QUERY METHODS ====================

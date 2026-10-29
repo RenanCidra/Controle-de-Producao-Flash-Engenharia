@@ -7,6 +7,7 @@ import {
   ProtheusSyncBundle,
 } from './protheus-sync.types.ts';
 import { AuditService } from '../../services/audit.service.ts';
+import { db } from '../../db/index.ts';
 
 export class ProtheusSyncService {
   private static generateBatchCode(prefix: string): string {
@@ -20,6 +21,37 @@ export class ProtheusSyncService {
     sourceType: ProtheusSourceType,
     importedBy?: string
   ): Promise<IngestionResult> {
+    if (!bundle || typeof bundle !== 'object' || Array.isArray(bundle)) {
+      throw new Error('A carga deve ser um objeto com grupos de registros válidos.');
+    }
+    const prepare = <T extends object>(
+      name: string,
+      rows: Record<string, any>[] | undefined,
+      normalize: (row: Record<string, any>) => T,
+      required: (keyof T)[]
+    ): T[] => (rows || []).map((row, index) => {
+      try {
+        const value = normalize(row);
+        const missing = required.filter((key) => (value as any)[key] === undefined || (value as any)[key] === null || (typeof (value as any)[key] === 'string' && !(value as any)[key].trim()));
+        if (missing.length) throw new Error(`campos obrigatórios ausentes: ${missing.join(', ')}`);
+        return value;
+      } catch (error: any) {
+        throw new Error(`${name}, registro ${index + 1}: ${error.message || 'dados inválidos'}`);
+      }
+    });
+
+    // Normalize and validate every row before creating a batch or writing any entity.
+    const normalized = {
+      products: prepare('Produto', bundle.products, ProtheusNormalizer.normalizeProduct.bind(ProtheusNormalizer), ['codigoProduto', 'descricao', 'tipo', 'unidadeMedida']),
+      structures: prepare('Estrutura', bundle.structures, ProtheusNormalizer.normalizeStructure.bind(ProtheusNormalizer), ['codigoProdutoPai', 'codigoComponente', 'quantidadeNecessaria', 'unidadeComponente']),
+      routings: prepare('Roteiro', bundle.routings, ProtheusNormalizer.normalizeRouting.bind(ProtheusNormalizer), ['codigoProduto', 'codigoRoteiro', 'sequenciaOperacao', 'codigoOperacao', 'descricaoOperacao']),
+      salesOrders: prepare('Pedido de venda', bundle.salesOrders, ProtheusNormalizer.normalizeSalesOrder.bind(ProtheusNormalizer), ['numeroPv', 'itemPv', 'clienteNome', 'codigoProduto', 'quantidadePedida', 'quantidadeEntregue', 'unidadeMedida', 'dataEmissao', 'dataEntrega', 'statusProtheus']),
+      productionOrders: prepare('Ordem de produção', bundle.productionOrders, ProtheusNormalizer.normalizeProductionOrder.bind(ProtheusNormalizer), ['numeroOp', 'codigoProduto', 'quantidadePlanejada', 'quantidadeProduzida', 'quantidadeRefugo', 'saldoAProduzir', 'statusProtheus', 'dataEmissao', 'dataPrevisaoFim']),
+      appointments: prepare('Apontamento', bundle.appointments, ProtheusNormalizer.normalizeAppointment.bind(ProtheusNormalizer), ['numeroOp', 'sequenciaOperacao', 'quantidadeProduzida', 'quantidadeRefugo', 'dataApontamento', 'tipoApontamento']),
+    };
+    if (Object.values(normalized).every((rows) => rows.length === 0)) {
+      throw new Error('O lote não contém registros para importar.');
+    }
     const batchCode = this.generateBatchCode(sourceType === 'REST_API' ? 'REST' : 'FILE');
     const batch = await ProtheusSyncRepository.createBatch(
       batchCode,
@@ -30,60 +62,54 @@ export class ProtheusSyncService {
 
     const errors: string[] = [];
     let totalProcessed = 0;
+    let summary = '';
     const details: IngestionResult['details'] = {};
 
     try {
+      await db.transaction(async (tx) => {
       // 1. Products (SB1)
-      if (bundle.products && bundle.products.length > 0) {
-        const normalized = bundle.products.map((p) => ProtheusNormalizer.normalizeProduct(p));
-        const count = await ProtheusSyncRepository.upsertProducts(normalized, batch.id);
+      if (normalized.products.length > 0) {
+        const count = await ProtheusSyncRepository.upsertProducts(normalized.products, batch.id, tx);
         details.products = count;
         totalProcessed += count;
       }
 
       // 2. Product Structures (SG1)
-      if (bundle.structures && bundle.structures.length > 0) {
-        const normalized = bundle.structures.map((s) => ProtheusNormalizer.normalizeStructure(s));
-        const count = await ProtheusSyncRepository.upsertStructures(normalized, batch.id);
+      if (normalized.structures.length > 0) {
+        const count = await ProtheusSyncRepository.upsertStructures(normalized.structures, batch.id, tx);
         details.structures = count;
         totalProcessed += count;
       }
 
       // 3. Routings (SG2)
-      if (bundle.routings && bundle.routings.length > 0) {
-        const normalized = bundle.routings.map((r) => ProtheusNormalizer.normalizeRouting(r));
-        const count = await ProtheusSyncRepository.upsertRoutings(normalized, batch.id);
+      if (normalized.routings.length > 0) {
+        const count = await ProtheusSyncRepository.upsertRoutings(normalized.routings, batch.id, tx);
         details.routings = count;
         totalProcessed += count;
       }
 
       // 4. Sales Orders (SC5 / SC6)
-      if (bundle.salesOrders && bundle.salesOrders.length > 0) {
-        const normalized = bundle.salesOrders.map((o) => ProtheusNormalizer.normalizeSalesOrder(o));
-        const count = await ProtheusSyncRepository.upsertSalesOrders(normalized, batch.id);
+      if (normalized.salesOrders.length > 0) {
+        const count = await ProtheusSyncRepository.upsertSalesOrders(normalized.salesOrders, batch.id, tx);
         details.salesOrders = count;
         totalProcessed += count;
       }
 
       // 5. Production Orders (SC2)
-      if (bundle.productionOrders && bundle.productionOrders.length > 0) {
-        const normalized = bundle.productionOrders.map((o) =>
-          ProtheusNormalizer.normalizeProductionOrder(o)
-        );
-        const count = await ProtheusSyncRepository.upsertProductionOrders(normalized, batch.id);
+      if (normalized.productionOrders.length > 0) {
+        const count = await ProtheusSyncRepository.upsertProductionOrders(normalized.productionOrders, batch.id, tx);
         details.productionOrders = count;
         totalProcessed += count;
       }
 
       // 6. Appointments (SH6)
-      if (bundle.appointments && bundle.appointments.length > 0) {
-        const normalized = bundle.appointments.map((a) => ProtheusNormalizer.normalizeAppointment(a));
-        const count = await ProtheusSyncRepository.insertAppointments(normalized, batch.id);
+      if (normalized.appointments.length > 0) {
+        const count = await ProtheusSyncRepository.insertAppointments(normalized.appointments, batch.id, tx);
         details.appointments = count;
         totalProcessed += count;
       }
 
-      const summary = `Processados com sucesso: ${Object.entries(details)
+      summary = `Processados com sucesso: ${Object.entries(details)
         .map(([k, v]) => `${k}=${v}`)
         .join(', ')}`;
 
@@ -91,8 +117,10 @@ export class ProtheusSyncService {
         batch.id,
         totalProcessed,
         'PROCESSED',
-        summary
+        summary,
+        tx
       );
+      });
 
       await AuditService.record({
         userId: importedBy || 'SYSTEM',
@@ -123,9 +151,9 @@ export class ProtheusSyncService {
     } catch (err: any) {
       await ProtheusSyncRepository.updateBatchSummary(
         batch.id,
-        totalProcessed,
+        0,
         'FAILED',
-        err.message || 'Falha no processamento do lote'
+        `Lote revertido; nenhum registro foi gravado. ${err.message || 'Falha no processamento.'}`
       );
       await AuditService.record({
         userId: importedBy || 'SYSTEM',
@@ -167,15 +195,16 @@ export class ProtheusSyncService {
           else if (entityType === 'SALES_ORDERS') bundle.salesOrders = parsed;
           else if (entityType === 'PRODUCTION_ORDERS') bundle.productionOrders = parsed;
           else if (entityType === 'APPOINTMENTS') bundle.appointments = parsed;
-          else bundle.products = parsed;
+          else throw new Error('A entidade BUNDLE não aceita uma lista simples. Informe a entidade ou envie um objeto com os grupos de dados.');
 
           return this.processBundle(bundle, 'FILE_IMPORT', importedBy);
-        } else if (typeof parsed === 'object') {
+        } else if (parsed && typeof parsed === 'object') {
           // Multi-entity JSON bundle
           return this.processBundle(parsed as ProtheusSyncBundle, 'FILE_IMPORT', importedBy);
         }
       } catch (err: any) {
-        throw new Error(`Arquivo JSON inválido: ${err.message}`);
+        if (err instanceof SyntaxError) throw new Error(`Arquivo JSON inválido: ${err.message}`);
+        throw err;
       }
     }
 
@@ -194,7 +223,7 @@ export class ProtheusSyncService {
     else if (entityType === 'SALES_ORDERS') bundle.salesOrders = rows;
     else if (entityType === 'PRODUCTION_ORDERS') bundle.productionOrders = rows;
     else if (entityType === 'APPOINTMENTS') bundle.appointments = rows;
-    else bundle.products = rows;
+    else throw new Error('Não foi possível identificar a entidade deste CSV. Selecione o tipo de dado antes de importar.');
 
     return this.processBundle(bundle, 'FILE_IMPORT', importedBy);
   }

@@ -16,9 +16,10 @@ import {
   FileText,
   Workflow,
   Sparkles,
+  ShieldCheck,
 } from 'lucide-react';
-import { api, ProtheusSyncResult } from '../../api.ts';
-import { getIntlLocale } from '../../i18n/index.ts';
+import { api, ProtheusMockFlowCheck, ProtheusMockValidationReport, ProtheusSyncResult } from '../../api.ts';
+import { getIntlLocale, translateText } from '../../i18n/index.ts';
 
 interface ProtheusSyncViewProps {
   onSuccess: (msg: string) => void;
@@ -26,13 +27,62 @@ interface ProtheusSyncViewProps {
   onRefreshStats: () => void;
 }
 
+const mockDatasetLabels: Record<string, string> = {
+  products: 'Produtos',
+  'product-groups': 'Grupos de produtos',
+  resources: 'Recursos (SH1)',
+  structures: 'Estruturas (SG1)',
+  routings: 'Roteiros (SG2)',
+  'production-orders': 'Ordens de produção (SC2)',
+  commitments: 'Empenhos',
+  'sales-order-headers': 'Cabeçalhos de PV (SC5)',
+  'sales-order-lines': 'Itens de PV (SC6)',
+  appointments: 'Apontamentos (SH6)',
+};
+
 export const ProtheusSyncView: React.FC<ProtheusSyncViewProps> = ({
   onSuccess,
   onError,
   onRefreshStats,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'upload' | 'pvs' | 'ops' | 'batches'>('upload');
+  const [activeSubTab, setActiveSubTab] = useState<'upload' | 'pvs' | 'ops' | 'batches' | 'mock'>('upload');
   const [loading, setLoading] = useState(false);
+  const [mockValidation, setMockValidation] = useState<ProtheusMockValidationReport | null>(null);
+  const [mockValidationError, setMockValidationError] = useState<string | null>(null);
+  const [mockPreviewEntity, setMockPreviewEntity] = useState('production-orders');
+  const [mockPreview, setMockPreview] = useState<Awaited<ReturnType<typeof api.getProtheusMockData>> | null>(null);
+  const [mockPreviewLoading, setMockPreviewLoading] = useState(false);
+  const [mockPreviewError, setMockPreviewError] = useState<string | null>(null);
+  const [mockFlowCheck, setMockFlowCheck] = useState<ProtheusMockFlowCheck | null>(null);
+  const [mockFlowCheckLoading, setMockFlowCheckLoading] = useState(false);
+  const [mockFlowCheckError, setMockFlowCheckError] = useState<string | null>(null);
+
+  const runMockFlowCheck = async () => {
+    setMockFlowCheckLoading(true);
+    setMockFlowCheckError(null);
+    try {
+      setMockFlowCheck(await api.getProtheusMockFlowCheck());
+    } catch (err: any) {
+      setMockFlowCheckError(err.message || 'Não foi possível concluir a verificação completa.');
+    } finally {
+      setMockFlowCheckLoading(false);
+    }
+  };
+
+  const loadMockPreview = async (entity: string, cursor?: string, append = false) => {
+    setMockPreviewLoading(true);
+    setMockPreviewError(null);
+    try {
+      const page = await api.getProtheusMockData(entity, cursor, 10);
+      setMockPreview((previous) => append && previous?.entity === entity
+        ? { ...page, records: [...previous.records, ...page.records] }
+        : page);
+    } catch (err: any) {
+      setMockPreviewError(err.message || 'Não foi possível carregar os registros da origem.');
+    } finally {
+      setMockPreviewLoading(false);
+    }
+  };
 
   // File Upload State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -74,9 +124,21 @@ export const ProtheusSyncView: React.FC<ProtheusSyncViewProps> = ({
       } else if (activeSubTab === 'batches') {
         const b = await api.getProtheusBatches();
         setBatches(b);
+      } else if (activeSubTab === 'mock') {
+        setMockValidationError(null);
+        const report = await api.validateProtheusMock();
+        setMockValidation(report);
+        const available = report.datasets.find((dataset) => dataset.status === 'OK');
+        if (available) {
+          const entity = report.datasets.some((dataset) => dataset.entity === mockPreviewEntity && dataset.status === 'OK')
+            ? mockPreviewEntity : available.entity;
+          setMockPreviewEntity(entity);
+          await loadMockPreview(entity);
+        }
       }
     } catch (err: any) {
-      onError(err.message);
+      if (activeSubTab === 'mock') setMockValidationError(err.message || 'Não foi possível validar a API simulada.');
+      else onError(err.message);
     } finally {
       setLoading(false);
     }
@@ -185,7 +247,7 @@ export const ProtheusSyncView: React.FC<ProtheusSyncViewProps> = ({
           <button
             onClick={() => {
               loadData();
-              onRefreshStats();
+              if (activeSubTab !== 'mock') onRefreshStats();
             }}
             disabled={loading}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-xs font-medium text-slate-300 hover:bg-slate-700 transition"
@@ -197,7 +259,7 @@ export const ProtheusSyncView: React.FC<ProtheusSyncViewProps> = ({
       </div>
 
       {/* Module Tabs */}
-      <div className="flex border-b border-slate-800 space-x-1">
+        <div className="flex flex-wrap border-b border-slate-800 space-x-1">
         <button
           onClick={() => setActiveSubTab('upload')}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition ${
@@ -241,6 +303,17 @@ export const ProtheusSyncView: React.FC<ProtheusSyncViewProps> = ({
         >
           <Clock className="h-4 w-4" />
           Auditoria de Lotes Ingeridos
+        </button>
+        <button
+          onClick={() => setActiveSubTab('mock')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition ${
+            activeSubTab === 'mock'
+              ? 'border-amber-500 text-amber-400 bg-amber-500/10'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <ShieldCheck className="h-4 w-4" />
+          {translateText('Teste da API simulada')}
         </button>
       </div>
 
@@ -545,7 +618,7 @@ export const ProtheusSyncView: React.FC<ProtheusSyncViewProps> = ({
                       </td>
                       <td className="py-3 px-4">
                         <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-amber-950/40 border border-amber-500/30 text-amber-300">
-                          {op.etapaAtual || 'Planejada'}
+                          {op.etapaAtual || 'Etapa não informada'}
                         </span>
                       </td>
                       <td className="py-3 px-4 text-right">
@@ -628,6 +701,222 @@ export const ProtheusSyncView: React.FC<ProtheusSyncViewProps> = ({
                 </tbody>
               </table>
             </div>
+          )}
+        </div>
+      )}
+
+      {activeSubTab === 'mock' && (
+        <div className="space-y-4">
+          <section className="rounded-xl border border-cyan-500/20 bg-[#151C25] p-5 space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-cyan-400" />
+                <div>
+                  <h3 className="text-sm font-semibold text-white">{translateText('Validação de leitura da API simulada')}</h3>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {translateText('Confere conexão, origem, campos e paginação da API local usando no máximo duas linhas por conjunto.')}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={loadData}
+                disabled={loading}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+                {translateText(loading ? 'Verificando…' : 'Verificar API simulada')}
+              </button>
+            </div>
+            <div className="rounded-lg border border-slate-700/70 bg-slate-950/40 px-3 py-2 text-xs text-slate-300">
+              {translateText('Somente leitura: não executa ingestão, não envia POST e não grava dados operacionais.')}
+            </div>
+          </section>
+
+          {mockValidationError && (
+            <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/20 p-4 text-sm text-rose-200">
+              <div className="flex items-center gap-2 font-semibold"><AlertTriangle className="h-4 w-4" />{translateText('Não foi possível validar a API simulada')}</div>
+              <p className="mt-1 text-xs text-rose-200/80">{mockValidationError}</p>
+            </div>
+          )}
+
+          {mockValidation && (
+            <>
+              <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2">
+                    {mockValidation.status === 'READY'
+                      ? <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                      : <AlertTriangle className="h-5 w-5 text-amber-400" />}
+                    <div>
+                      <p className="text-sm font-semibold text-white">
+                        {mockValidation.status === 'READY'
+                          ? translateText('Leitura validada')
+                          : mockValidation.status === 'LIMITED'
+                            ? translateText('API simulada acessível com limitações')
+                            : translateText('Validação bloqueada')}
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        {translateText('Última verificação:')} {new Date(mockValidation.checkedAt).toLocaleString(getIntlLocale())}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-[10px] font-semibold">
+                    <span className="rounded-full border border-cyan-500/30 bg-cyan-950/30 px-2.5 py-1 text-cyan-200">{translateText('SIMULAÇÃO')}</span>
+                    <span className="rounded-full border border-emerald-500/30 bg-emerald-950/30 px-2.5 py-1 text-emerald-200">{translateText('SOMENTE LEITURA')}</span>
+                    <span className="rounded-full border border-slate-700 bg-slate-950/40 px-2.5 py-1 text-slate-300">{translateText('Sem gravação no banco')}</span>
+                  </div>
+                </div>
+              </section>
+
+              <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[760px] text-left text-xs">
+                    <thead className="border-b border-slate-800 bg-slate-950 text-[10px] uppercase tracking-wider text-slate-400">
+                      <tr>
+                        <th className="px-4 py-3">{translateText('Conjunto')}</th>
+                        <th className="px-4 py-3">{translateText('Arquivo de origem')}</th>
+                        <th className="px-4 py-3 text-right">{translateText('Registros na origem')}</th>
+                        <th className="px-4 py-3 text-center">{translateText('Cursor')}</th>
+                        <th className="px-4 py-3 text-center">{translateText('Leitura')}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/70">
+                      {mockValidation.datasets.map((dataset) => (
+                        <tr key={dataset.entity}>
+                          <td className="px-4 py-3 font-medium text-slate-200">{translateText(mockDatasetLabels[dataset.entity] || dataset.entity)}</td>
+                          <td className="px-4 py-3 font-mono text-[11px] text-slate-400">{dataset.sourceFile || '—'}</td>
+                          <td className="px-4 py-3 text-right font-mono text-slate-200">
+                            {dataset.sourceRows == null ? '—' : dataset.sourceRows.toLocaleString(getIntlLocale())}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {dataset.cursorPaginationVerified
+                              ? <span className="text-emerald-300">{translateText('Validado')}</span>
+                              : <span className="text-slate-500">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {dataset.status === 'OK'
+                              ? <span className="text-emerald-300">{translateText('OK')}</span>
+                              : <span className="text-rose-300" title={dataset.error}>{translateText('Falhou')}</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="border-t border-slate-800 px-4 py-3 text-[11px] text-slate-500">
+                  {translateText('A verificação de tela testa conectividade e duas páginas. A pré-validação completa dos relatórios continua disponível no fluxo de desenvolvimento.')}
+                </p>
+              </section>
+
+              <section className="rounded-xl border border-violet-500/20 bg-slate-900/50 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h4 className="text-sm font-semibold text-white">{translateText('Consistência do fluxo de dados')}</h4>
+                    <p className="mt-1 text-[11px] text-slate-400">{translateText('Percorre todas as páginas e verifica chaves, referências e campos entre os relatórios. Pode levar alguns minutos.')}</p>
+                  </div>
+                  <button type="button" onClick={() => void runMockFlowCheck()} disabled={mockFlowCheckLoading} className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-violet-400/30 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-200 hover:bg-violet-500/20 disabled:opacity-50">
+                    <RefreshCw className={`h-3.5 w-3.5 ${mockFlowCheckLoading ? 'animate-spin' : ''}`} />
+                    {translateText(mockFlowCheckLoading ? 'Verificando todos os registros…' : 'Executar verificação completa')}
+                  </button>
+                </div>
+                {mockFlowCheckError && <p role="alert" className="mt-3 rounded-lg border border-rose-500/20 bg-rose-950/20 px-3 py-2 text-xs text-rose-200">{mockFlowCheckError}</p>}
+                {mockFlowCheck && (
+                  <div className="mt-4 space-y-3">
+                    <div className={`flex flex-wrap items-center gap-3 rounded-lg px-3 py-2 text-xs ${mockFlowCheck.status === 'READY' ? 'border border-emerald-500/20 bg-emerald-950/20 text-emerald-200' : 'border border-amber-500/20 bg-amber-950/20 text-amber-100'}`}>
+                      {mockFlowCheck.status === 'READY' ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                      <strong>{mockFlowCheck.status === 'READY' ? translateText('Fluxo validado para a simulação') : translateText('Fluxo bloqueado para integração real')}</strong>
+                      <span className="text-[11px] opacity-80">{translateText('Somente leitura · banco não alterado')}</span>
+                    </div>
+                    {mockFlowCheck.blockers.length > 0 && (
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-200">{translateText('Pontos que precisam de definição')}</p>
+                        <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-300">{mockFlowCheck.blockers.map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}</ul>
+                      </div>
+                    )}
+                    {mockFlowCheck.warnings.length > 0 && (
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{translateText('Observações da verificação')}</p>
+                        <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-400">{mockFlowCheck.warnings.map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}</ul>
+                      </div>
+                    )}
+                    <p className="text-[10px] text-slate-500">{translateText('Este resultado valida a qualidade das amostras simuladas. Não confirma conectividade nem compatibilidade com uma API real do Protheus.')}</p>
+                  </div>
+                )}
+              </section>
+
+              <section className="overflow-hidden rounded-xl border border-cyan-500/20 bg-[#151C25]">
+                <div className="flex flex-col gap-3 border-b border-slate-800 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h4 className="text-sm font-semibold text-white">{translateText('Prévia dos dados de origem')}</h4>
+                    <p className="mt-1 text-[11px] text-slate-400">{translateText('Amostra somente leitura dos relatórios; estes registros não são gravados no sistema.')}</p>
+                  </div>
+                  <select
+                    value={mockPreviewEntity}
+                    onChange={(event) => {
+                      const entity = event.target.value;
+                      setMockPreviewEntity(entity);
+                      void loadMockPreview(entity);
+                    }}
+                    className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200"
+                    aria-label={translateText('Conjunto de dados')}
+                  >
+                    {(mockValidation?.datasets || []).filter((dataset) => dataset.status === 'OK').map((dataset) => (
+                      <option key={dataset.entity} value={dataset.entity}>{translateText(mockDatasetLabels[dataset.entity] || dataset.entity)}</option>
+                    ))}
+                  </select>
+                </div>
+                {mockPreviewError && <p role="alert" className="px-4 py-3 text-xs text-rose-300">{mockPreviewError}</p>}
+                {mockPreview && (
+                  <>
+                    <div className="flex flex-wrap gap-x-5 gap-y-1 border-b border-slate-800 px-4 py-3 text-[11px] text-slate-400">
+                      <span>{translateText('Origem')}: <strong className="font-medium text-slate-200">{mockPreview.sourceFile} · {mockPreview.sourceSheet}</strong></span>
+                      <span>{translateText('Registros na origem')}: <strong className="font-mono text-slate-200">{mockPreview.sourceRows.toLocaleString(getIntlLocale())}</strong></span>
+                      <span>{translateText('Exibidos')}: <strong className="font-mono text-slate-200">{mockPreview.records.length.toLocaleString(getIntlLocale())}</strong></span>
+                    </div>
+                    {mockPreview.records.length ? (
+                      <div className="max-h-[520px] overflow-auto">
+                        <table className="w-full min-w-max text-left text-xs">
+                          <thead className="sticky top-0 border-b border-slate-800 bg-slate-950 text-[10px] uppercase tracking-wide text-slate-400">
+                            <tr>{Object.keys(mockPreview.records[0]).map((field) => <th key={field} className="whitespace-nowrap px-3 py-2">{field}</th>)}</tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800/70">
+                            {mockPreview.records.map((record, index) => (
+                              <tr key={`${mockPreview.page}-${index}`} className="hover:bg-slate-800/40">
+                                {Object.keys(mockPreview.records[0]).map((field) => {
+                                  const value = record[field];
+                                  const shown = value == null || value === '' ? '—' : typeof value === 'object' ? JSON.stringify(value) : String(value);
+                                  return <td key={field} className="max-w-[320px] whitespace-nowrap px-3 py-2 text-slate-300" title={shown}>{shown}</td>;
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : <p className="px-4 py-6 text-center text-xs text-slate-400">{translateText('A origem não contém registros para este conjunto.')}</p>}
+                    <div className="flex items-center justify-between border-t border-slate-800 px-4 py-3">
+                      <span className="text-[11px] text-slate-500">{translateText('Somente leitura · nenhuma gravação no banco')}</span>
+                      {mockPreview.nextCursor && <button disabled={mockPreviewLoading} onClick={() => void loadMockPreview(mockPreviewEntity, mockPreview.nextCursor || undefined, true)} className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-200 disabled:opacity-50">{translateText(mockPreviewLoading ? 'Carregando…' : 'Carregar mais registros')}</button>}
+                      {mockPreviewLoading && !mockPreview.nextCursor && <span className="text-xs text-cyan-200">{translateText('Carregando…')}</span>}
+                    </div>
+                  </>
+                )}
+                {!mockPreview && mockPreviewLoading && <p className="px-4 py-6 text-center text-xs text-cyan-200">{translateText('Carregando…')}</p>}
+              </section>
+
+              {mockValidation.limitations.length > 0 && (
+                <section className="rounded-xl border border-amber-500/25 bg-amber-950/10 p-4">
+                  <h4 className="text-xs font-semibold text-amber-200">{translateText('Limitações encontradas')}</h4>
+                  <ul className="mt-2 space-y-2">
+                    {mockValidation.limitations.map((limitation) => (
+                      <li key={limitation.endpoint} className="text-xs text-amber-100/80">
+                        <span className="font-mono text-[10px] text-amber-300">{limitation.endpoint}</span>
+                        <span className="ml-2">{limitation.message}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+            </>
           )}
         </div>
       )}
@@ -737,7 +1026,7 @@ export const ProtheusSyncView: React.FC<ProtheusSyncViewProps> = ({
                               {Number(op.quantidadeProduzida)}
                             </td>
                             <td className="py-2.5 px-3 text-amber-300 font-medium">
-                              {op.etapaAtual || 'Planejada'}
+                              {op.etapaAtual || 'Etapa não informada'}
                             </td>
                             <td className="py-2.5 px-3 text-right">
                               <button
@@ -796,7 +1085,7 @@ export const ProtheusSyncView: React.FC<ProtheusSyncViewProps> = ({
                     Etapa Atual Calculada
                   </span>
                   <span className="text-xs font-bold text-amber-300 block mt-1">
-                    {selectedOpDetail.order.etapaAtual || 'Planejada'}
+                    {selectedOpDetail.order.etapaAtual || 'Etapa não informada'}
                   </span>
                 </div>
                 <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">

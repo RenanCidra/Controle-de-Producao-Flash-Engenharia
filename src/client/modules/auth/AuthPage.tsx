@@ -40,28 +40,30 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setupRequired, bootstrapEnab
 
   return (
     <main className="min-h-[100dvh] bg-[#0C1420] text-white selection:bg-amber-400/30">
-      <div className="mx-auto grid min-h-[100dvh] max-w-[1440px] lg:grid-cols-[1.08fr_0.92fr]">
-        <section className="relative order-2 flex flex-col justify-between overflow-hidden px-5 py-6 sm:px-8 sm:py-10 lg:order-1 lg:px-16 lg:py-12">
+      <div className="grid min-h-[100dvh] w-full lg:grid-cols-[1.08fr_0.92fr]">
+        <section className="relative order-2 flex flex-col justify-between overflow-hidden bg-[#0C1420] px-4 py-6 sm:px-8 sm:py-9 lg:order-1 lg:px-16 lg:py-12">
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-cover opacity-60 saturate-[0.8]" style={{ backgroundImage: "url('/assets/login-production.webp')", backgroundPosition: '62% center' }} />
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0C1420]/40 via-[#0C1420]/35 to-[#0C1420]/70" />
           <div className="pointer-events-none absolute -left-28 top-1/4 h-96 w-96 rounded-full bg-amber-500/10 blur-3xl" />
           <div className="relative flex items-center gap-3">
             <div className="flex flex-col items-start gap-1.5">
-              <img src="/assets/flash-brand.svg" alt="Flash Engenharia" className="h-12 w-[190px] object-contain object-left" />
-              <div className="text-xs text-slate-400">{t('Controle de Produção Industrial')}</div>
+              <img src="/assets/flash-brand.svg" alt="Flash Engenharia" className="h-10 w-40 object-contain object-left sm:h-12 sm:w-[190px]" />
             </div>
           </div>
 
-          <div className="relative my-10 max-w-2xl sm:my-12 lg:my-0">
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs font-medium text-amber-300">
-              <Activity size={14} /> {t('Produção conectada, rastreável e sob controle')}
+          <div className="relative my-7 max-w-2xl sm:my-10 lg:my-0">
+            <div className="mb-4 inline-flex max-w-full items-center gap-2 rounded-full border border-slate-700 bg-[#101A27] px-3 py-1.5 text-[10px] font-medium text-amber-300 sm:mb-5 sm:text-xs">
+              <Activity size={14} className="shrink-0" /> {t('Produção conectada, rastreável e sob controle')}
             </div>
-            <h1 className="max-w-xl text-3xl font-bold leading-tight tracking-tight sm:text-4xl lg:text-5xl">
-              {t('Da ordem de produção à entrega, com clareza em cada etapa.')}
+            <h1 className="max-w-xl text-2xl font-bold leading-tight tracking-tight sm:text-4xl lg:text-5xl">
+              <span className="block">{t('Da ordem de produção à entrega.')}</span>
+              <span className="mt-1 block text-amber-400">{t('Clareza em cada etapa.')}</span>
             </h1>
-            <p className="mt-5 max-w-xl text-base leading-7 text-slate-300">
+            <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:mt-5 sm:text-base sm:leading-7">
               {t('Acompanhe a operação em um só lugar e transforme dados dispersos em decisões mais rápidas para a fábrica.')}
             </p>
 
-            <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:mt-10">
+            <div className="mt-6 grid grid-cols-2 gap-2 sm:mt-8 sm:gap-3 lg:mt-10">
               <Feature icon={<Waypoints size={18} />} title={t('Rastreabilidade de ponta a ponta')} description={t('Conecte pedidos de venda, ordens de produção, etapas e apontamentos.')}/>
               <Feature icon={<Boxes size={18} />} title={t('Visibilidade da operação')} description={t('Encontre atrasos, saldo a produzir, refugo e disponibilidade de estoque.')}/>
               <Feature icon={<Activity size={18} />} title={t('Dados do Protheus integrados')} description={t('Centralize a leitura operacional de pedidos, produtos, roteiros e produção.')}/>
@@ -72,12 +74,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setupRequired, bootstrapEnab
           <div className="relative flex items-center gap-2 text-xs text-slate-500"><LockKeyhole size={14} /> {t('Acesso interno protegido por autenticação')}</div>
         </section>
 
-        <section className="order-1 flex items-center justify-center border-b border-slate-800 bg-[#111C2A] px-4 py-8 sm:px-8 sm:py-10 lg:order-2 lg:border-b-0 lg:border-l lg:px-10 lg:py-12">
-          <div className="w-full max-w-md">
-            <div className="mb-8">
+        <section className="relative isolate order-1 flex items-start justify-center overflow-hidden border-b border-slate-800 bg-[#111C2A] px-4 py-6 sm:px-8 sm:py-8 lg:order-2 lg:items-center lg:border-b-0 lg:border-l lg:px-12 lg:py-10 xl:px-20">
+          <div className="relative w-full max-w-md rounded-2xl border border-slate-700/80 bg-[#0B1420] px-4 py-5 shadow-2xl shadow-black/30 sm:rounded-3xl sm:px-7 sm:py-8">
+            <div className="mb-6 sm:mb-8">
               <div className="text-xs font-bold uppercase tracking-[0.18em] text-amber-400">{setupRequired ? t('Primeiro acesso') : t('Acesso ao sistema')}</div>
-              <h2 className="mt-3 text-3xl font-bold">{setupRequired ? t('Configure a conta administradora') : t('Boas-vindas')}</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-400">
+              <h2 className="mt-2 text-2xl font-bold sm:mt-3 sm:text-3xl">{setupRequired ? t('Configure a conta administradora') : t('Boas-vindas')}</h2>
+              <p className="mt-2 text-sm leading-5 text-slate-400 sm:leading-6">
                 {setupRequired
                   ? t('Ainda não existe um administrador ativo com senha configurada. Configure o acesso inicial seguro da equipe.')
                   : t('Entre com seu usuário e senha internos para acompanhar a operação.')}
@@ -98,7 +100,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setupRequired, bootstrapEnab
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
               {setupStatusChecked && !setupStatusError && setupRequired && bootstrapEnabled && <Field label={t('Chave temporária de implantação')} value={setupSecret} onChange={setSetupSecret} type="password" autoComplete="off" required />}
               {setupStatusChecked && !setupStatusError && setupRequired && <Field label={t('Nome do administrador')} value={name} onChange={setName} autoComplete="name" required />}
               {setupStatusChecked && !setupStatusError && (
@@ -130,7 +132,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setupRequired, bootstrapEnab
               </button>}
             </form>
 
-            <div className="mt-6 flex items-start gap-2 border-t border-slate-800 pt-5 text-xs leading-5 text-slate-500">
+            <div className="mt-5 flex items-start gap-2 border-t border-slate-800 pt-4 text-[11px] leading-5 text-slate-500 sm:mt-6 sm:pt-5 sm:text-xs">
               <ShieldCheck size={15} className="mt-0.5 shrink-0 text-emerald-500" />
               {t('As contas são administradas internamente. Não há cadastro público nem necessidade de e-mail para entrar.')}
             </div>
@@ -142,9 +144,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setupRequired, bootstrapEnab
 };
 
 function Feature({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
-  return <div className="rounded-xl border border-slate-800 bg-slate-900/55 p-4">
-    <div className="flex items-center gap-2 text-sm font-semibold text-slate-100"><span className="text-amber-400">{icon}</span>{title}</div>
-    <p className="mt-2 text-xs leading-5 text-slate-400">{description}</p>
+  return <div className="min-w-0 rounded-xl border border-slate-700/80 bg-[#111C2A] p-3 shadow-sm shadow-black/20 sm:p-4">
+    <div className="flex items-start gap-1.5 text-[11px] font-semibold leading-4 text-slate-100 sm:items-center sm:gap-2 sm:text-sm sm:leading-normal"><span className="shrink-0 text-amber-400">{icon}</span><span>{title}</span></div>
+    <p className="mt-1.5 text-[10px] leading-4 text-slate-400 sm:mt-2 sm:text-xs sm:leading-5">{description}</p>
   </div>;
 }
 

@@ -31,6 +31,7 @@ export const AuditView: React.FC<AuditViewProps> = ({ logs: initialLogs, onReloa
   const [pageSize, setPageSize] = useState<number>(25);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Filters
   const [searchInput, setSearchInput] = useState<string>('');
@@ -44,8 +45,9 @@ export const AuditView: React.FC<AuditViewProps> = ({ logs: initialLogs, onReloa
   const [copied, setCopied] = useState<boolean>(false);
 
   const fetchLogs = useCallback(
-    async (targetPage = page, targetPageSize = pageSize) => {
+    async (targetPage: number, targetPageSize: number) => {
       setLoading(true);
+      setLoadError(null);
       try {
         const res = await api.getAuditLogs({
           page: targetPage,
@@ -65,23 +67,28 @@ export const AuditView: React.FC<AuditViewProps> = ({ logs: initialLogs, onReloa
           setLogs(res.items || []);
           setTotal(res.total ?? 0);
           setTotalPages(res.totalPages ?? 1);
-          setPage(res.page ?? targetPage);
+          setPage(Math.min(res.page ?? targetPage, Math.max(1, res.totalPages ?? 1)));
         }
       } catch (err) {
         console.error('Failed to load audit logs:', err);
+        setLogs([]);
+        setTotal(0);
+        setTotalPages(1);
+        setLoadError(err instanceof Error ? err.message : 'Não foi possível carregar os eventos de auditoria.');
       } finally {
         setLoading(false);
       }
     },
-    [page, pageSize, selectedEntity, selectedAction, selectedStatus, searchQuery]
+    [pageSize, selectedEntity, selectedAction, selectedStatus, searchQuery]
   );
 
   useEffect(() => {
-    fetchLogs(1, pageSize);
-  }, [selectedEntity, selectedAction, selectedStatus, searchQuery, pageSize]);
+    fetchLogs(page, pageSize);
+  }, [fetchLogs, page, pageSize]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setPage(1);
     setSearchQuery(searchInput);
   };
 
@@ -91,6 +98,7 @@ export const AuditView: React.FC<AuditViewProps> = ({ logs: initialLogs, onReloa
     setSelectedEntity('ALL');
     setSelectedAction('ALL');
     setSelectedStatus('ALL');
+    setPage(1);
   };
 
   const handleRefresh = async () => {
@@ -104,17 +112,29 @@ export const AuditView: React.FC<AuditViewProps> = ({ logs: initialLogs, onReloa
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const formatDetailsPreview = (details: any) => {
-    if (!details) return '—';
+  const formatAuditDate = (value?: string) => {
+    if (!value) return '—';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 'Data inválida' : date.toLocaleString(getIntlLocale());
+  };
+
+  const safeAuditDetails = (details: any): any => {
+    let parsed = details;
     if (typeof details === 'string') {
-      try {
-        const parsed = JSON.parse(details);
-        return JSON.stringify(parsed);
-      } catch {
-        return details;
-      }
+      try { parsed = JSON.parse(details); } catch { return details; }
     }
-    return JSON.stringify(details);
+    const sensitive = /password|senha|secret|token|authorization|credential|api.?key|hash/i;
+    const scrub = (value: any): any => {
+      if (Array.isArray(value)) return value.map(scrub);
+      if (!value || typeof value !== 'object') return value;
+      return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, sensitive.test(key) ? '[REDACTED]' : scrub(nested)]));
+    };
+    return scrub(parsed);
+  };
+
+  const formattedDetails = (details: any, pretty = false) => {
+    const safe = safeAuditDetails(details);
+    return typeof safe === 'string' ? safe : JSON.stringify(safe, null, pretty ? 2 : undefined);
   };
 
   const getActionBadgeColor = (action: string) => {
@@ -139,6 +159,20 @@ export const AuditView: React.FC<AuditViewProps> = ({ logs: initialLogs, onReloa
         return 'bg-[#1C2532] text-slate-300 border border-[#263342]';
     }
   };
+
+  const getActionLabel = (action?: string) => ({
+    CREATE: 'Criado', UPDATE: 'Alterado', DELETE: 'Excluído', LOGIN: 'Entrada',
+    LOGOUT: 'Saída', PASSWORD_RESET: 'Senha redefinida', IMPORT: 'Importação',
+    SYNC: 'Sincronização', TEST_INTEGRATION: 'Teste de integração',
+  } as Record<string, string>)[action?.toUpperCase() || ''] || action || 'Evento';
+
+  const getEntityLabel = (entity?: string) => ({
+    PRODUCTION_ORDER: 'Ordem de produção', PRODUCTION_ORDERS: 'Ordens de produção',
+    SALES_ORDER: 'Pedido de venda', SALES_ORDERS: 'Pedidos de venda',
+    PROTHEUS_SYNC: 'Protheus', AUTH: 'Acesso', USER: 'Usuário', QUALITY: 'Qualidade',
+    INVENTORY: 'Estoque', PRODUCTION_LINE: 'Posto de trabalho', ORGANIZATION: 'Unidade',
+    INTEGRATION: 'Integração', SYSTEM: 'Sistema',
+  } as Record<string, string>)[entity?.toUpperCase() || ''] || entity || 'Registro';
 
   const startRecord = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const endRecord = Math.min(total, page * pageSize);
@@ -275,7 +309,15 @@ export const AuditView: React.FC<AuditViewProps> = ({ logs: initialLogs, onReloa
       </div>
 
       {/* Table Content */}
-      {logs.length === 0 ? (
+      {loadError ? (
+        <div role="alert" className="flex items-start gap-3 rounded-xl border border-rose-900/70 bg-rose-950/30 p-4 text-sm text-rose-200">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className="flex-1"><p className="font-semibold">Falha ao carregar auditoria</p><p className="mt-1 text-xs text-rose-200/80">{loadError}</p></div>
+          <button onClick={() => fetchLogs(page, pageSize)} className="rounded border border-rose-800 px-3 py-1 text-xs font-semibold hover:bg-rose-900/40">Tentar novamente</button>
+        </div>
+      ) : loading ? (
+        <div className="rounded-xl border border-[#202936] bg-[#151C25] px-4 py-8 text-center text-sm text-slate-400">Carregando eventos registrados…</div>
+      ) : logs.length === 0 ? (
         <EmptyState
           icon={FileText}
           title="Nenhum evento registrado."
@@ -287,39 +329,28 @@ export const AuditView: React.FC<AuditViewProps> = ({ logs: initialLogs, onReloa
               <thead className="bg-[#10161E] text-slate-400 uppercase font-semibold border-b border-[#202936]">
                 <tr>
                   <th className="py-3 px-4 whitespace-nowrap">Data / Hora</th>
-                  <th className="py-3 px-4">Ação</th>
-                  <th className="py-3 px-4">Entidade</th>
-                  <th className="py-3 px-4">Ref. ID</th>
-                  <th className="py-3 px-4">Autor / Usuário</th>
-                  <th className="py-3 px-4">IP / Origem</th>
-                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4">Evento</th>
+                  <th className="py-3 px-4">Registro</th>
+                  <th className="py-3 px-4">Autor</th>
+                  <th className="py-3 px-4">Resultado</th>
                   <th className="py-3 px-4 text-right">Detalhes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#202936]">
                 {logs.map((log) => {
-                  const isSuccess = log.status !== 'FAILURE';
+                  const isSuccess = log.status === 'SUCCESS';
+                  const isFailure = log.status === 'FAILURE';
                   return (
                     <tr key={log.id} className="hover:bg-[#1C2532]/70 transition">
                       <td className="py-3 px-4 font-mono text-slate-400 whitespace-nowrap">
-                        {log.createdAt ? new Date(log.createdAt).toLocaleString(getIntlLocale()) : '—'}
+                        {formatAuditDate(log.createdAt)}
                       </td>
-                      <td className="py-3 px-4 whitespace-nowrap">
-                        <span className={`inline-block px-2 py-0.5 rounded-sm text-[11px] font-bold ${getActionBadgeColor(log.action)}`}>
-                          {log.action}
-                        </span>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2"><span className={`inline-block px-2 py-0.5 rounded-sm text-[10px] font-bold ${getActionBadgeColor(log.action)}`}>{getActionLabel(log.action)}</span><span className="font-semibold text-white">{getEntityLabel(log.entity)}</span></div>
                       </td>
-                      <td className="py-3 px-4 font-semibold text-white whitespace-nowrap">
-                        {log.entity}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-slate-400 whitespace-nowrap">
-                        {log.entityId ? `#${log.entityId}` : '—'}
-                      </td>
+                      <td className="py-3 px-4 font-mono text-slate-400 whitespace-nowrap">{log.entityId || '—'}</td>
                       <td className="py-3 px-4 font-mono text-slate-300 max-w-[160px] truncate" title={log.userEmail || log.userId || ''}>
                         {log.userEmail || log.userId || '—'}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-slate-400 whitespace-nowrap">
-                        {log.ipAddress || '—'}
                       </td>
                       <td className="py-3 px-4 whitespace-nowrap">
                         {isSuccess ? (
@@ -327,12 +358,12 @@ export const AuditView: React.FC<AuditViewProps> = ({ logs: initialLogs, onReloa
                             <CheckCircle2 className="h-3 w-3" />
                             OK
                           </span>
-                        ) : (
+                        ) : isFailure ? (
                           <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-400">
                             <AlertCircle className="h-3 w-3" />
                             Falha
                           </span>
-                        )}
+                        ) : <span className="text-slate-400">{log.status || 'Não informado'}</span>}
                       </td>
                       <td className="py-3 px-4 text-right whitespace-nowrap">
                         <button
@@ -424,10 +455,10 @@ export const AuditView: React.FC<AuditViewProps> = ({ logs: initialLogs, onReloa
             <div className="px-5 py-4 bg-[#10161E] border-b border-[#202936] flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <span className={`px-2 py-0.5 rounded-sm text-xs font-bold ${getActionBadgeColor(activeLog.action)}`}>
-                  {activeLog.action}
+                  {getActionLabel(activeLog.action)}
                 </span>
                 <h4 className="text-sm font-bold text-white">
-                  {activeLog.entity} {activeLog.entityId ? `#${activeLog.entityId}` : ''}
+                  {getEntityLabel(activeLog.entity)} {activeLog.entityId ? `#${activeLog.entityId}` : ''}
                 </h4>
               </div>
               <button
@@ -439,11 +470,11 @@ export const AuditView: React.FC<AuditViewProps> = ({ logs: initialLogs, onReloa
             </div>
 
             <div className="p-5 overflow-y-auto space-y-4 text-xs">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#10161E] p-3 rounded-lg border border-[#202936]">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-[#10161E] p-3 rounded-lg border border-[#202936]">
                 <div>
                   <span className="block text-[10px] uppercase font-semibold text-slate-500">Data / Hora</span>
                   <span className="font-mono text-slate-200">
-                    {activeLog.createdAt ? new Date(activeLog.createdAt).toLocaleString(getIntlLocale()) : '—'}
+                    {formatAuditDate(activeLog.createdAt)}
                   </span>
                 </div>
                 <div>
@@ -458,8 +489,8 @@ export const AuditView: React.FC<AuditViewProps> = ({ logs: initialLogs, onReloa
                 </div>
                 <div>
                   <span className="block text-[10px] uppercase font-semibold text-slate-500">Status</span>
-                  <span className={activeLog.status === 'FAILURE' ? 'text-rose-400 font-bold' : 'text-emerald-400 font-bold'}>
-                    {activeLog.status || 'SUCCESS'}
+                  <span className={activeLog.status === 'FAILURE' ? 'text-rose-400 font-bold' : activeLog.status === 'SUCCESS' ? 'text-emerald-400 font-bold' : 'text-slate-300 font-semibold'}>
+                    {activeLog.status || 'Não informado'}
                   </span>
                 </div>
               </div>
@@ -477,7 +508,7 @@ export const AuditView: React.FC<AuditViewProps> = ({ logs: initialLogs, onReloa
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[11px] font-semibold text-slate-400">Conteúdo dos Detalhes</span>
                   <button
-                    onClick={() => handleCopyDetails(formatDetailsPreview(activeLog.details))}
+                    onClick={() => handleCopyDetails(formattedDetails(activeLog.details))}
                     className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1 transition"
                   >
                     {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
@@ -487,8 +518,7 @@ export const AuditView: React.FC<AuditViewProps> = ({ logs: initialLogs, onReloa
                 <pre className="bg-[#10161E] border border-[#202936] rounded-lg p-3 font-mono text-[11px] text-slate-200 overflow-x-auto whitespace-pre-wrap leading-relaxed max-h-60">
                   {(() => {
                     try {
-                      const parsed = typeof activeLog.details === 'string' ? JSON.parse(activeLog.details) : activeLog.details;
-                      return JSON.stringify(parsed, null, 2);
+                      return formattedDetails(activeLog.details, true);
                     } catch {
                       return activeLog.details || 'Sem detalhes adicionais.';
                     }

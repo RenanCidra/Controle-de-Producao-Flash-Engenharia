@@ -134,13 +134,13 @@ export const TraceabilityDetailModal: React.FC<TraceabilityDetailModalProps> = (
           <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 col-span-2 md:col-span-1">
             <span className="text-slate-400 text-[11px] block">Avanço Físico</span>
             <div className="flex items-center gap-2 mt-1">
-              <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
+              {op.percentualConclusao != null ? <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-gradient-to-r from-amber-500 to-emerald-500 rounded-full"
                   style={{ width: `${op.percentualConclusao}%` }}
                 />
-              </div>
-              <span className="text-xs font-mono font-bold text-slate-200 print:text-black">{op.percentualConclusao}%</span>
+              </div> : <span className="flex-1 text-xs text-slate-400">Sem base para cálculo</span>}
+              <span className="text-xs font-mono font-bold text-slate-200 print:text-black">{op.percentualConclusao == null ? '—' : `${op.percentualConclusao}%`}</span>
             </div>
           </div>
         </div>

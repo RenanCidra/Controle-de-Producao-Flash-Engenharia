@@ -43,7 +43,7 @@ export interface TraceabilityMatrixItem {
   quantidadeProduzida: number;
   quantidadeRefugo: number;
   saldoAProduzir: number;
-  percentualConclusao: number;
+  percentualConclusao: number | null;
   statusProtheusOp: string;
   etapaAtual: string;
   postoTrabalhoAtual: string | null;
@@ -146,5 +146,5 @@ export interface TraceabilitySummaryMetrics {
   opsConcluidas: number;
   opsAtrasadas: number;
   opsComRefugo: number;
-  taxaEntregaPrazoPercentual: number;
+  taxaEntregaPrazoPercentual: number | null;
 }

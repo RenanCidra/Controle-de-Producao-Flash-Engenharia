@@ -232,8 +232,8 @@ export class TraceabilityRepository {
       const qtdPlan = Number(op.quantidadePlanejada) || 0;
       const qtdProd = Number(op.quantidadeProduzida) || 0;
       const qtdRefugo = Number(op.quantidadeRefugo) || 0;
-      const saldo = Number(op.saldoAProduzir) || Math.max(0, qtdPlan - qtdProd);
-      const percentual = qtdPlan > 0 ? Math.min(100, Math.round((qtdProd / qtdPlan) * 100)) : 0;
+      const saldo = Number(op.saldoAProduzir);
+      const percentual = qtdPlan > 0 ? Math.min(100, Math.round((qtdProd / qtdPlan) * 100)) : null;
 
       const apptInfo = apptMap.get(op.numeroOp);
       const totalRoteiro = routingCountMap.get(op.codigoProduto) || 0;
@@ -249,7 +249,7 @@ export class TraceabilityRepository {
         idOp: op.id,
         numeroOp: op.numeroOp,
         codigoProduto: op.codigoProduto,
-        descricaoProduto: op.descricaoProduto || 'Sem descrição cadastrada',
+        descricaoProduto: op.descricaoProduto || 'Descrição não informada',
         codigoRoteiro: op.codigoRoteiro,
         quantidadePlanejada: qtdPlan,
         quantidadeProduzida: qtdProd,
@@ -257,7 +257,7 @@ export class TraceabilityRepository {
         saldoAProduzir: saldo,
         percentualConclusao: percentual,
         statusProtheusOp: op.statusProtheus,
-        etapaAtual: op.etapaAtual || 'Planejada (Sem apontamentos)',
+        etapaAtual: op.etapaAtual || 'Etapa não informada',
         postoTrabalhoAtual: apptInfo?.lastPosto || null,
         dataEmissaoOp: op.dataEmissao,
         dataInicioRealOp: op.dataInicioReal,
@@ -391,7 +391,7 @@ export class TraceabilityRepository {
               numeroOp: cop.numeroOp,
               quantidadePlanejada: Number(cop.quantidadePlanejada),
               quantidadeProduzida: Number(cop.quantidadeProduzida),
-              etapaAtual: cop.etapaAtual || 'Planejada',
+              etapaAtual: cop.etapaAtual || 'Etapa não informada',
               statusProtheus: cop.statusProtheus,
             }
           : null,
@@ -503,18 +503,18 @@ export class TraceabilityRepository {
       idOp: op.id,
       numeroOp: op.numeroOp,
       codigoProduto: op.codigoProduto,
-      descricaoProduto: op.descricaoProduto || prod?.descricao || 'Sem descrição cadastrada',
+      descricaoProduto: op.descricaoProduto || prod?.descricao || 'Descrição não informada',
       codigoRoteiro: op.codigoRoteiro,
       quantidadePlanejada: qtdPlanejadaOp,
       quantidadeProduzida: Number(op.quantidadeProduzida) || 0,
       quantidadeRefugo: Number(op.quantidadeRefugo) || 0,
-      saldoAProduzir: Number(op.saldoAProduzir) || 0,
+      saldoAProduzir: Number(op.saldoAProduzir),
       percentualConclusao:
         qtdPlanejadaOp > 0
           ? Math.min(100, Math.round(((Number(op.quantidadeProduzida) || 0) / qtdPlanejadaOp) * 100))
           : 0,
       statusProtheusOp: op.statusProtheus,
-      etapaAtual: op.etapaAtual || 'Planejada',
+      etapaAtual: op.etapaAtual || 'Etapa não informada',
       postoTrabalhoAtual: appointmentRows[0]?.postoTrabalho || null,
       dataEmissaoOp: op.dataEmissao,
       dataInicioRealOp: op.dataInicioReal,
@@ -588,15 +588,25 @@ export class TraceabilityRepository {
 
     const totalOps = ops.length;
     const uniquePvs = new Set(pvs.map((p) => p.numeroPv)).size;
+    const pvsByItem = new Map(pvs.map((pv) => [`${pv.numeroPv}_${pv.itemPv}`, pv]));
 
     let opsConcluidas = 0;
     let opsEmAndamento = 0;
     let opsAtrasadas = 0;
+    let conclusoesComPrazoConhecido = 0;
+    let conclusoesNoPrazo = 0;
 
     for (const op of ops) {
-      const prazo = calculatePrazoStatus(op.statusProtheus, op.dataPrevisaoFim);
+      const pv = op.numeroPv ? pvsByItem.get(`${op.numeroPv}_${op.itemPv || ''}`) : undefined;
+      const prazo = calculatePrazoStatus(op.statusProtheus, op.dataPrevisaoFim, pv?.dataEntrega, op.dataConclusaoReal);
       if (prazo.statusPrazo === 'CONCLUIDO') {
         opsConcluidas++;
+        const dueDate = parseProtheusDate(pv?.dataEntrega || op.dataPrevisaoFim);
+        const completedDate = parseProtheusDate(op.dataConclusaoReal);
+        if (dueDate && completedDate) {
+          conclusoesComPrazoConhecido++;
+          if (completedDate.getTime() <= dueDate.getTime()) conclusoesNoPrazo++;
+        }
       } else if (prazo.statusPrazo === 'ATRASADO') {
         opsAtrasadas++;
         opsEmAndamento++;
@@ -606,8 +616,9 @@ export class TraceabilityRepository {
     }
 
     const opsComRefugo = Number(scrapOps[0]?.count || 0);
-    const taxaEntregaPrazo =
-      totalOps > 0 ? Math.round(((totalOps - opsAtrasadas) / totalOps) * 100) : 100;
+    const taxaEntregaPrazo = conclusoesComPrazoConhecido > 0
+      ? Math.round((conclusoesNoPrazo / conclusoesComPrazoConhecido) * 100)
+      : null;
 
     return {
       totalOps,

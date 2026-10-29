@@ -12,8 +12,7 @@ export class ProtheusNormalizer {
   public static parseCsv(content: string): { headers: string[]; rows: Record<string, string>[] } {
     const lines = content
       .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0);
+      .filter((line) => line.trim().length > 0);
 
     if (lines.length === 0) {
       return { headers: [], rows: [] };
@@ -50,6 +49,9 @@ export class ProtheusNormalizer {
           current += char;
         }
       }
+      if (inQuotes) {
+        throw new Error('CSV contém campo entre aspas com quebra de linha, formato ainda não suportado. Exporte novamente sem quebra de linha em células.');
+      }
       result.push(current.trim());
       return result;
     };
@@ -60,6 +62,9 @@ export class ProtheusNormalizer {
     for (let i = 1; i < lines.length; i++) {
       const values = parseLine(lines[i]);
       if (values.length === 0 || (values.length === 1 && !values[0])) continue;
+      if (values.length !== headers.length) {
+        throw new Error(`CSV inválido na linha ${i + 1}: esperadas ${headers.length} colunas, recebidas ${values.length}.`);
+      }
       const row: Record<string, string> = {};
       headers.forEach((header, index) => {
         row[header] = values[index] !== undefined ? values[index].replace(/^["']|["']$/g, '').trim() : '';
@@ -70,9 +75,15 @@ export class ProtheusNormalizer {
     return { headers, rows };
   }
 
-  public static normalizeNumber(value: any, defaultValue: number = 0): number {
-    if (value === undefined || value === null || value === '') return defaultValue;
-    if (typeof value === 'number') return isNaN(value) ? defaultValue : value;
+  public static normalizeNumber(value: any, defaultValue?: number): number {
+    if (value === undefined || value === null || String(value).trim() === '') {
+      if (defaultValue !== undefined) return defaultValue;
+      throw new Error('valor numérico ausente');
+    }
+    if (typeof value === 'number') {
+      if (Number.isFinite(value)) return value;
+      throw new Error('valor numérico inválido');
+    }
 
     let str = String(value).trim();
     // Handle Brazilian format (e.g. "1.500,50" -> "1500.50")
@@ -87,30 +98,42 @@ export class ProtheusNormalizer {
     }
 
     const parsed = parseFloat(str);
-    return isNaN(parsed) ? defaultValue : parsed;
+    if (!Number.isFinite(parsed)) throw new Error(`valor numérico inválido: ${String(value)}`);
+    return parsed;
   }
 
   public static normalizeDate(value: any): string {
-    if (!value) return new Date().toISOString().split('T')[0];
+    if (!value || !String(value).trim()) throw new Error('data obrigatória ausente');
     const str = String(value).trim();
 
     // Protheus YYYYMMDD format (e.g. 20261025)
     if (/^\d{8}$/.test(str)) {
-      return `${str.substring(0, 4)}-${str.substring(4, 6)}-${str.substring(6, 8)}`;
+      const date = `${str.substring(0, 4)}-${str.substring(4, 6)}-${str.substring(6, 8)}`;
+      if (!this.isValidDate(date)) throw new Error(`data inválida: ${str}`);
+      return date;
     }
 
     // DD/MM/YYYY format
     if (/^\d{2}\/\d{2}\/\d{4}$/.test(str)) {
       const [d, m, y] = str.split('/');
-      return `${y}-${m}-${d}`;
+      const date = `${y}-${m}-${d}`;
+      if (!this.isValidDate(date)) throw new Error(`data inválida: ${str}`);
+      return date;
     }
 
     // YYYY-MM-DD format
     if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
-      return str.substring(0, 10);
+      const date = str.substring(0, 10);
+      if (!this.isValidDate(date)) throw new Error(`data inválida: ${str}`);
+      return date;
     }
 
-    return str;
+    throw new Error(`formato de data não reconhecido: ${str}`);
+  }
+
+  private static isValidDate(value: string): boolean {
+    const date = new Date(`${value}T00:00:00Z`);
+    return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
   }
 
   public static detectEntityTypeFromHeaders(headers: string[]): ProtheusEntityType {
@@ -122,7 +145,7 @@ export class ProtheusNormalizer {
     if (headerStr.includes('H6_') || headerStr.includes('APONTAMENTO') || headerStr.includes('QTDPROD')) {
       return 'APPOINTMENTS';
     }
-    if (headerStr.includes('C2_') || headerStr.includes('ORDEM_PRODUCAO') || headerStr.includes('NUMERO_OP') || headerStr.includes('OP')) {
+    if (headerStr.includes('C2_') || headerStr.includes('ORDEM_PRODUCAO') || headerStr.includes('NUMERO_OP') || /\bOP\b/.test(headerStr)) {
       return 'PRODUCTION_ORDERS';
     }
     if (headerStr.includes('G1_') || headerStr.includes('ESTRUTURA') || headerStr.includes('BOM') || headerStr.includes('COMPONENTE')) {
@@ -131,11 +154,11 @@ export class ProtheusNormalizer {
     if (headerStr.includes('G2_') || headerStr.includes('ROTEIRO') || headerStr.includes('OPERACAO')) {
       return 'ROUTINGS';
     }
-    if (headerStr.includes('B1_') || headerStr.includes('PRODUTO') || headerStr.includes('DESCRICAO')) {
+    if (headerStr.includes('B1_') || headerStr.includes('CODIGO_PRODUTO') || headerStr.includes('COD_PRODUTO') || /\bPRODUTO\b/.test(headerStr)) {
       return 'PRODUCTS';
     }
 
-    return 'PRODUCTS';
+    throw new Error('Não foi possível identificar o tipo de dado pelos campos do arquivo. Selecione a entidade antes de importar.');
   }
 
   public static normalizeProduct(raw: Record<string, any>): NormalizedProduct {
@@ -148,11 +171,11 @@ export class ProtheusNormalizer {
     ).trim();
 
     const tipo = String(
-      raw.tipo || raw.B1_TIPO || raw.TIPO || 'PA'
+      raw.tipo || raw.B1_TIPO || raw.TIPO || ''
     ).trim().toUpperCase();
 
     const unidadeMedida = String(
-      raw.unidadeMedida || raw.B1_UM || raw.UNIDADE || raw.UM || 'UN'
+      raw.unidadeMedida || raw.B1_UM || raw.UNIDADE || raw.UM || ''
     ).trim().toUpperCase();
 
     const revisao = raw.revisao || raw.B1_REV || raw.REVISAO ? String(raw.revisao || raw.B1_REV || raw.REVISAO).trim() : undefined;
@@ -182,15 +205,16 @@ export class ProtheusNormalizer {
       : undefined;
 
     const quantidadeNecessaria = this.normalizeNumber(
-      raw.quantidadeNecessaria !== undefined ? raw.quantidadeNecessaria : (raw.G1_QUANT || raw.QUANTIDADE || 1)
+      raw.quantidadeNecessaria !== undefined ? raw.quantidadeNecessaria : (raw.G1_QUANT ?? raw.QUANTIDADE)
     );
 
     const unidadeComponente = String(
-      raw.unidadeComponente || raw.G1_UM || raw.UM_COMP || raw.UM || 'UN'
+      raw.unidadeComponente || raw.G1_UM || raw.UM_COMP || raw.UM || ''
     ).trim().toUpperCase();
 
-    const perdaPercentual = raw.perdaPercentual !== undefined || raw.G1_PERDA !== undefined
-      ? this.normalizeNumber(raw.perdaPercentual !== undefined ? raw.perdaPercentual : raw.G1_PERDA, 0)
+    const rawPerda = raw.perdaPercentual !== undefined ? raw.perdaPercentual : raw.G1_PERDA;
+    const perdaPercentual = rawPerda !== undefined && rawPerda !== null && String(rawPerda).trim() !== ''
+      ? this.normalizeNumber(rawPerda)
       : undefined;
 
     const revisao = raw.revisao || raw.G1_REV || raw.G1_REVINI ? String(raw.revisao || raw.G1_REV || raw.G1_REVINI).trim() : undefined;
@@ -212,27 +236,28 @@ export class ProtheusNormalizer {
     ).trim();
 
     const codigoRoteiro = String(
-      raw.codigoRoteiro || raw.G2_ROTEIRO || raw.ROTEIRO || '01'
+      raw.codigoRoteiro || raw.G2_ROTEIRO || raw.ROTEIRO || ''
     ).trim();
 
     const sequenciaOperacao = String(
-      raw.sequenciaOperacao || raw.G2_OPERAC || raw.OPERAC || raw.SEQ || '01'
+      raw.sequenciaOperacao || raw.G2_OPERAC || raw.OPERAC || raw.SEQ || ''
     ).trim();
 
     const codigoOperacao = String(
-      raw.codigoOperacao || raw.G2_CODIGO || raw.OPERACAO || raw.COD_OPER || sequenciaOperacao
+      raw.codigoOperacao || raw.G2_CODIGO || raw.OPERACAO || raw.COD_OPER || ''
     ).trim();
 
     const descricaoOperacao = String(
-      raw.descricaoOperacao || raw.G2_DESC || raw.DESCRICAO || `Operação ${sequenciaOperacao}`
+      raw.descricaoOperacao || raw.G2_DESC || raw.DESCRICAO || ''
     ).trim();
 
     const postoTrabalho = raw.postoTrabalho || raw.G2_RECURSO || raw.G2_POSTO || raw.POSTO || raw.RECURSO
       ? String(raw.postoTrabalho || raw.G2_RECURSO || raw.G2_POSTO || raw.POSTO || raw.RECURSO).trim()
       : undefined;
 
-    const tempoPadraoMinutos = raw.tempoPadraoMinutos !== undefined || raw.G2_TEMPO !== undefined
-      ? this.normalizeNumber(raw.tempoPadraoMinutos !== undefined ? raw.tempoPadraoMinutos : raw.G2_TEMPO)
+    const rawTempo = raw.tempoPadraoMinutos !== undefined ? raw.tempoPadraoMinutos : raw.G2_TEMPO;
+    const tempoPadraoMinutos = rawTempo !== undefined && rawTempo !== null && String(rawTempo).trim() !== ''
+      ? this.normalizeNumber(rawTempo)
       : undefined;
 
     return {
@@ -252,7 +277,7 @@ export class ProtheusNormalizer {
     ).trim();
 
     const itemPv = String(
-      raw.itemPv || raw.C6_ITEM || raw.ITEM_PV || raw.ITEM || '01'
+      raw.itemPv || raw.C6_ITEM || raw.ITEM_PV || raw.ITEM || ''
     ).trim();
 
     const clienteCodigo = raw.clienteCodigo || raw.C5_CLIENTE || raw.COD_CLIENTE
@@ -260,7 +285,7 @@ export class ProtheusNormalizer {
       : undefined;
 
     const clienteNome = String(
-      raw.clienteNome || raw.A1_NOME || raw.CLIENTE || raw.NOME_CLIENTE || 'Cliente Indefinido'
+      raw.clienteNome || raw.A1_NOME || raw.CLIENTE || raw.NOME_CLIENTE || ''
     ).trim();
 
     const clienteCnpj = raw.clienteCnpj || raw.A1_CGC || raw.CNPJ
@@ -280,17 +305,17 @@ export class ProtheusNormalizer {
     );
 
     const quantidadeEntregue = this.normalizeNumber(
-      raw.quantidadeEntregue !== undefined ? raw.quantidadeEntregue : (raw.C6_QTDENT || raw.QTD_ENTREGUE || 0)
+      raw.quantidadeEntregue !== undefined ? raw.quantidadeEntregue : (raw.C6_QTDENT ?? raw.QTD_ENTREGUE)
     );
 
     const unidadeMedida = String(
-      raw.unidadeMedida || raw.C6_UM || raw.UM || 'UN'
+      raw.unidadeMedida || raw.C6_UM || raw.UM || ''
     ).trim().toUpperCase();
 
     const dataEmissao = this.normalizeDate(raw.dataEmissao || raw.C5_EMISSAO || raw.EMISSAO);
     const dataEntrega = this.normalizeDate(raw.dataEntrega || raw.C6_ENTREG || raw.ENTREGA || raw.PREVISAO);
     const statusProtheus = String(
-      raw.statusProtheus || raw.C6_BLQ || raw.STATUS || 'ABERTO'
+      raw.statusProtheus || raw.C6_BLQ || raw.STATUS || ''
     ).trim();
 
     return {
@@ -338,24 +363,23 @@ export class ProtheusNormalizer {
       : undefined;
 
     const quantidadePlanejada = this.normalizeNumber(
-      raw.quantidadePlanejada !== undefined ? raw.quantidadePlanejada : (raw.C2_QUANT || raw.QUANTIDADE || 0)
+      raw.quantidadePlanejada !== undefined ? raw.quantidadePlanejada : (raw.C2_QUANT ?? raw.QUANTIDADE)
     );
 
     const quantidadeProduzida = this.normalizeNumber(
-      raw.quantidadeProduzida !== undefined ? raw.quantidadeProduzida : (raw.C2_QUJE || raw.QTD_PRODUZIDA || 0)
+      raw.quantidadeProduzida !== undefined ? raw.quantidadeProduzida : (raw.C2_QUJE ?? raw.QTD_PRODUZIDA)
     );
 
     const quantidadeRefugo = this.normalizeNumber(
-      raw.quantidadeRefugo !== undefined ? raw.quantidadeRefugo : (raw.C2_PERDA || raw.REFUGO || 0)
+      raw.quantidadeRefugo !== undefined ? raw.quantidadeRefugo : (raw.C2_PERDA ?? raw.REFUGO)
     );
 
-    let saldoAProduzir = this.normalizeNumber(
-      raw.saldoAProduzir !== undefined ? raw.saldoAProduzir : (raw.C2_SALDO !== undefined ? raw.C2_SALDO : (quantidadePlanejada - quantidadeProduzida))
+    const saldoAProduzir = this.normalizeNumber(
+      raw.saldoAProduzir !== undefined ? raw.saldoAProduzir : raw.C2_SALDO
     );
-    if (saldoAProduzir < 0) saldoAProduzir = 0;
 
     const statusProtheus = String(
-      raw.statusProtheus || raw.C2_STATUS || raw.STATUS || 'PLANEJADA'
+      raw.statusProtheus || raw.C2_STATUS || raw.STATUS || ''
     ).trim();
 
     const etapaAtual = raw.etapaAtual ? String(raw.etapaAtual).trim() : undefined;
@@ -399,7 +423,7 @@ export class ProtheusNormalizer {
     ).trim();
 
     const sequenciaOperacao = String(
-      raw.sequenciaOperacao || raw.H6_OPERAC || raw.OPERAC || raw.SEQ || '01'
+      raw.sequenciaOperacao || raw.H6_OPERAC || raw.OPERAC || raw.SEQ || ''
     ).trim();
 
     const codigoOperacao = raw.codigoOperacao || raw.H6_CODOPER || raw.OPERACAO
@@ -419,11 +443,11 @@ export class ProtheusNormalizer {
       : undefined;
 
     const quantidadeProduzida = this.normalizeNumber(
-      raw.quantidadeProduzida !== undefined ? raw.quantidadeProduzida : (raw.H6_QTDPROD || raw.QTD_PRODUZIDA || 0)
+      raw.quantidadeProduzida !== undefined ? raw.quantidadeProduzida : (raw.H6_QTDPROD ?? raw.QTD_PRODUZIDA)
     );
 
     const quantidadeRefugo = this.normalizeNumber(
-      raw.quantidadeRefugo !== undefined ? raw.quantidadeRefugo : (raw.H6_QTDPERD || raw.REFUGO || 0)
+      raw.quantidadeRefugo !== undefined ? raw.quantidadeRefugo : (raw.H6_QTDPERD ?? raw.REFUGO)
     );
 
     const dataApontamento = this.normalizeDate(
@@ -434,7 +458,7 @@ export class ProtheusNormalizer {
     const horaFim = raw.horaFim || raw.H6_HORAFIN ? String(raw.horaFim || raw.H6_HORAFIN).trim() : undefined;
 
     const tipoApontamento = String(
-      raw.tipoApontamento || raw.H6_TIPO || raw.TIPO || 'TOTAL'
+      raw.tipoApontamento || raw.H6_TIPO || raw.TIPO || ''
     ).trim().toUpperCase();
 
     const motivoRefugo = raw.motivoRefugo || raw.H6_MOTIVO

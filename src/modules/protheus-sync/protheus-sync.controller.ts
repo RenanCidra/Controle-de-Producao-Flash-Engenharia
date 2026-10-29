@@ -1,9 +1,45 @@
 import { Request, Response } from 'express';
 import { ProtheusSyncService } from './protheus-sync.service.ts';
 import { ProtheusSyncRepository } from './protheus-sync.repository.ts';
+import { ProtheusMockValidationService } from './protheus-mock-validation.service.ts';
 import { ProtheusSyncBundle, ProtheusEntityType } from './protheus-sync.types.ts';
 
 export class ProtheusSyncController {
+  public static async validateMock(_req: Request, res: Response): Promise<void> {
+    try {
+      res.json(await ProtheusMockValidationService.run());
+    } catch (error: any) {
+      res.status(502).json({ error: error?.message || 'Não foi possível verificar a API simulada.' });
+    }
+  }
+
+  public static async validateMockFlow(_req: Request, res: Response): Promise<void> {
+    try {
+      res.json(await ProtheusMockValidationService.runFlowCheck());
+    } catch (error: any) {
+      res.status(502).json({ error: error?.message || 'Não foi possível concluir a verificação dos relatórios.' });
+    }
+  }
+
+  public static async previewMockData(req: Request, res: Response): Promise<void> {
+    const entity = typeof req.query.entity === 'string' ? req.query.entity : '';
+    const cursor = typeof req.query.cursor === 'string' ? req.query.cursor : undefined;
+    const pageSize = req.query.pageSize === undefined ? 10 : Number(req.query.pageSize);
+    try {
+      res.json(await ProtheusMockValidationService.readPage(entity, cursor, pageSize));
+    } catch (error: any) {
+      const message = error?.message;
+      const status = message === 'MOCK_ENTITY_NOT_AVAILABLE' ? 404
+        : ['MOCK_PAGE_SIZE_INVALID', 'MOCK_CURSOR_INVALID'].includes(message) ? 400
+          : 502;
+      const userMessage = message === 'MOCK_ENTITY_NOT_AVAILABLE' ? 'Conjunto de dados não disponível na simulação.'
+        : message === 'MOCK_PAGE_SIZE_INVALID' ? 'O tamanho da página deve ficar entre 1 e 25.'
+          : message === 'MOCK_CURSOR_INVALID' ? 'O cursor da página é inválido ou expirou.'
+            : message || 'Não foi possível carregar a amostra da API simulada.';
+      res.status(status).json({ error: userMessage });
+    }
+  }
+
   public static async syncRest(req: Request, res: Response): Promise<void> {
     try {
       const authUser = (req as any).user;

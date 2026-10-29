@@ -74,4 +74,29 @@ export class AuthController {
     }
     return res.json({ message: 'Sessão encerrada com sucesso.' });
   }
+
+  public static async changePassword(req: AuthenticatedRequest, res: Response) {
+    const uid = req.user?.uid;
+    if (!uid) return res.status(401).json({ error: 'Sessão não autenticada.' });
+    try {
+      const { currentPassword, newPassword } = req.body || {};
+      if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
+        return res.status(400).json({ error: 'Informe a senha atual e a nova senha.' });
+      }
+      const forwardedFor = req.headers['x-forwarded-for'];
+      const ipAddress = typeof forwardedFor === 'string' ? forwardedFor.split(',')[0].trim() : req.socket.remoteAddress;
+      const result = await AuthService.changeOwnPassword(uid, currentPassword, newPassword, ipAddress);
+      return res.json(result);
+    } catch (error: any) {
+      const message = error?.message || 'Não foi possível alterar a senha.';
+      const status = message === 'SENHA_ATUAL_INCORRETA' ? 400
+        : message === 'CONTA_INATIVA' ? 403
+          : message === 'SENHA_NOVA_IGUAL' || message.includes('mínimo 12 caracteres') ? 400 : 500;
+      const safeMessage = message === 'SENHA_ATUAL_INCORRETA'
+        ? 'A senha atual não confere.'
+        : message === 'CONTA_INATIVA' ? 'A conta não está ativa.'
+          : message === 'SENHA_NOVA_IGUAL' ? 'A nova senha precisa ser diferente da senha atual.' : message;
+      return res.status(status).json({ error: safeMessage });
+    }
+  }
 }

@@ -14,6 +14,7 @@ import { IntegrationsView } from './client/modules/integrations/IntegrationsView
 import { SettingsView, SettingsSubTab } from './client/modules/settings/SettingsView.tsx';
 import { subscribeToLanguageChange } from './client/i18n/index.ts';
 import { AuthPage } from './client/modules/auth/AuthPage.tsx';
+import { UserProfileModal } from './client/modules/auth/UserProfileModal.tsx';
 
 const DEV_PREVIEW_AUTH = import.meta.env.DEV && import.meta.env.VITE_DEV_PREVIEW_AUTH === 'true';
 const DEV_PREVIEW_USER: AuthUser = {
@@ -40,6 +41,7 @@ export default function App() {
   const [loading, setLoading] = useState<boolean>(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [setupRequired, setSetupRequired] = useState(false);
   const [bootstrapEnabled, setBootstrapEnabled] = useState(false);
   const [setupStatusChecked, setSetupStatusChecked] = useState(false);
@@ -313,6 +315,7 @@ export default function App() {
             setActiveTab={setActiveTab}
             currentUser={currentUser}
             onOpenAuth={() => setAuthModalOpen(true)}
+            onOpenProfile={() => setProfileModalOpen(true)}
             onLogout={handleLogout}
             onOpenSettings={handleNavigateToSettings}
             collapsed={sidebarCollapsed && !mobileSidebarOpen}
@@ -321,7 +324,15 @@ export default function App() {
             onCloseMobile={() => setMobileSidebarOpen(false)}
           />
 
-          <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#F1F4F7]">
+          <main
+            className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#F1F4F7]"
+            style={{
+              backgroundImage: "linear-gradient(rgba(241,244,247,0.91), rgba(241,244,247,0.91)), url('/assets/login-production.webp')",
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundAttachment: 'fixed',
+            }}
+          >
             <Header
               plantCode={factoryProfile?.plantCode}
               currentUser={currentUser}
@@ -335,7 +346,7 @@ export default function App() {
               onToggleSidebar={handleToggleSidebar}
             />
 
-            <div className="min-w-0 flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 bg-[#F1F4F7]">
+            <div className="min-w-0 flex-1 overflow-y-auto bg-transparent p-3 sm:p-4 lg:p-6">
               {activeTab === 'dashboard' && (
                 <DashboardView
                   stats={stats}
@@ -438,6 +449,7 @@ export default function App() {
         }}
         onError={(err) => showToast(err, 'error')}
       />
+      <UserProfileModal isOpen={profileModalOpen} user={currentUser} onClose={() => setProfileModalOpen(false)} />
     </div>
   );
 }

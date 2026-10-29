@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import { AuthRepository } from './auth.repository.ts';
+import { UsersRepository } from '../users/users.repository.ts';
 import { normalizeLoginName, validateLoginName, validatePassword } from './credentials.ts';
 import { TokenService } from '../../services/token.service.ts';
 import { AuditService } from '../../services/audit.service.ts';
@@ -34,6 +35,33 @@ function issueAccessToken(user: any): string {
 }
 
 export class AuthService {
+  public static async changeOwnPassword(uid: string, currentPassword: string, newPassword: string, ipAddress?: string) {
+    const user = await AuthRepository.findByUid(uid);
+    if (!user || user.status !== 'ACTIVE') throw new Error('CONTA_INATIVA');
+    if (!user.passwordHash || !await bcrypt.compare(currentPassword, user.passwordHash)) {
+      throw new Error('SENHA_ATUAL_INCORRETA');
+    }
+    validatePassword(newPassword);
+    if (await bcrypt.compare(newPassword, user.passwordHash)) {
+      throw new Error('SENHA_NOVA_IGUAL');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await UsersRepository.updatePassword(user.id, passwordHash);
+    await AuditService.record({
+      userId: user.uid,
+      userEmail: user.email,
+      action: 'UPDATE',
+      entity: 'USER',
+      entityId: String(user.id),
+      details: { action: 'OWN_PASSWORD_CHANGE', loginName: user.loginName },
+      ipAddress,
+      status: 'SUCCESS',
+    });
+
+    return { success: true, message: 'Senha alterada com sucesso.' };
+  }
+
   public static async getSetupStatus() {
     const hasAdminCredential = await AuthRepository.hasActiveAdminCredential();
     return {
