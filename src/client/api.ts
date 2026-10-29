@@ -117,6 +117,17 @@ class ApiService {
       totalProtheusOp: number;
       totalProtheusProducts: number;
       totalProtheusBatches: number;
+      totalProtheusStructures: number;
+      totalProtheusRoutings: number;
+      totalProtheusAppointments: number;
+      latestProtheusImport: {
+        batchCode: string;
+        sourceType: string;
+        entityType: string;
+        recordsCount: number;
+        status: string;
+        createdAt: string | null;
+      } | null;
       organization: any;
     }>('/stats');
   }

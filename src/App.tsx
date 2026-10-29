@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { api, AuthUser } from './client/api.ts';
 import { Sidebar, ActiveTab } from './client/components/Sidebar.tsx';
@@ -68,8 +68,22 @@ export default function App() {
     totalProtheusOp: number;
     totalProtheusProducts: number;
     totalProtheusBatches: number;
+    totalProtheusStructures: number;
+    totalProtheusRoutings: number;
+    totalProtheusAppointments: number;
+    latestProtheusImport: {
+      batchCode: string;
+      sourceType: string;
+      entityType: string;
+      recordsCount: number;
+      status: string;
+      createdAt: string | null;
+    } | null;
     organization: any;
   } | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [statsUpdatedAt, setStatsUpdatedAt] = useState<string | null>(null);
 
   const [orders, setOrders] = useState<any[]>([]);
   const [lines, setLines] = useState<any[]>([]);
@@ -85,15 +99,21 @@ export default function App() {
     setTimeout(() => setMessage(null), 4000);
   };
 
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
+    setStatsLoading(true);
     try {
       const data = await api.getStats();
       setStats(data);
+      setStatsError(null);
+      setStatsUpdatedAt(new Date().toISOString());
       if (data.organization) setFactoryProfile(data.organization);
     } catch (err: any) {
       console.error(err);
+      setStatsError(err.message || 'Não foi possível atualizar os dados do espelho.');
+    } finally {
+      setStatsLoading(false);
     }
-  };
+  }, []);
 
   const loadTabData = async (tab: ActiveTab) => {
     setLoading(true);
@@ -177,9 +197,14 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser) return;
-    loadStats();
     loadTabData(activeTab);
   }, [activeTab, currentUser]);
+
+  useEffect(() => {
+    if (!currentUser || activeTab !== 'dashboard') return;
+    const interval = window.setInterval(() => void loadStats(), 5 * 60 * 1000);
+    return () => window.clearInterval(interval);
+  }, [activeTab, currentUser, loadStats]);
 
   const handleLogout = async () => {
     try {
@@ -271,10 +296,10 @@ export default function App() {
               activeTab={activeTab}
               plantCode={factoryProfile?.plantCode}
               currentUser={currentUser}
-              loading={loading}
+              loading={loading || statsLoading}
               onRefresh={() => {
-                loadStats();
-                loadTabData(activeTab);
+                if (activeTab === 'dashboard') void loadStats();
+                else void loadTabData(activeTab);
               }}
               onOpenAuth={() => setAuthModalOpen(true)}
               onOpenSettings={handleNavigateToSettings}
@@ -284,6 +309,10 @@ export default function App() {
               {activeTab === 'dashboard' && (
                 <DashboardView
                   stats={stats}
+                  refreshing={statsLoading}
+                  refreshError={statsError}
+                  statsUpdatedAt={statsUpdatedAt}
+                  onRefresh={() => void loadStats()}
                   onNavigate={(tab, subTab) => {
                     if (tab === 'settings') {
                       handleNavigateToSettings(subTab || 'data-sync');

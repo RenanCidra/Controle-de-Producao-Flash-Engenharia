@@ -23,9 +23,12 @@ import {
   protheusSalesOrders,
   protheusProductionOrders,
   protheusProducts,
+  protheusProductStructures,
+  protheusRoutings,
+  protheusProductionAppointments,
   protheusImportBatches,
 } from './db/schema.ts';
-import { sql } from 'drizzle-orm';
+import { desc, sql } from 'drizzle-orm';
 import { auditHttpMiddleware } from './middleware/audit.middleware.ts';
 import { authenticateToken } from './middleware/auth.middleware.ts';
 
@@ -80,6 +83,10 @@ apiRouter.get('/stats', async (req: Request, res: Response) => {
       protheusOpCount,
       protheusProdCount,
       protheusBatchesCount,
+      protheusStructuresCount,
+      protheusRoutingsCount,
+      protheusAppointmentsCount,
+      latestImport,
     ] = await Promise.all([
       db.select({ count: sql<number>`count(*)` }).from(users),
       db.select({ count: sql<number>`count(*)` }).from(inventoryItems),
@@ -93,6 +100,17 @@ apiRouter.get('/stats', async (req: Request, res: Response) => {
       db.select({ count: sql<number>`count(*)` }).from(protheusProductionOrders),
       db.select({ count: sql<number>`count(*)` }).from(protheusProducts),
       db.select({ count: sql<number>`count(*)` }).from(protheusImportBatches),
+      db.select({ count: sql<number>`count(*)` }).from(protheusProductStructures),
+      db.select({ count: sql<number>`count(*)` }).from(protheusRoutings),
+      db.select({ count: sql<number>`count(*)` }).from(protheusProductionAppointments),
+      db.select({
+        batchCode: protheusImportBatches.batchCode,
+        sourceType: protheusImportBatches.sourceType,
+        entityType: protheusImportBatches.entityType,
+        recordsCount: protheusImportBatches.recordsCount,
+        status: protheusImportBatches.status,
+        createdAt: protheusImportBatches.createdAt,
+      }).from(protheusImportBatches).orderBy(desc(protheusImportBatches.createdAt)).limit(1),
     ]);
 
     res.json({
@@ -107,6 +125,10 @@ apiRouter.get('/stats', async (req: Request, res: Response) => {
       totalProtheusOp: Number(protheusOpCount[0]?.count || 0),
       totalProtheusProducts: Number(protheusProdCount[0]?.count || 0),
       totalProtheusBatches: Number(protheusBatchesCount[0]?.count || 0),
+      totalProtheusStructures: Number(protheusStructuresCount[0]?.count || 0),
+      totalProtheusRoutings: Number(protheusRoutingsCount[0]?.count || 0),
+      totalProtheusAppointments: Number(protheusAppointmentsCount[0]?.count || 0),
+      latestProtheusImport: latestImport[0] || null,
       organization: orgData[0] || null,
     });
   } catch (error: any) {
