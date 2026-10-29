@@ -3,6 +3,7 @@ import {
   Home,
   GitBranch,
   Activity,
+  Link2,
   ClipboardList,
   CalendarDays,
   Settings,
@@ -138,17 +139,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {mobileOpen && <button type="button" onClick={onCloseMobile} title="Fechar menu" aria-label="Fechar menu" className="rounded-md p-1.5 text-slate-400 hover:bg-[#1C2532] hover:text-white md:hidden"><X className="h-4 w-4" /></button>}
       </div>
 
-      {/* API Reachability Status */}
+      {/* Internal backend reachability and Protheus source integration state */}
       <div className={collapsed ? 'px-0 py-2.5' : 'px-4 py-2.5'}>
-        <div title={collapsed ? `Backend do sistema: ${apiStatusText}` : undefined} aria-live="polite" className={`rounded-full border border-[#263342] bg-[#1B232E] flex items-center text-xs ${collapsed ? 'mx-auto h-9 w-9 justify-center' : 'px-3 py-1.5 justify-between'}`}>
-          <span className={`flex items-center gap-1.5 font-medium text-[11px] ${apiStatusColor}`}>
-            <Activity className="h-3.5 w-3.5" />
-            {!collapsed && 'Backend do sistema'}
-          </span>
-          {!collapsed && <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${apiStatusColor}`}>
-            <span className={`h-2 w-2 rounded-full ${apiStatusDot}`}></span>
-            {apiStatusText}
-          </span>}
+        <div title={collapsed ? `Backend local: ${apiStatusText} · Protheus: leitura automática não configurada` : undefined} aria-live="polite" className={`rounded-xl border border-[#263342] bg-[#1B232E] text-xs ${collapsed ? 'mx-auto flex h-[68px] w-9 flex-col items-center justify-center gap-2' : 'space-y-2 px-3 py-2.5'}`}>
+          <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'}`}>
+            <span className={`flex items-center gap-1.5 font-medium text-[11px] ${apiStatusColor}`}>
+              <Activity className="h-3.5 w-3.5 shrink-0" />
+              {!collapsed && 'Backend local'}
+            </span>
+            {!collapsed && <span className={`inline-flex items-center gap-1.5 text-[10px] font-semibold ${apiStatusColor}`}>
+              <span className={`h-2 w-2 rounded-full ${apiStatusDot}`}></span>
+              {apiStatusText}
+            </span>}
+          </div>
+          <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between border-t border-[#263342] pt-2'}`}>
+            <span className="flex items-center gap-1.5 text-[11px] font-medium text-amber-300">
+              <Link2 className="h-3.5 w-3.5 shrink-0" />
+              {!collapsed && 'Protheus'}
+            </span>
+            {!collapsed && <span className="text-right text-[10px] font-semibold leading-tight text-amber-300">Leitura não configurada</span>}
+          </div>
         </div>
       </div>
 
@@ -262,9 +272,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="px-3 py-1.5 flex items-center justify-between text-[10px] text-slate-400">
             <span className="flex items-center gap-1.5 font-medium">
               <span className={`h-1.5 w-1.5 rounded-full ${apiStatusDot}`}></span>
-              Backend do sistema {apiStatusText.toLowerCase()}
+              Backend local {apiStatusText.toLowerCase()}
             </span>
             <span className="font-mono text-slate-500">/api/health</span>
+          </div>
+          <div className="px-3 py-1.5 flex items-center justify-between text-[10px] text-amber-300">
+            <span className="flex items-center gap-1.5 font-medium"><Link2 className="h-3 w-3" />Protheus</span>
+            <span>Leitura automática não configurada</span>
           </div>
 
           {/* Logout / Switch User */}
