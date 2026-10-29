@@ -47,6 +47,16 @@ Quando o acesso à origem for definido, implementar sincronização incremental 
 - Configurações devem ser abertas somente pelo menu do perfil do usuário. Remover/evitar atalhos para configurações no menu principal, cabeçalho, dashboard e telas operacionais. A barra lateral principal deve crescer com funções de produção; atualmente reserva entradas visíveis, desabilitadas e marcadas “Planejado” para Gestão de Ocorrências e PMP.
 - A experiência responsiva usa barra lateral principal recolhível no desktop (ícones e marca Flash compacta) e gaveta no celular; o botão de menu no cabeçalho recolhe/expande no desktop e abre a gaveta em telas menores. A navegação interna de Configurações também vira gaveta em telas pequenas. Conteúdo usa `100dvh`, larguras mínimas flexíveis, tabelas com rolagem horizontal e espaçamentos responsivos.
 - Em **Configurações → Conexões e Saúde do Sistema** (ADMIN), `/api/health` verifica o backend e executa uma consulta simples ao PostgreSQL ao abrir a tela e a cada 30 segundos. Estados são exibidos separadamente: backend, banco online/offline/timeout e integração de leitura Protheus não configurada. O painel de conexões não aparece no dashboard, barra lateral ou menu de perfil.
+- A tela de conexão trata respostas de um backend local antigo sem `databaseStatus`: nesse caso mantém a página aberta, informa que o banco não foi reportado e orienta reiniciar o backend. Não assumir que o status do backend prova conexão ao Protheus.
+- O estado técnico foi removido da navegação e do menu do perfil; o acesso fica somente em Configurações. A área de conexão é administrativa.
+- A navegação principal é responsiva: recolhe para ícones em desktop, vira gaveta em celular e usa conteúdo/grades flexíveis; a navegação de Configurações também vira gaveta em telas estreitas. Build e typecheck passaram após os últimos ajustes.
+
+## Estado operacional e como retomar
+
+- O script `npm run dev` executa `tsx server.ts`; o backend da API faz parte do processo local do projeto. Quando o código de rotas/backend muda, reinicie o servidor de desenvolvimento se ele não estiver recarregando o backend. A tela de conexões continua segura se receber uma resposta de health de versão anterior.
+- O estado atual **não** inclui conector que consulte Protheus. `POST /api/protheus/sync/rest` e a importação de arquivo recebem cargas; não são uma conexão de leitura automática do ERP. Não exibir “Protheus conectado” só porque `/api/health` responde.
+- A revisão do layout/health não alterou o modelo de domínio de produção e não criou migrações de banco.
+- O relatório geral para a próxima IA pode ser retomado lendo este arquivo, `AGENTS.md`, `docs/ACCESS_AND_AUTH_ARCHITECTURE.md` e `docs/PRIMEIRO_ACESSO.md`. Não colocar `.env` nem segredos em commits.
 
 ## Direção conceitual para módulos futuros
 
