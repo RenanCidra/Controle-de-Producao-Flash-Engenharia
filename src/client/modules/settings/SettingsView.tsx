@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ArrowLeft,
   Search,
@@ -22,6 +22,8 @@ import {
   Shield,
   FileText,
   Menu,
+  Activity,
+  Link2,
 } from 'lucide-react';
 import { ProtheusSyncView } from '../protheus-sync/ProtheusSyncView.tsx';
 import { ProtheusTableBrowser } from '../protheus-sync/ProtheusTableBrowser.tsx';
@@ -30,14 +32,15 @@ import { IntegrationsView } from '../integrations/IntegrationsView.tsx';
 import { FactoryView } from '../factory/FactoryView.tsx';
 import { UsersView } from '../users/UsersView.tsx';
 import { AuditView } from '../audit/AuditView.tsx';
-import { getAppLanguage, setAppLanguage } from '../../i18n/index.ts';
+import { api } from '../../api.ts';
+import { getAppLanguage, getIntlLocale, setAppLanguage, translateText } from '../../i18n/index.ts';
 
 export type SettingsSubTab =
   | 'data-sync'
   | 'factory'
   | 'users'
   | 'general'
-  | 'cloudsql'
+  | 'connections'
   | 'connectors'
   | 'production-lines'
   | 'integrations'
@@ -62,6 +65,101 @@ interface SettingsViewProps {
   onReloadLines: () => void;
   onReloadIntegrations: () => void;
 }
+
+type ServiceState = 'checking' | 'online' | 'offline' | 'timeout';
+
+const statusLabel = (state: ServiceState) => translateText({
+  checking: 'Verificando',
+  online: 'Online',
+  offline: 'Sem conexão',
+  timeout: 'Sem resposta no prazo',
+}[state]);
+
+const statusStyle = (state: ServiceState) => ({
+  checking: 'text-amber-300 bg-amber-400',
+  online: 'text-emerald-300 bg-emerald-400',
+  offline: 'text-rose-300 bg-rose-400',
+  timeout: 'text-amber-300 bg-amber-400',
+})[state];
+
+const ConnectionStatusPanel: React.FC = () => {
+  const [backendState, setBackendState] = useState<ServiceState>('checking');
+  const [databaseState, setDatabaseState] = useState<ServiceState>('checking');
+  const [lastChecked, setLastChecked] = useState<Date | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [error, setError] = useState('');
+
+  const checkConnections = async () => {
+    setChecking(true);
+    try {
+      const health = await api.getHealth();
+      setBackendState(health.status === 'online' ? 'online' : 'offline');
+      setDatabaseState(health.databaseStatus);
+      setError('');
+    } catch (err: any) {
+      setBackendState('offline');
+      setDatabaseState('timeout');
+      setError(err.message || translateText('Não foi possível consultar o estado dos serviços.'));
+    } finally {
+      setLastChecked(new Date());
+      setChecking(false);
+    }
+  };
+
+  useEffect(() => {
+    void checkConnections();
+    const interval = window.setInterval(() => void checkConnections(), 30_000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const services = [
+    { title: translateText('Backend da aplicação'), icon: Server, state: backendState, description: translateText('Processo que atende as telas e rotas do sistema.') },
+    { title: translateText('Banco de dados PostgreSQL'), icon: Database, state: databaseState, description: translateText('Verificado por uma consulta simples ao banco configurado.') },
+  ];
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-xl font-bold text-white">Conexões e Saúde do Sistema</h3>
+          <p className="mt-1 text-xs text-slate-400">Estado do backend e do banco. A verificação ocorre ao abrir esta tela e a cada 30 segundos.</p>
+        </div>
+        <button onClick={() => void checkConnections()} disabled={checking} className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#2D3A4B] bg-[#1D2733] px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-[#253242] disabled:opacity-60">
+          <RefreshCw className={`h-3.5 w-3.5 ${checking ? 'animate-spin' : ''}`} />
+          {translateText(checking ? 'Verificando…' : 'Verificar agora')}
+        </button>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {services.map(({ title, icon: Icon, state, description }) => (
+          <article key={title} aria-live="polite" className="rounded-xl border border-[#202936] bg-[#141B24] p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#2D3A4B] bg-[#1D2733] text-[#FFAA00]"><Icon className="h-5 w-5" /></span>
+                <div className="min-w-0"><h4 className="text-sm font-semibold text-white">{title}</h4><p className="mt-1 text-xs leading-relaxed text-slate-400">{description}</p></div>
+              </div>
+              <span className={`inline-flex shrink-0 items-center gap-1.5 rounded border border-current/20 px-2 py-1 text-[10px] font-bold ${statusStyle(state).split(' ')[0]}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${statusStyle(state).split(' ')[1]} ${state === 'checking' ? 'animate-pulse' : ''}`} />
+                {statusLabel(state)}
+              </span>
+            </div>
+          </article>
+        ))}
+        <article className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-5 md:col-span-2">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-300"><Link2 className="h-5 w-5" /></span>
+            <div><div className="flex flex-wrap items-center gap-2"><h4 className="text-sm font-semibold text-white">Integração de leitura com o Protheus</h4><span className="rounded border border-amber-400/30 px-2 py-0.5 text-[10px] font-bold text-amber-300">Não configurada</span></div><p className="mt-1 text-xs leading-relaxed text-slate-400">O sistema ainda não consulta o Protheus automaticamente. O endpoint REST disponível recebe cargas enviadas ao sistema; ele não confirma uma conexão ativa com o ERP.</p></div>
+          </div>
+        </article>
+      </div>
+
+      <div className="flex flex-col gap-1 rounded-lg border border-[#202936] bg-[#111720] px-4 py-3 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+        <span>{error ? `${translateText('Última verificação com erro:')} ${error}` : 'Verificação concluída sem alterar dados.'}</span>
+        <span>Última checagem: {lastChecked ? lastChecked.toLocaleTimeString(getIntlLocale()) : translateText('aguardando')}</span>
+      </div>
+    </div>
+  );
+};
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
   initialSubTab = 'general',
@@ -139,8 +237,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           icon: Settings,
         },
         {
-          id: 'cloudsql',
-          label: 'Conexão & Cloud SQL',
+          id: 'connections',
+          label: 'Conexões e Saúde do Sistema',
           icon: HardDrive,
         },
         {
@@ -163,7 +261,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => {
-        if (item.id === 'users' || item.id === 'cloudsql') return currentUser?.role === 'ADMIN';
+        if (item.id === 'users' || item.id === 'connections') return currentUser?.role === 'ADMIN';
         if (['data-sync', 'production-lines', 'integrations'].includes(item.id)) return ['ADMIN', 'SUPERVISOR'].includes(currentUser?.role);
         if (item.id === 'connectors' || item.id === 'security') return ['ADMIN', 'SUPERVISOR', 'AUDITOR'].includes(currentUser?.role);
         return true;
@@ -478,64 +576,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
           )}
 
-          {/* TAB 5: CONEXÃO & CLOUD SQL */}
-          {activeSubTab === 'cloudsql' && (
-            <div className="max-w-4xl mx-auto space-y-6">
-              <h3 className="text-xl font-bold text-white mb-2">Conexão & Cloud SQL</h3>
-              <p className="text-xs text-slate-400 -mt-4 mb-6">
-                Parâmetros da camada de persistência relacional e integridade de chaves.
-              </p>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-5 rounded-xl bg-[#141B24] border border-[#202936] space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white uppercase tracking-wider">
-                      Instância PostgreSQL
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                      Conectado
-                    </span>
-                  </div>
-                  <div className="space-y-2 text-xs text-slate-300">
-                    <div className="flex justify-between py-1 border-b border-[#202936]">
-                      <span className="text-slate-400">Banco de Dados:</span>
-                      <span className="font-mono text-white">nexuspcp_db</span>
-                    </div>
-                    <div className="flex justify-between py-1 border-b border-[#202936]">
-                      <span className="text-slate-400">ORM / Driver:</span>
-                      <span className="font-mono text-[#FFAA00]">Drizzle ORM + PG Pool</span>
-                    </div>
-                    <div className="flex justify-between py-1">
-                      <span className="text-slate-400">Chaves Estrangeiras:</span>
-                      <span className="font-semibold text-emerald-400">Ativas (PV ↔ OP)</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-5 rounded-xl bg-[#141B24] border border-[#202936] space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white uppercase tracking-wider">
-                      Volume Operacional
-                    </span>
-                    <span className="text-[10px] font-mono text-[#FFAA00] bg-[#1E2734] px-2 py-0.5 rounded border border-[#FFAA00]/30">
-                      Integrado
-                    </span>
-                  </div>
-                  <div className="space-y-2 text-xs text-slate-300">
-                    <div className="flex justify-between py-1 border-b border-[#202936]">
-                      <span className="text-slate-400">Total de Pedidos (PV):</span>
-                      <span className="font-mono font-bold text-white">{stats?.totalProtheusPv ?? '—'}</span>
-                    </div>
-                    <div className="flex justify-between py-1 border-b border-[#202936]">
-                      <span className="text-slate-400">Total de Ordens (OP):</span>
-                      <span className="font-mono font-bold text-white">{stats?.totalProtheusOp ?? '—'}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* TAB 5: CONEXÕES E DISPONIBILIDADE */}
+          {activeSubTab === 'connections' && <ConnectionStatusPanel />}
 
           {/* TAB 6: CONECTORES PROTHEUS */}
           {activeSubTab === 'connectors' && (

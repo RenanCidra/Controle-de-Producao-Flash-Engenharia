@@ -113,7 +113,13 @@ class ApiService {
     if (!response.ok) throw new Error(`API respondeu HTTP ${response.status}.`);
     const health = await response.json();
     if (health?.status !== 'online') throw new Error('API não está online.');
-    return health as { status: 'online'; timestamp: string; service: string; version: string };
+    return health as {
+      status: 'online';
+      databaseStatus: 'online' | 'offline' | 'timeout';
+      timestamp: string;
+      service: string;
+      version: string;
+    };
   }
 
   public getStats() {

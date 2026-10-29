@@ -37,12 +37,21 @@ const apiRouter = Router();
 apiRouter.use(auditHttpMiddleware);
 
 apiRouter.use('/auth', authRoutes);
-apiRouter.get('/health', (req: Request, res: Response) => {
+apiRouter.get('/health', async (req: Request, res: Response) => {
+  let databaseTimeout: ReturnType<typeof setTimeout> | undefined;
+  const databaseStatus = await Promise.race([
+    db.execute(sql`select 1`).then(() => 'online' as const).catch(() => 'offline' as const),
+    new Promise<'timeout'>((resolve) => {
+      databaseTimeout = setTimeout(() => resolve('timeout'), 3000);
+    }),
+  ]);
+  if (databaseTimeout) clearTimeout(databaseTimeout);
+
   res.json({
     status: 'online',
     timestamp: new Date().toISOString(),
     service: 'NexusPCP Production Control & Protheus Sync API',
-    database: 'PostgreSQL Cloud SQL',
+    databaseStatus,
     version: '1.0.0',
   });
 });

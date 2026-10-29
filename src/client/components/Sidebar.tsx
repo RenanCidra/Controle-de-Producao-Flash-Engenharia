@@ -2,8 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Home,
   GitBranch,
-  Activity,
-  Link2,
   ClipboardList,
   CalendarDays,
   Settings,
@@ -18,7 +16,7 @@ import {
   LucideIcon,
   Zap,
 } from 'lucide-react';
-import { api, AuthUser } from '../api.ts';
+import { AuthUser } from '../api.ts';
 
 export type ActiveTab =
   | 'dashboard'
@@ -63,29 +61,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [apiStatus, setApiStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
   const menuRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    let disposed = false;
-    let checking = false;
-    const checkApiStatus = async () => {
-      if (checking) return;
-      checking = true;
-      try {
-        const health = await api.getHealth();
-        if (!disposed) setApiStatus(health.status === 'online' ? 'connected' : 'disconnected');
-      } catch {
-        if (!disposed) setApiStatus('disconnected');
-      } finally {
-        checking = false;
-      }
-    };
-    void checkApiStatus();
-    const interval = window.setInterval(() => void checkApiStatus(), 30_000);
-    return () => { disposed = true; window.clearInterval(interval); };
-  }, []);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -112,10 +89,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         .join('')
         .toUpperCase()
     : 'RC';
-  const apiStatusText = apiStatus === 'connected' ? 'Online' : apiStatus === 'disconnected' ? 'Offline' : 'Verificando';
-  const apiStatusColor = apiStatus === 'connected' ? 'text-emerald-400' : apiStatus === 'disconnected' ? 'text-rose-400' : 'text-amber-400';
-  const apiStatusDot = apiStatus === 'connected' ? 'bg-emerald-400' : apiStatus === 'disconnected' ? 'bg-rose-400' : 'bg-amber-400 animate-pulse';
-
   return (
     <>
     {mobileOpen && <button type="button" aria-label="Fechar menu" onClick={onCloseMobile} className="fixed inset-0 z-30 bg-black/55 md:hidden" />}
@@ -137,29 +110,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
         {collapsed ? <button type="button" onClick={onToggleCollapse} title="Expandir menu" aria-label="Expandir menu" className="absolute right-[-13px] top-5 hidden h-7 w-7 items-center justify-center rounded-full border border-[#334155] bg-[#202936] text-slate-300 shadow-md hover:text-white md:flex"><PanelLeftOpen className="h-3.5 w-3.5" /></button> : <button type="button" onClick={onToggleCollapse} title="Recolher menu" aria-label="Recolher menu" className="hidden rounded-md p-1.5 text-slate-400 hover:bg-[#1C2532] hover:text-white md:block"><PanelLeftClose className="h-4 w-4" /></button>}
         {mobileOpen && <button type="button" onClick={onCloseMobile} title="Fechar menu" aria-label="Fechar menu" className="rounded-md p-1.5 text-slate-400 hover:bg-[#1C2532] hover:text-white md:hidden"><X className="h-4 w-4" /></button>}
-      </div>
-
-      {/* Internal backend reachability and Protheus source integration state */}
-      <div className={collapsed ? 'px-0 py-2.5' : 'px-4 py-2.5'}>
-        <div title={collapsed ? `Backend local: ${apiStatusText} · Protheus: leitura automática não configurada` : undefined} aria-live="polite" className={`rounded-xl border border-[#263342] bg-[#1B232E] text-xs ${collapsed ? 'mx-auto flex h-[68px] w-9 flex-col items-center justify-center gap-2' : 'space-y-2 px-3 py-2.5'}`}>
-          <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'}`}>
-            <span className={`flex items-center gap-1.5 font-medium text-[11px] ${apiStatusColor}`}>
-              <Activity className="h-3.5 w-3.5 shrink-0" />
-              {!collapsed && 'Backend local'}
-            </span>
-            {!collapsed && <span className={`inline-flex items-center gap-1.5 text-[10px] font-semibold ${apiStatusColor}`}>
-              <span className={`h-2 w-2 rounded-full ${apiStatusDot}`}></span>
-              {apiStatusText}
-            </span>}
-          </div>
-          <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between border-t border-[#263342] pt-2'}`}>
-            <span className="flex items-center gap-1.5 text-[11px] font-medium text-amber-300">
-              <Link2 className="h-3.5 w-3.5 shrink-0" />
-              {!collapsed && 'Protheus'}
-            </span>
-            {!collapsed && <span className="text-right text-[10px] font-semibold leading-tight text-amber-300">Leitura não configurada</span>}
-          </div>
-        </div>
       </div>
 
       {/* Main Navigation */}
@@ -264,21 +214,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <Settings className="h-4 w-4 text-[#FFAA00]" />
               <span className="font-medium">Configurações</span>
             </button>
-          </div>
-
-          <div className="h-px bg-[#263342] my-1" />
-
-          {/* Database & System info */}
-          <div className="px-3 py-1.5 flex items-center justify-between text-[10px] text-slate-400">
-            <span className="flex items-center gap-1.5 font-medium">
-              <span className={`h-1.5 w-1.5 rounded-full ${apiStatusDot}`}></span>
-              Backend local {apiStatusText.toLowerCase()}
-            </span>
-            <span className="font-mono text-slate-500">/api/health</span>
-          </div>
-          <div className="px-3 py-1.5 flex items-center justify-between text-[10px] text-amber-300">
-            <span className="flex items-center gap-1.5 font-medium"><Link2 className="h-3 w-3" />Protheus</span>
-            <span>Leitura automática não configurada</span>
           </div>
 
           {/* Logout / Switch User */}
