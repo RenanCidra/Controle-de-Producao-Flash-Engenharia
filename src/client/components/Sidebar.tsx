@@ -139,7 +139,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               disabled={item.planned}
               title={item.planned ? `${item.label} · planejado para uma próxima etapa` : item.label}
               onClick={() => { if (item.id) setActiveTab(item.id); onCloseMobile(); }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition-all group ${item.planned ? 'cursor-not-allowed text-slate-500 border border-transparent' : ''} ${
+              className={`w-full flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-lg text-xs font-medium transition-all group ${item.planned ? 'cursor-not-allowed text-slate-500 border border-transparent' : ''} ${
                 isActive
                   ? 'bg-[#2A2316] text-[#FFAA00] border border-[#FFAA00]/70 shadow-sm font-semibold'
                   : 'text-slate-300 hover:text-white hover:bg-[#1C2532] border border-transparent'
