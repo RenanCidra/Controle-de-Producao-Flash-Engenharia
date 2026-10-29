@@ -1,13 +1,12 @@
 import { Router } from 'express';
 import { ProtheusSyncController } from './protheus-sync.controller.ts';
 import { requirePermission } from '../../middleware/access-control.ts';
-import { allowBodyFields } from '../../middleware/request-protection.ts';
 
 const protheusRouter = Router();
 
 // Ingestion endpoints (Both REST API JSON & File Import)
 protheusRouter.post('/sync/rest', requirePermission('integrations:write'), ProtheusSyncController.syncRest);
-protheusRouter.post('/sync/upload', requirePermission('integrations:write'), allowBodyFields('content', 'fileName', 'entityType'), ProtheusSyncController.syncUpload);
+protheusRouter.post('/sync/upload', requirePermission('integrations:write'), ProtheusSyncController.syncUpload);
 protheusRouter.get('/mock/validate', requirePermission('protheus-data:read'), ProtheusSyncController.validateMock);
 protheusRouter.get('/mock/flow-check', requirePermission('protheus-data:read'), ProtheusSyncController.validateMockFlow);
 protheusRouter.get('/mock/data', requirePermission('protheus-data:read'), ProtheusSyncController.previewMockData);

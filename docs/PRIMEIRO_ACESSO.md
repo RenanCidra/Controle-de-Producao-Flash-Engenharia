@@ -28,7 +28,7 @@ O sistema não possui usuário ou senha padrão. A primeira conta `ADMIN` é cri
 
 1. Abra a página do sistema. Se não existir administrador ativo com senha, ela mostrará **Configure a conta administradora**.
 2. Cole no campo de chave temporária o valor de `BOOTSTRAP_SECRET` configurado no passo 1.
-3. Defina seu nome, um usuário de acesso (3–40 caracteres: letras sem acento, números, ponto, hífen ou sublinhado) e uma senha com pelo menos 12 caracteres e no máximo 72 bytes.
+3. Defina seu nome, um usuário de acesso (3–40 caracteres: letras sem acento, números, ponto, hífen ou sublinhado) e uma senha com pelo menos 12 caracteres.
 4. O sistema cria a conta como `ADMIN` e inicia a sessão. Depois, remova `BOOTSTRAP_SECRET` dos segredos do AI Studio e reimplante. Mantenha `JWT_SECRET` configurado.
 
 ## Se a tela mostrar apenas login
@@ -37,7 +37,7 @@ Isso significa que a API encontrou um administrador ativo com senha configurada.
 
 Se a página disser que não conseguiu verificar a configuração de acesso, confira primeiro se a migração foi aplicada e se o servidor consegue se conectar ao banco. O backend deste repositório expõe `GET /api/auth/setup-status`; uma resposta `404` normalmente indica implantação antiga ou rota base incorreta. Reimplante a versão atual e confirme o prefixo `/api`. O assistente não permite cadastro quando essa verificação falha.
 
-Depois de entrar com uma conta real, cada usuário pode alterar a própria senha em **Meu perfil**, informando a senha atual; a nova senha deve ter pelo menos 12 caracteres e no máximo 72 bytes. Esse fluxo não recupera uma senha esquecida: nesse caso, um administrador deve usar o processo de redefinição de senha da conta. A foto e o idioma escolhidos no perfil ficam somente no navegador atual e não fazem parte do backup da conta.
+Depois de entrar com uma conta real, cada usuário pode alterar a própria senha em **Meu perfil**, informando a senha atual; a nova senha deve ter pelo menos 12 caracteres. Esse fluxo não recupera uma senha esquecida: nesse caso, um administrador deve usar o processo de redefinição de senha da conta. A foto e o idioma escolhidos no perfil ficam somente no navegador atual e não fazem parte do backup da conta.
 
 ## Prévia local sem login (temporária)
 

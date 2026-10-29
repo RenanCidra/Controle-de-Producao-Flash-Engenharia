@@ -17,17 +17,6 @@ export class IntegrationClientService {
   public static async testEndpoint(params: TestConnectionParams): Promise<TestConnectionResult> {
     const startTime = Date.now();
     try {
-      const target = new URL(params.baseUrl);
-      if (!['http:', 'https:'].includes(target.protocol) || target.username || target.password) {
-        throw new Error('A URL deve usar HTTP/HTTPS e não pode conter credenciais embutidas.');
-      }
-      if (process.env.NODE_ENV === 'production') {
-        const allowedHosts = (process.env.INTEGRATION_ALLOWED_HOSTS || '').split(',').map((host) => host.trim().toLowerCase()).filter(Boolean);
-        if (!allowedHosts.length || !allowedHosts.includes(target.hostname.toLowerCase())) {
-          throw new Error('O host da integração não está na lista permitida do servidor.');
-        }
-      }
-
       const headers: Record<string, string> = {
         'Accept': 'application/json',
         'User-Agent': 'NexusERP-IntegrationEngine/1.0',
@@ -50,14 +39,17 @@ export class IntegrationClientService {
         method: 'GET',
         headers,
         signal: controller.signal,
-        redirect: 'error',
       });
 
       clearTimeout(timeoutId);
       const latencyMs = Date.now() - startTime;
 
-      const responseText = await response.text();
-      const responseData = responseText.slice(0, 4_000);
+      let responseData: unknown = null;
+      try {
+        responseData = await response.json();
+      } catch {
+        responseData = await response.text();
+      }
 
       return {
         success: response.ok,
@@ -66,7 +58,7 @@ export class IntegrationClientService {
           ? `Conexão estabelecida com sucesso (${response.status})`
           : `Resposta de erro do servidor remoto: ${response.status} ${response.statusText}`,
         latencyMs,
-        responseData: responseData || null,
+        responseData,
       };
     } catch (error: any) {
       const latencyMs = Date.now() - startTime;

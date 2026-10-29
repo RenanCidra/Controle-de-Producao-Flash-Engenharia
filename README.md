@@ -37,12 +37,6 @@ Dados ausentes não devem ser interpretados como zero ou como etapa concluída. 
    SQL_USER=usuario_local
    SQL_PASSWORD=senha_local
    JWT_SECRET=gere_um_segredo_aleatorio_com_pelo_menos_32_caracteres
-   # Opcional: origens web externas autorizadas, separadas por vírgula
-   # CORS_ALLOWED_ORIGINS=https://sistema.exemplo.com
-   # Configure somente se houver proxy reverso confiável na frente do servidor
-   # TRUST_PROXY_HOPS=1
-   # Em produção, hosts exatos que o teste de integração pode acessar
-   # INTEGRATION_ALLOWED_HOSTS=erp.exemplo.interno
    ```
 
    Use os valores do PostgreSQL autorizado para o ambiente. `JWT_SECRET` precisa ter pelo menos 32 caracteres. Não coloque credenciais reais no Git, neste README ou em mensagens.

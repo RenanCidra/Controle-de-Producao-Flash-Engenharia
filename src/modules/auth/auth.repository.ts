@@ -33,7 +33,6 @@ export class AuthRepository {
       const raw = identifier.trim();
       const normalized = raw.toLowerCase();
       const upper = raw.toUpperCase();
-      const escapedNamePrefix = `${normalized.replace(/[\\%_]/g, '\\$&')}%`;
 
       const numMatch = raw.match(/^#?(\d+)$/);
       const numericId = numMatch ? parseInt(numMatch[1], 10) : null;
@@ -45,7 +44,7 @@ export class AuthRepository {
         eq(users.uid, normalized),
         eq(users.uid, upper),
         sql`LOWER(${users.name}) = ${normalized}`,
-        sql`LOWER(${users.name}) LIKE ${escapedNamePrefix}`,
+        sql`LOWER(${users.name}) LIKE ${normalized + '%'}`,
       ];
 
       if (numericId !== null && !isNaN(numericId)) {

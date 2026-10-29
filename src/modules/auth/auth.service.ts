@@ -141,7 +141,7 @@ export class AuthService {
         action: 'LOGIN',
         entity: 'AUTH',
         entityId: candidates[0] ? String(candidates[0].id) : null,
-        details: { message: 'Tentativa de autenticação inválida' },
+        details: { message: 'Tentativa de autenticação inválida', identifier: rawIdentifier },
         ipAddress: data.ipAddress,
         status: 'FAILURE',
       });
@@ -155,7 +155,7 @@ export class AuthService {
       action: 'LOGIN',
       entity: 'AUTH',
       entityId: String(matchedUser.id),
-      details: { message: 'Autenticação concluída', loginName: matchedUser.loginName },
+      details: { message: 'Autenticação concluída', loginName: matchedUser.loginName, identifier: rawIdentifier },
       ipAddress: data.ipAddress,
       status: 'SUCCESS',
     });
