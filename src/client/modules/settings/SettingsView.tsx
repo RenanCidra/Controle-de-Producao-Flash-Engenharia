@@ -567,6 +567,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
               <UsersView
                 users={users}
+                currentUser={currentUser}
                 onReload={onReloadUsers}
                 onSuccess={onSuccess}
                 onError={onError}

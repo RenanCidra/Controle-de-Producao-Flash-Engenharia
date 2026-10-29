@@ -151,10 +151,15 @@ class ApiService {
   }
 
   // Auth
-  public async login(credentials: { loginName: string; password: string }) {
+  public async login(credentials: { loginName?: string; identifier?: string; password: string }) {
+    const identifier = (credentials.identifier || credentials.loginName || '').trim();
     return this.request<{ accessToken: string; user: AuthUser }>('/auth/login', {
       method: 'POST',
-      body: JSON.stringify(credentials),
+      body: JSON.stringify({
+        identifier,
+        loginName: identifier,
+        password: credentials.password,
+      }),
     });
   }
 
@@ -196,8 +201,15 @@ class ApiService {
     });
   }
 
+  public resetUserPassword(id: number, password: string) {
+    return this.request<{ success: boolean; message: string }>(`/users/${id}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
+  }
+
   public deleteUser(id: number) {
-    return this.request<{ message: string }>(`/users/${id}`, { method: 'DELETE' });
+    return this.request<{ success: boolean; message: string }>(`/users/${id}`, { method: 'DELETE' });
   }
 
   // Organization / Factory Profile
@@ -329,11 +341,30 @@ class ApiService {
   }
 
   // Audit Logs
-  public getAuditLogs(params?: { entity?: string; limit?: number }) {
+  public getAuditLogs(params?: {
+    entity?: string;
+    action?: string;
+    status?: string;
+    search?: string;
+    page?: number;
+    pageSize?: number;
+    limit?: number;
+  }) {
     const query = new URLSearchParams();
     if (params?.entity) query.append('entity', params.entity);
+    if (params?.action) query.append('action', params.action);
+    if (params?.status) query.append('status', params.status);
+    if (params?.search) query.append('search', params.search);
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.pageSize) query.append('pageSize', String(params.pageSize));
     if (params?.limit) query.append('limit', String(params.limit));
-    return this.request<any[]>(`/audit-logs?${query.toString()}`);
+    return this.request<{
+      items: any[];
+      total: number;
+      page: number;
+      pageSize: number;
+      totalPages: number;
+    }>(`/audit-logs?${query.toString()}`);
   }
 
   // ==========================================

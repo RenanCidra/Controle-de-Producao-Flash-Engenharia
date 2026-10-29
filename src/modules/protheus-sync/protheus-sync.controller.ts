@@ -6,7 +6,8 @@ import { ProtheusSyncBundle, ProtheusEntityType } from './protheus-sync.types.ts
 export class ProtheusSyncController {
   public static async syncRest(req: Request, res: Response): Promise<void> {
     try {
-      const userEmail = (req as any).user?.email || 'API_CONSUMER';
+      const authUser = (req as any).user;
+      const userIdentifier = authUser?.loginName || authUser?.email || authUser?.uid || 'API_CONSUMER';
       let bundle: ProtheusSyncBundle = {};
 
       if (req.body.bundle) {
@@ -24,7 +25,7 @@ export class ProtheusSyncController {
         bundle = req.body;
       }
 
-      const result = await ProtheusSyncService.processBundle(bundle, 'REST_API', userEmail);
+      const result = await ProtheusSyncService.processBundle(bundle, 'REST_API', userIdentifier);
       res.status(201).json(result);
     } catch (error: any) {
       console.error('Protheus REST sync failed:', error);
@@ -34,7 +35,8 @@ export class ProtheusSyncController {
 
   public static async syncUpload(req: Request, res: Response): Promise<void> {
     try {
-      const userEmail = (req as any).user?.email || 'FILE_UPLOADER';
+      const authUser = (req as any).user;
+      const userIdentifier = authUser?.loginName || authUser?.email || authUser?.uid || 'FILE_UPLOADER';
       const { content, fileName, entityType } = req.body;
 
       if (!content || typeof content !== 'string') {
@@ -46,7 +48,7 @@ export class ProtheusSyncController {
         content,
         fileName || 'upload.csv',
         entityType as ProtheusEntityType | undefined,
-        userEmail
+        userIdentifier
       );
 
       res.status(201).json(result);

@@ -10,6 +10,7 @@ router.use(authenticateToken);
 router.get('/', requirePermission('accounts:manage'), UsersController.list);
 router.post('/', requirePermission('accounts:manage'), UsersController.create);
 router.put('/:id', requirePermission('accounts:manage'), UsersController.update);
+router.post('/:id/reset-password', requirePermission('accounts:manage'), UsersController.resetPassword);
 router.delete('/:id', requirePermission('accounts:manage'), UsersController.delete);
 
 export default router;

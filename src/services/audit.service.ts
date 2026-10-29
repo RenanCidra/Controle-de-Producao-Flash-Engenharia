@@ -3,8 +3,25 @@ import { auditLogs } from '../db/schema.ts';
 import { AuditLogEntry } from '../types/index.ts';
 
 export class AuditService {
-  public static async record(entry: AuditLogEntry): Promise<void> {
+  public static async record(entry: AuditLogEntry, req?: any): Promise<void> {
     try {
+      if (req) {
+        req._auditRecorded = true;
+        if (!entry.ipAddress) {
+          const forwarded = req.headers?.['x-forwarded-for'];
+          entry.ipAddress = typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : req.socket?.remoteAddress || '127.0.0.1';
+        }
+        if (!entry.userAgent) {
+          entry.userAgent = req.headers?.['user-agent'] || 'Unknown';
+        }
+        if (!entry.userId && req.user) {
+          entry.userId = req.user.uid || (req.user.userId ? String(req.user.userId) : null);
+        }
+        if (!entry.userEmail && req.user) {
+          entry.userEmail = req.user.email || req.user.loginName || null;
+        }
+      }
+
       const detailsString =
         typeof entry.details === 'object' && entry.details !== null
           ? JSON.stringify(entry.details)

@@ -6,6 +6,7 @@ import {
   ProtheusSourceType,
   ProtheusSyncBundle,
 } from './protheus-sync.types.ts';
+import { AuditService } from '../../services/audit.service.ts';
 
 export class ProtheusSyncService {
   private static generateBatchCode(prefix: string): string {
@@ -93,6 +94,22 @@ export class ProtheusSyncService {
         summary
       );
 
+      await AuditService.record({
+        userId: importedBy || 'SYSTEM',
+        userEmail: importedBy || 'PROTHEUS_INTEGRATION',
+        action: sourceType === 'REST_API' ? 'SYNC' : 'IMPORT',
+        entity: 'PROTHEUS_SYNC',
+        entityId: batchCode,
+        details: {
+          batchId: batch.id,
+          sourceType,
+          totalRecordsProcessed: totalProcessed,
+          details,
+          summary,
+        },
+        status: 'SUCCESS',
+      });
+
       return {
         batchId: batch.id,
         batchCode,
@@ -110,6 +127,19 @@ export class ProtheusSyncService {
         'FAILED',
         err.message || 'Falha no processamento do lote'
       );
+      await AuditService.record({
+        userId: importedBy || 'SYSTEM',
+        userEmail: importedBy || 'PROTHEUS_INTEGRATION',
+        action: sourceType === 'REST_API' ? 'SYNC' : 'IMPORT',
+        entity: 'PROTHEUS_SYNC',
+        entityId: batchCode,
+        details: {
+          batchId: batch.id,
+          sourceType,
+          error: err.message,
+        },
+        status: 'FAILURE',
+      });
       throw err;
     }
   }

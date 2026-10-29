@@ -84,40 +84,54 @@ export class AuthService {
     return { user: publicUser(user), accessToken: issueAccessToken(user) };
   }
 
-  public static async login(data: { loginName: string; password?: string; ipAddress?: string }) {
+  public static async login(data: { loginName?: string; identifier?: string; password?: string; ipAddress?: string }) {
     TokenService.assertConfigured();
-    const loginName = normalizeLoginName(data.loginName);
-    const user = await AuthRepository.findByLoginName(loginName);
-    const passwordMatches = user?.passwordHash && data.password
-      ? await bcrypt.compare(data.password, user.passwordHash)
-      : false;
+    const rawIdentifier = (data.identifier || data.loginName || '').trim();
+    if (!rawIdentifier) {
+      throw new Error(INVALID_CREDENTIALS);
+    }
 
-    if (!user || user.status !== 'ACTIVE' || !passwordMatches) {
+    const candidates = await AuthRepository.findByIdentifier(rawIdentifier);
+    let matchedUser: any = null;
+
+    if (data.password) {
+      for (const candidate of candidates) {
+        if (candidate.status === 'ACTIVE' && candidate.passwordHash) {
+          const isMatch = await bcrypt.compare(data.password, candidate.passwordHash);
+          if (isMatch) {
+            matchedUser = candidate;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!matchedUser) {
       await AuditService.record({
-        userId: user?.uid || null,
-        userEmail: user?.email || null,
+        userId: candidates[0]?.uid || null,
+        userEmail: candidates[0]?.email || null,
         action: 'LOGIN',
         entity: 'AUTH',
-        entityId: user ? String(user.id) : null,
-        details: { message: 'Tentativa de autenticação inválida', loginName },
+        entityId: candidates[0] ? String(candidates[0].id) : null,
+        details: { message: 'Tentativa de autenticação inválida', identifier: rawIdentifier },
         ipAddress: data.ipAddress,
         status: 'FAILURE',
       });
       throw new Error(INVALID_CREDENTIALS);
     }
 
-    await AuthRepository.updateLastLogin(user.id);
+    await AuthRepository.updateLastLogin(matchedUser.id);
     await AuditService.record({
-      userId: user.uid,
-      userEmail: user.email,
+      userId: matchedUser.uid,
+      userEmail: matchedUser.email,
       action: 'LOGIN',
       entity: 'AUTH',
-      entityId: String(user.id),
-      details: { message: 'Autenticação concluída', loginName },
+      entityId: String(matchedUser.id),
+      details: { message: 'Autenticação concluída', loginName: matchedUser.loginName, identifier: rawIdentifier },
       ipAddress: data.ipAddress,
       status: 'SUCCESS',
     });
 
-    return { user: publicUser(user), accessToken: issueAccessToken(user) };
+    return { user: publicUser(matchedUser), accessToken: issueAccessToken(matchedUser) };
   }
 }

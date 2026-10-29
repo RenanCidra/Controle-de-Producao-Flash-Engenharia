@@ -35,14 +35,15 @@ export class AuthController {
 
   public static async login(req: Request, res: Response) {
     try {
-      const { loginName, password } = req.body;
-      if (!loginName || !password) {
-        return res.status(400).json({ error: 'Usuário e senha são obrigatórios.' });
+      const { loginName, identifier, username, email, password } = req.body;
+      const targetIdentifier = identifier || loginName || username || email;
+      if (!targetIdentifier || !password) {
+        return res.status(400).json({ error: 'Usuário ou ID e senha são obrigatórios.' });
       }
 
       const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress;
       const result = await AuthService.login({
-        loginName,
+        identifier: targetIdentifier,
         password,
         ipAddress: typeof ipAddress === 'string' ? ipAddress.split(',')[0].trim() : undefined,
       });

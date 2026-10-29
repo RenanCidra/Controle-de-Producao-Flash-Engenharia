@@ -40,7 +40,10 @@ export type AuditAction =
   | 'START_PRODUCTION'
   | 'COMPLETE_PRODUCTION'
   | 'INSPECT_QUALITY'
-  | 'TEST_INTEGRATION';
+  | 'TEST_INTEGRATION'
+  | 'PASSWORD_RESET'
+  | 'IMPORT'
+  | 'SYNC';
 
 export type AuditEntity =
   | 'PRODUCTION_ORDER'
@@ -50,7 +53,9 @@ export type AuditEntity =
   | 'USER'
   | 'ORGANIZATION'
   | 'INTEGRATION'
-  | 'AUTH';
+  | 'AUTH'
+  | 'PROTHEUS_SYNC'
+  | 'SYSTEM';
 
 export interface AuditLogEntry {
   userId?: string | null;

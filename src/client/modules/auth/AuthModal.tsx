@@ -85,16 +85,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         )}
 
         <div>
-          <label className="text-xs font-medium text-slate-300">Usuário de acesso</label>
+          <label className="text-xs font-medium text-slate-300">
+            {setupRequired ? 'Usuário de acesso' : 'Usuário ou ID'}
+          </label>
           <input
             type="text"
             required
-            minLength={3}
-            maxLength={40}
+            minLength={setupRequired ? 3 : 1}
+            maxLength={80}
             autoComplete="username"
+            placeholder={setupRequired ? undefined : 'Usuário, ID ou e-mail'}
             value={loginName}
             onChange={(event) => setLoginName(event.target.value)}
-            className="mt-1 w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+            className="mt-1 w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500"
           />
         </div>
 

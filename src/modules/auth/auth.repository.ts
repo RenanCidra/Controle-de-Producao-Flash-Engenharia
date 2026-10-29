@@ -15,18 +15,53 @@ export class AuthRepository {
     }
   }
 
-  public static async findByLoginName(loginName: string) {
+  public static async findByExactLoginName(loginName: string) {
+    if (!loginName?.trim()) return null;
     try {
       const normalized = loginName.toLowerCase().trim();
-      const records = await db.select().from(users).where(or(
-        eq(users.loginName, normalized),
-        eq(users.email, normalized),
-      ));
+      const records = await db.select().from(users).where(eq(users.loginName, normalized));
       return records[0] || null;
     } catch (error) {
-      console.error('Database query failed in AuthRepository.findByLoginName:', error);
+      console.error('Database query failed in AuthRepository.findByExactLoginName:', error);
       throw new Error('Falha ao consultar conta de acesso.', { cause: error });
     }
+  }
+
+  public static async findByIdentifier(identifier: string) {
+    if (!identifier?.trim()) return [];
+    try {
+      const raw = identifier.trim();
+      const normalized = raw.toLowerCase();
+      const upper = raw.toUpperCase();
+
+      const numMatch = raw.match(/^#?(\d+)$/);
+      const numericId = numMatch ? parseInt(numMatch[1], 10) : null;
+
+      const conditions = [
+        eq(users.loginName, normalized),
+        eq(users.email, normalized),
+        eq(users.uid, raw),
+        eq(users.uid, normalized),
+        eq(users.uid, upper),
+        sql`LOWER(${users.name}) = ${normalized}`,
+        sql`LOWER(${users.name}) LIKE ${normalized + '%'}`,
+      ];
+
+      if (numericId !== null && !isNaN(numericId)) {
+        conditions.push(eq(users.id, numericId));
+      }
+
+      const records = await db.select().from(users).where(or(...conditions));
+      return records;
+    } catch (error) {
+      console.error('Database query failed in AuthRepository.findByIdentifier:', error);
+      throw new Error('Falha ao consultar conta de acesso.', { cause: error });
+    }
+  }
+
+  public static async findByLoginName(loginName: string) {
+    const matches = await this.findByIdentifier(loginName);
+    return matches[0] || null;
   }
 
   public static async findByUid(uid: string) {

@@ -11,11 +11,28 @@ function inferEntityFromPath(path: string): AuditEntity {
   if (path.includes('/users')) return 'USER';
   if (path.includes('/org')) return 'ORGANIZATION';
   if (path.includes('/integrations')) return 'INTEGRATION';
+  if (path.includes('/protheus')) return 'PROTHEUS_SYNC';
   if (path.includes('/auth')) return 'AUTH';
-  return 'PRODUCTION_ORDER';
+  return 'SYSTEM';
 }
 
-function inferActionFromMethod(method: string): AuditAction {
+function extractEntityId(path: string): string | null {
+  const segments = path.split('?')[0].split('/').filter(Boolean);
+  const last = segments[segments.length - 1];
+  if (last && /^[0-9a-zA-Z_-]+$/.test(last) && last !== 'sync' && last !== 'upload' && last !== 'test' && last !== 'login' && last !== 'logout') {
+    return last;
+  }
+  return null;
+}
+
+function inferActionFromMethod(method: string, path: string): AuditAction {
+  if (path.includes('/login')) return 'LOGIN';
+  if (path.includes('/logout')) return 'LOGOUT';
+  if (path.includes('/reset-password')) return 'PASSWORD_RESET';
+  if (path.includes('/test')) return 'TEST_INTEGRATION';
+  if (path.includes('/sync/rest')) return 'SYNC';
+  if (path.includes('/sync/upload')) return 'IMPORT';
+
   switch (method) {
     case 'POST':
       return 'CREATE';
@@ -39,27 +56,33 @@ export const auditHttpMiddleware = (
     res.send = function (body) {
       res.send = originalSend;
 
-      const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
-      const userAgent = req.headers['user-agent'] || 'Unknown';
+      // If already recorded with precise business context by a domain service, avoid duplicate HTTP log
+      if ((req as any)._auditRecorded) {
+        return originalSend.call(this, body);
+      }
+
+      const forwarded = req.headers['x-forwarded-for'];
+      const ipAddress = typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : req.socket.remoteAddress || '127.0.0.1';
+      const userAgent = (req.headers['user-agent'] as string) || 'Unknown';
       const isSuccess = res.statusCode >= 200 && res.statusCode < 400;
 
-      const sanitizedBody = { ...req.body };
-      for (const sensitiveField of ['password', 'setupSecret', 'token', 'accessToken', 'refreshToken', 'apiKey']) {
+      const sanitizedBody = req.body && typeof req.body === 'object' ? { ...req.body } : {};
+      for (const sensitiveField of ['password', 'setupSecret', 'token', 'accessToken', 'refreshToken', 'apiKey', 'secret', 'newPassword']) {
         if (sensitiveField in sanitizedBody) sanitizedBody[sensitiveField] = '***REDACTED***';
       }
 
       AuditService.record({
         userId: req.user?.uid || (req.user?.userId ? String(req.user.userId) : null),
-        userEmail: req.user?.email || null,
-        action: inferActionFromMethod(req.method),
+        userEmail: req.user?.email || req.user?.loginName || null,
+        action: inferActionFromMethod(req.method, req.originalUrl),
         entity: inferEntityFromPath(req.originalUrl),
-        entityId: req.params?.id || null,
+        entityId: req.params?.id || extractEntityId(req.originalUrl),
         details: {
           path: req.originalUrl,
           statusCode: res.statusCode,
           payload: sanitizedBody,
         },
-        ipAddress: typeof ipAddress === 'string' ? ipAddress.split(',')[0].trim() : '127.0.0.1',
+        ipAddress,
         userAgent,
         status: isSuccess ? 'SUCCESS' : 'FAILURE',
       });

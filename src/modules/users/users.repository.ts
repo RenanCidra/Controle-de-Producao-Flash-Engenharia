@@ -61,13 +61,30 @@ export class UsersRepository {
     }
   }
 
+  public static async updatePassword(id: number, passwordHash: string): Promise<boolean> {
+    try {
+      await db
+        .update(users)
+        .set({
+          passwordHash,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, id));
+      return true;
+    } catch (error) {
+      console.error('Database update error in UsersRepository.updatePassword:', error);
+      throw new Error('Falha ao atualizar senha da conta de acesso.', { cause: error });
+    }
+  }
+
   public static async update(
     id: number,
     data: {
       name?: string;
+      email?: string | null;
       role?: UserRole;
       status?: UserStatus;
-      department?: string;
+      department?: string | null;
     }
   ) {
     try {

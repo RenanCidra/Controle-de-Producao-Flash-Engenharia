@@ -15,9 +15,9 @@ export class UsersController {
 
   public static async create(req: AuthenticatedRequest, res: Response) {
     try {
-      const { name, loginName, email, password, role, department } = req.body;
+      const { name, loginName, email, password, role, department, customUid } = req.body;
       if (!name || !loginName || !password) {
-        return res.status(400).json({ error: 'Nome, usuário de acesso e senha são obrigatórios.' });
+        return res.status(400).json({ error: 'Nome, identificador de acesso e senha são obrigatórios.' });
       }
 
       const actorId = req.user?.uid || String(req.user?.userId);
@@ -30,6 +30,7 @@ export class UsersController {
         password,
         role: role || 'OPERATOR',
         department,
+        customUid,
       });
 
       return res.status(201).json(user);
@@ -53,12 +54,41 @@ export class UsersController {
       const actorId = req.user?.uid || String(req.user?.userId);
       const actorEmail = req.user?.email || 'system';
 
-      const { name, role, status, department } = req.body;
-      const updated = await UsersService.updateUser(actorId, actorEmail, id, { name, role, status, department });
+      const { name, email, role, status, department } = req.body;
+      const updated = await UsersService.updateUser(actorId, actorEmail, id, {
+        name,
+        email,
+        role,
+        status,
+        department,
+      });
       return res.json(updated);
     } catch (error: any) {
       console.error('Failed to update user:', error);
       return res.status(400).json({ error: error.message || 'Falha ao atualizar conta de acesso.' });
+    }
+  }
+
+  public static async resetPassword(req: AuthenticatedRequest, res: Response) {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: 'ID inválido.' });
+      }
+
+      const { password } = req.body;
+      if (!password || typeof password !== 'string') {
+        return res.status(400).json({ error: 'A nova senha é obrigatória.' });
+      }
+
+      const actorId = req.user?.uid || String(req.user?.userId);
+      const actorEmail = req.user?.email || 'system';
+
+      const result = await UsersService.resetPassword(actorId, actorEmail, id, password);
+      return res.json(result);
+    } catch (error: any) {
+      console.error('Failed to reset user password:', error);
+      return res.status(400).json({ error: error.message || 'Falha ao redefinir a senha do usuário.' });
     }
   }
 

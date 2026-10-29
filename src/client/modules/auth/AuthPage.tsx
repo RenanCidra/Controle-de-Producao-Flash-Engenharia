@@ -101,7 +101,18 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setupRequired, bootstrapEnab
             <form onSubmit={handleSubmit} className="space-y-4">
               {setupStatusChecked && !setupStatusError && setupRequired && bootstrapEnabled && <Field label={t('Chave temporária de implantação')} value={setupSecret} onChange={setSetupSecret} type="password" autoComplete="off" required />}
               {setupStatusChecked && !setupStatusError && setupRequired && <Field label={t('Nome do administrador')} value={name} onChange={setName} autoComplete="name" required />}
-              {setupStatusChecked && !setupStatusError && <Field label={t('Usuário')} value={loginName} onChange={setLoginName} autoComplete="username" minLength={3} maxLength={40} required />}
+              {setupStatusChecked && !setupStatusError && (
+                <Field
+                  label={setupRequired ? t('Usuário') : t('Usuário ou ID')}
+                  placeholder={setupRequired ? undefined : t('Usuário, ID ou e-mail')}
+                  value={loginName}
+                  onChange={setLoginName}
+                  autoComplete="username"
+                  minLength={setupRequired ? 3 : 1}
+                  maxLength={80}
+                  required
+                />
+              )}
               {setupStatusChecked && !setupStatusError && <div>
                 <label className="mb-1.5 block text-sm font-medium text-slate-200">{setupRequired ? t('Senha (mínimo 12 caracteres)') : t('Senha')}</label>
                 <div className="relative">
@@ -137,12 +148,12 @@ function Feature({ icon, title, description }: { icon: React.ReactNode; title: s
   </div>;
 }
 
-function Field({ label, value, onChange, type = 'text', autoComplete, minLength, maxLength, required }: {
+function Field({ label, value, onChange, type = 'text', autoComplete, minLength, maxLength, required, placeholder }: {
   label: string; value: string; onChange: (value: string) => void; type?: string; autoComplete?: string;
-  minLength?: number; maxLength?: number; required?: boolean;
+  minLength?: number; maxLength?: number; required?: boolean; placeholder?: string;
 }) {
   return <div>
     <label className="mb-1.5 block text-sm font-medium text-slate-200">{label}</label>
-    <input type={type} required={required} minLength={minLength} maxLength={maxLength} autoComplete={autoComplete} value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-xl border border-slate-700 bg-[#0C1420] px-4 py-3 text-sm outline-none transition placeholder:text-slate-600 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15" />
+    <input type={type} required={required} minLength={minLength} maxLength={maxLength} autoComplete={autoComplete} placeholder={placeholder} value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-xl border border-slate-700 bg-[#0C1420] px-4 py-3 text-sm outline-none transition placeholder:text-slate-600 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15" />
   </div>;
 }

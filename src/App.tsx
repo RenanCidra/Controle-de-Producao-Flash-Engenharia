@@ -159,8 +159,8 @@ export default function App() {
         const org = await api.getOrg();
         setFactoryProfile(org);
         if (['ADMIN', 'SUPERVISOR', 'AUDITOR'].includes(currentUser?.role || '')) {
-          const logs = await api.getAuditLogs({ limit: 100 });
-          setAuditLogs(logs);
+          const res = await api.getAuditLogs({ page: 1, pageSize: 25 });
+          setAuditLogs(Array.isArray(res) ? res : res.items || []);
         }
         if (currentUser?.role === 'ADMIN') {
           const usr = await api.getUsers();
@@ -289,7 +289,10 @@ export default function App() {
           onReloadLines={() => api.getProductionLines().then(setLines).catch((err) => showToast(err.message, 'error'))}
           onReloadIntegrations={() => api.getIntegrations().then(setIntegrations).catch((err) => showToast(err.message, 'error'))}
           onReloadAudit={() =>
-            api.getAuditLogs({ limit: 100 }).then(setAuditLogs).catch((err) => showToast(err.message, 'error'))
+            api
+              .getAuditLogs({ page: 1, pageSize: 25 })
+              .then((res) => setAuditLogs(Array.isArray(res) ? res : res.items || []))
+              .catch((err) => showToast(err.message, 'error'))
           }
           onReloadFactory={() => {
             api.getOrg().then(setFactoryProfile);
