@@ -111,7 +111,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         .join('')
         .toUpperCase()
     : 'RC';
-  const apiStatusText = apiStatus === 'connected' ? 'Conectada' : apiStatus === 'disconnected' ? 'Sem conexão' : 'Verificando';
+  const apiStatusText = apiStatus === 'connected' ? 'Online' : apiStatus === 'disconnected' ? 'Offline' : 'Verificando';
   const apiStatusColor = apiStatus === 'connected' ? 'text-emerald-400' : apiStatus === 'disconnected' ? 'text-rose-400' : 'text-amber-400';
   const apiStatusDot = apiStatus === 'connected' ? 'bg-emerald-400' : apiStatus === 'disconnected' ? 'bg-rose-400' : 'bg-amber-400 animate-pulse';
 
@@ -140,10 +140,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* API Reachability Status */}
       <div className={collapsed ? 'px-0 py-2.5' : 'px-4 py-2.5'}>
-        <div title={collapsed ? `API: ${apiStatusText}` : undefined} aria-live="polite" className={`rounded-full border border-[#263342] bg-[#1B232E] flex items-center text-xs ${collapsed ? 'mx-auto h-9 w-9 justify-center' : 'px-3 py-1.5 justify-between'}`}>
+        <div title={collapsed ? `Backend do sistema: ${apiStatusText}` : undefined} aria-live="polite" className={`rounded-full border border-[#263342] bg-[#1B232E] flex items-center text-xs ${collapsed ? 'mx-auto h-9 w-9 justify-center' : 'px-3 py-1.5 justify-between'}`}>
           <span className={`flex items-center gap-1.5 font-medium text-[11px] ${apiStatusColor}`}>
             <Activity className="h-3.5 w-3.5" />
-            {!collapsed && 'API'}
+            {!collapsed && 'Backend do sistema'}
           </span>
           {!collapsed && <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${apiStatusColor}`}>
             <span className={`h-2 w-2 rounded-full ${apiStatusDot}`}></span>
@@ -262,9 +262,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="px-3 py-1.5 flex items-center justify-between text-[10px] text-slate-400">
             <span className="flex items-center gap-1.5 font-medium">
               <span className={`h-1.5 w-1.5 rounded-full ${apiStatusDot}`}></span>
-              API {apiStatusText.toLowerCase()}
+              Backend do sistema {apiStatusText.toLowerCase()}
             </span>
-            <span className="font-mono text-slate-500">Health check</span>
+            <span className="font-mono text-slate-500">/api/health</span>
           </div>
 
           {/* Logout / Switch User */}
