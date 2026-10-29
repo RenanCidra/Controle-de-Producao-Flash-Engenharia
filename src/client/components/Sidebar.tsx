@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Home,
   GitBranch,
-  Database,
+  Activity,
   ClipboardList,
   CalendarDays,
   Settings,
@@ -17,7 +17,7 @@ import {
   LucideIcon,
   Zap,
 } from 'lucide-react';
-import { AuthUser } from '../api.ts';
+import { api, AuthUser } from '../api.ts';
 
 export type ActiveTab =
   | 'dashboard'
@@ -62,8 +62,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [apiStatus, setApiStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
   const menuRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let disposed = false;
+    let checking = false;
+    const checkApiStatus = async () => {
+      if (checking) return;
+      checking = true;
+      try {
+        const health = await api.getHealth();
+        if (!disposed) setApiStatus(health.status === 'online' ? 'connected' : 'disconnected');
+      } catch {
+        if (!disposed) setApiStatus('disconnected');
+      } finally {
+        checking = false;
+      }
+    };
+    void checkApiStatus();
+    const interval = window.setInterval(() => void checkApiStatus(), 30_000);
+    return () => { disposed = true; window.clearInterval(interval); };
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -90,6 +111,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         .join('')
         .toUpperCase()
     : 'RC';
+  const apiStatusText = apiStatus === 'connected' ? 'Conectada' : apiStatus === 'disconnected' ? 'Sem conexão' : 'Verificando';
+  const apiStatusColor = apiStatus === 'connected' ? 'text-emerald-400' : apiStatus === 'disconnected' ? 'text-rose-400' : 'text-amber-400';
+  const apiStatusDot = apiStatus === 'connected' ? 'bg-emerald-400' : apiStatus === 'disconnected' ? 'bg-rose-400' : 'bg-amber-400 animate-pulse';
 
   return (
     <>
@@ -114,16 +138,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {mobileOpen && <button type="button" onClick={onCloseMobile} title="Fechar menu" aria-label="Fechar menu" className="rounded-md p-1.5 text-slate-400 hover:bg-[#1C2532] hover:text-white md:hidden"><X className="h-4 w-4" /></button>}
       </div>
 
-      {/* Cloud SQL Connection Status Pill */}
+      {/* API Reachability Status */}
       <div className={collapsed ? 'px-0 py-2.5' : 'px-4 py-2.5'}>
-        <div title={collapsed ? 'Cloud SQL conectado' : undefined} className={`rounded-full bg-[#1B232E] border border-[#263342] flex items-center text-xs ${collapsed ? 'mx-auto h-9 w-9 justify-center' : 'px-3 py-1.5 justify-between'}`}>
-          <span className="flex items-center gap-1.5 text-slate-300 font-medium text-[11px]">
-            <Database className="h-3.5 w-3.5 text-emerald-400" />
-            {!collapsed && 'Cloud SQL'}
+        <div title={collapsed ? `API: ${apiStatusText}` : undefined} aria-live="polite" className={`rounded-full border border-[#263342] bg-[#1B232E] flex items-center text-xs ${collapsed ? 'mx-auto h-9 w-9 justify-center' : 'px-3 py-1.5 justify-between'}`}>
+          <span className={`flex items-center gap-1.5 font-medium text-[11px] ${apiStatusColor}`}>
+            <Activity className="h-3.5 w-3.5" />
+            {!collapsed && 'API'}
           </span>
-          {!collapsed && <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            Conectado
+          {!collapsed && <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${apiStatusColor}`}>
+            <span className={`h-2 w-2 rounded-full ${apiStatusDot}`}></span>
+            {apiStatusText}
           </span>}
         </div>
       </div>
@@ -237,10 +261,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Database & System info */}
           <div className="px-3 py-1.5 flex items-center justify-between text-[10px] text-slate-400">
             <span className="flex items-center gap-1.5 font-medium">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              Cloud SQL Ativo
+              <span className={`h-1.5 w-1.5 rounded-full ${apiStatusDot}`}></span>
+              API {apiStatusText.toLowerCase()}
             </span>
-            <span className="font-mono text-slate-500">PostgreSQL</span>
+            <span className="font-mono text-slate-500">Health check</span>
           </div>
 
           {/* Logout / Switch User */}

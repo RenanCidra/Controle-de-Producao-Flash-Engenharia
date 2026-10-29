@@ -104,6 +104,18 @@ class ApiService {
   }
 
   // System
+  public async getHealth() {
+    const response = await fetch('/api/health', {
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) throw new Error(`API respondeu HTTP ${response.status}.`);
+    const health = await response.json();
+    if (health?.status !== 'online') throw new Error('API não está online.');
+    return health as { status: 'online'; timestamp: string; service: string; version: string };
+  }
+
   public getStats() {
     return this.request<{
       totalUsers: number;

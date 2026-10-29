@@ -46,6 +46,7 @@ Quando o acesso à origem for definido, implementar sincronização incremental 
 - A navegação de dados usa `protheus-data:read` no servidor (ADMIN, SUPERVISOR e AUDITOR; OPERATOR sem acesso). Ingestão manual requer `integrations:write`. As relações de empenhos e de recursos/setores aparecem como pendentes, sem inventar tabela/campos que ainda não foram fornecidos.
 - Configurações devem ser abertas somente pelo menu do perfil do usuário. Remover/evitar atalhos para configurações no menu principal, cabeçalho, dashboard e telas operacionais. A barra lateral principal deve crescer com funções de produção; atualmente reserva entradas visíveis, desabilitadas e marcadas “Planejado” para Gestão de Ocorrências e PMP.
 - A experiência responsiva usa barra lateral principal recolhível no desktop (ícones e marca Flash compacta) e gaveta no celular; o botão de menu no cabeçalho recolhe/expande no desktop e abre a gaveta em telas menores. A navegação interna de Configurações também vira gaveta em telas pequenas. Conteúdo usa `100dvh`, larguras mínimas flexíveis, tabelas com rolagem horizontal e espaçamentos responsivos.
+- A barra lateral verifica `/api/health` ao abrir e a cada 30 segundos, mostrando “Verificando”, “Conectada” ou “Sem conexão”. O indicador representa disponibilidade HTTP da API, não valida sozinho a conexão ao banco nem a ingestão Protheus.
 
 ## Direção conceitual para módulos futuros
 
