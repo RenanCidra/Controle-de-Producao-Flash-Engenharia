@@ -115,7 +115,7 @@ class ApiService {
     if (health?.status !== 'online') throw new Error('API não está online.');
     return health as {
       status: 'online';
-      databaseStatus: 'online' | 'offline' | 'timeout';
+      databaseStatus?: 'online' | 'offline' | 'timeout';
       timestamp: string;
       service: string;
       version: string;

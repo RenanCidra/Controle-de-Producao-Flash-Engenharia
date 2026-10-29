@@ -66,21 +66,19 @@ interface SettingsViewProps {
   onReloadIntegrations: () => void;
 }
 
-type ServiceState = 'checking' | 'online' | 'offline' | 'timeout';
+type ServiceState = 'checking' | 'online' | 'offline' | 'timeout' | 'unknown';
 
-const statusLabel = (state: ServiceState) => translateText({
-  checking: 'Verificando',
-  online: 'Online',
-  offline: 'Sem conexão',
-  timeout: 'Sem resposta no prazo',
-}[state]);
+const serviceStatePresentation: Record<ServiceState, { label: string; text: string; dot: string }> = {
+  checking: { label: 'Verificando', text: 'text-amber-300', dot: 'bg-amber-400' },
+  online: { label: 'Online', text: 'text-emerald-300', dot: 'bg-emerald-400' },
+  offline: { label: 'Sem conexão', text: 'text-rose-300', dot: 'bg-rose-400' },
+  timeout: { label: 'Sem resposta no prazo', text: 'text-amber-300', dot: 'bg-amber-400' },
+  unknown: { label: 'Não informado', text: 'text-slate-300', dot: 'bg-slate-400' },
+};
 
-const statusStyle = (state: ServiceState) => ({
-  checking: 'text-amber-300 bg-amber-400',
-  online: 'text-emerald-300 bg-emerald-400',
-  offline: 'text-rose-300 bg-rose-400',
-  timeout: 'text-amber-300 bg-amber-400',
-})[state];
+const statusLabel = (state: ServiceState) => translateText(serviceStatePresentation[state].label);
+const normalizeServiceState = (state: unknown): ServiceState =>
+  state === 'online' || state === 'offline' || state === 'timeout' ? state : 'unknown';
 
 const ConnectionStatusPanel: React.FC = () => {
   const [backendState, setBackendState] = useState<ServiceState>('checking');
@@ -94,11 +92,11 @@ const ConnectionStatusPanel: React.FC = () => {
     try {
       const health = await api.getHealth();
       setBackendState(health.status === 'online' ? 'online' : 'offline');
-      setDatabaseState(health.databaseStatus);
-      setError('');
+      setDatabaseState(normalizeServiceState(health.databaseStatus));
+      setError(health.databaseStatus ? '' : translateText('A API respondeu, mas não informou o estado do banco. Reinicie o backend para atualizar esta verificação.'));
     } catch (err: any) {
       setBackendState('offline');
-      setDatabaseState('timeout');
+      setDatabaseState('unknown');
       setError(err.message || translateText('Não foi possível consultar o estado dos serviços.'));
     } finally {
       setLastChecked(new Date());
@@ -138,8 +136,8 @@ const ConnectionStatusPanel: React.FC = () => {
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#2D3A4B] bg-[#1D2733] text-[#FFAA00]"><Icon className="h-5 w-5" /></span>
                 <div className="min-w-0"><h4 className="text-sm font-semibold text-white">{title}</h4><p className="mt-1 text-xs leading-relaxed text-slate-400">{description}</p></div>
               </div>
-              <span className={`inline-flex shrink-0 items-center gap-1.5 rounded border border-current/20 px-2 py-1 text-[10px] font-bold ${statusStyle(state).split(' ')[0]}`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${statusStyle(state).split(' ')[1]} ${state === 'checking' ? 'animate-pulse' : ''}`} />
+              <span className={`inline-flex shrink-0 items-center gap-1.5 rounded border border-current/20 px-2 py-1 text-[10px] font-bold ${serviceStatePresentation[state].text}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${serviceStatePresentation[state].dot} ${state === 'checking' ? 'animate-pulse' : ''}`} />
                 {statusLabel(state)}
               </span>
             </div>
