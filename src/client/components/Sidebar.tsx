@@ -21,6 +21,7 @@ import { readUserPreferences, subscribeToUserPreferences } from '../modules/auth
 export type ActiveTab =
   | 'dashboard'
   | 'traceability'
+  | 'occurrences'
   | 'production-orders'
   | 'production-lines'
   | 'quality'
@@ -58,7 +59,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navItems: { id?: ActiveTab; label: string; icon: LucideIcon; badge?: string; planned?: boolean }[] = [
     { id: 'dashboard', label: 'Painel Geral', icon: Home },
     { id: 'traceability', label: 'Pedidos e OPs', icon: GitBranch },
-    { label: 'Gestão de ocorrências', icon: ClipboardList, badge: 'Planejado', planned: true },
+    { id: 'occurrences', label: 'Gestão de ocorrências', icon: ClipboardList },
     { label: 'PMP · Mestre da Produção', icon: CalendarDays, badge: 'Planejado', planned: true },
   ];
 
@@ -281,4 +282,5 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </>
   );
 };
+
 

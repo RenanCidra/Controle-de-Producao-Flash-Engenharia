@@ -122,3 +122,12 @@ O procedimento operacional completo para criar a primeira conta `ADMIN` está em
 - Nenhum token ou credencial é tratado como autorização por si só; a API verifica conta, permissão e escopo.
 - Nenhum caminho Firebase ou de desenvolvimento concede privilégios automaticamente.
 - Migrações e bootstrap administrativo são documentados, repetíveis e não expõem senhas em commits/logs.
+
+
+### Gestão de ocorrências (2026-10-29)
+
+- O módulo registra ocorrências locais ligadas a uma OP existente no espelho Protheus. Ele não grava dados no Protheus; notas e mudanças de situação formam uma linha do tempo.
+- A navegação oferece páginas de análise, registros e novo lançamento logo abaixo do cabeçalho. Indicadores refletem os registros e filtros do banco; campos sem fonte validada não são apresentados como fatos.
+- A API aplica permissões de leitura, criação, comentários e gestão de situação. A ocorrência também aparece na consulta da OP e pode abrir a gestão já filtrada pela OP.
+- A migração incremental `20261029_production_occurrences.sql` e o comando `npm run db:migrate:occurrences` criam as tabelas auxiliares preservando dados existentes. A migração não foi confirmada em banco de destino; validar a existência de `protheus_production_orders` e o ambiente antes de aplicá-la.
+- Consolidação por PV depende do vínculo no espelho. Importação do histórico Excel, campos de setor/quantidade/parada e escopo multi-planta continuam pendentes.

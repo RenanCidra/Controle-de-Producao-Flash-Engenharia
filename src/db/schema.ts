@@ -1,5 +1,5 @@
-import { relations } from "drizzle-orm";
-import { integer, numeric, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
+import { check, index, integer, numeric, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 // Organizations own accounts, employee records, and operational data.
 export const organizations = pgTable("organizations", {
@@ -262,6 +262,42 @@ export const protheusProductionAppointments = pgTable("protheus_production_appoi
   batchId: integer("batch_id").references(() => protheusImportBatches.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// User-entered operational occurrences are linked to, but never written back to, Protheus.
+export const productionOccurrences = pgTable("production_occurrences", {
+  id: serial("id").primaryKey(),
+  numeroOp: text("numero_op").notNull().references(() => protheusProductionOrders.numeroOp),
+  occurrenceType: text("occurrence_type").notNull(),
+  description: text("description").notNull(),
+  operation: text("operation"),
+  workstation: text("workstation"),
+  immediateAction: text("immediate_action"),
+  status: text("status").notNull().default("OPEN"),
+  createdByUid: text("created_by_uid").notNull(),
+  createdByName: text("created_by_name").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("production_occurrences_op_idx").on(table.numeroOp, table.createdAt),
+  index("production_occurrences_status_idx").on(table.status, table.createdAt),
+  check("production_occurrences_status_check", sql`${table.status} IN ('OPEN', 'IN_PROGRESS', 'CLOSED')`),
+]);
+
+// Follow-up notes and status changes are append-only to preserve the occurrence history.
+export const productionOccurrenceEvents = pgTable("production_occurrence_events", {
+  id: serial("id").primaryKey(),
+  occurrenceId: integer("occurrence_id").notNull().references(() => productionOccurrences.id),
+  eventType: text("event_type").notNull(),
+  message: text("message").notNull(),
+  previousStatus: text("previous_status"),
+  newStatus: text("new_status"),
+  authorUid: text("author_uid").notNull(),
+  authorName: text("author_name").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("production_occurrence_events_occurrence_idx").on(table.occurrenceId, table.createdAt),
+  check("production_occurrence_events_type_check", sql`${table.eventType} IN ('CREATED', 'NOTE', 'STATUS_CHANGED')`),
+]);
 
 // Relations
 export const productionOrdersRelations = relations(productionOrders, ({ one, many }) => ({

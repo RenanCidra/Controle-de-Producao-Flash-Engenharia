@@ -23,11 +23,15 @@ import { getIntlLocale } from '../../i18n/index.ts';
 interface TraceabilityViewProps {
   onSuccess: (msg: string) => void;
   onError: (msg: string) => void;
+  initialNumeroOp?: string | null;
+  onManageOccurrences: (numeroOp: string) => void;
 }
 
 export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
   onSuccess,
   onError,
+  initialNumeroOp,
+  onManageOccurrences,
 }) => {
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState<'csv' | 'json' | null>(null);
@@ -65,20 +69,22 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
 
   // Modal inspection
   const [selectedOpDetail, setSelectedOpDetail] = useState<any | null>(null);
+  const [selectedOpOccurrences, setSelectedOpOccurrences] = useState<any[]>([]);
+  const [occurrencesError, setOccurrencesError] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
   // Advanced filters expansion
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
-  const loadData = async () => {
+  const loadData = async (opOverride?: string) => {
     setLoading(true);
     setLoadError(null);
     try {
       const [matrixRes, metricsRes] = await Promise.all([
         api.getTraceabilityMatrix({
-          search: search.trim() || undefined,
+          search: opOverride ? undefined : search.trim() || undefined,
           numeroPv: numeroPv.trim() || undefined,
-          numeroOp: numeroOp.trim() || undefined,
+          numeroOp: opOverride || numeroOp.trim() || undefined,
           cliente: cliente.trim() || undefined,
           codigoProduto: codigoProduto.trim() || undefined,
           statusOp: statusOp || undefined,
@@ -109,8 +115,17 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
   };
 
   useEffect(() => {
+    if (initialNumeroOp) return;
     loadData();
   }, [page, limit, apenasAtrasadas, apenasComRefugo, semVinculoPv, statusOp, statusPv]);
+
+  useEffect(() => {
+    if (!initialNumeroOp) return;
+    setNumeroOp(initialNumeroOp);
+    setSearch('');
+    setPage(1);
+    void loadData(initialNumeroOp);
+  }, [initialNumeroOp]);
 
   const handleApplyFilter = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -186,8 +201,14 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
 
   const handleOpenOpDetail = async (numeroOp: string) => {
     setDetailLoading(true);
+    setOccurrencesError(null);
     try {
       const detail = await api.getTraceabilityOpDetail(numeroOp);
+      const occurrenceRows = await api.getOccurrencesForOp(numeroOp).catch((error: any) => {
+        setOccurrencesError(error?.message || 'Não foi possível consultar as ocorrências desta OP.');
+        return [];
+      });
+      setSelectedOpOccurrences(occurrenceRows);
       setSelectedOpDetail(detail);
     } catch (err: any) {
       onError(err.message);
@@ -425,7 +446,7 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
           <div role="alert" className="p-8 text-center">
             <h3 className="text-base font-bold text-rose-300">Falha ao carregar rastreabilidade</h3>
             <p className="mt-2 text-xs text-slate-300">{loadError}</p>
-            <button onClick={loadData} className="mt-4 rounded-lg border border-[#263342] bg-[#1C2532] px-4 py-2 text-xs font-semibold text-white">Tentar novamente</button>
+            <button onClick={() => void loadData(initialNumeroOp || undefined)} className="mt-4 rounded-lg border border-[#263342] bg-[#1C2532] px-4 py-2 text-xs font-semibold text-white">Tentar novamente</button>
           </div>
         ) : loading && items.length === 0 ? (
           <div className="p-10 text-center text-sm text-slate-400">Carregando dados de produção…</div>
@@ -686,9 +707,14 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
       {selectedOpDetail && (
         <TraceabilityDetailModal
           detail={selectedOpDetail}
-          onClose={() => setSelectedOpDetail(null)}
+          occurrences={selectedOpOccurrences}
+          occurrencesError={occurrencesError}
+          canCreateOccurrence={api.getUser()?.role !== 'AUDITOR'}
+          onManageOccurrences={() => onManageOccurrences(selectedOpDetail.op.numeroOp)}
+          onClose={() => { setSelectedOpDetail(null); setSelectedOpOccurrences([]); }}
         />
       )}
     </div>
   );
 };
+

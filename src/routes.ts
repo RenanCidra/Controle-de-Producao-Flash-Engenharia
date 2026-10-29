@@ -10,6 +10,7 @@ import integrationsRoutes from './modules/integrations/integrations.routes.ts';
 import auditRoutes from './modules/audit/audit.routes.ts';
 import protheusRouter from './modules/protheus-sync/protheus-sync.routes.ts';
 import traceabilityRouter from './modules/traceability/traceability.routes.ts';
+import occurrencesRouter from './modules/occurrences/occurrences.routes.ts';
 import { db } from './db/index.ts';
 import {
   users,
@@ -76,6 +77,7 @@ apiRouter.use('/integrations', integrationsRoutes);
 apiRouter.use('/audit-logs', auditRoutes);
 apiRouter.use('/protheus', protheusRouter);
 apiRouter.use('/traceability', traceabilityRouter);
+apiRouter.use('/occurrences', occurrencesRouter);
 
 apiRouter.get('/stats', async (req: Request, res: Response) => {
   try {

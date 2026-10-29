@@ -107,3 +107,8 @@ Quando o acesso à origem for definido, implementar sincronização incremental 
 ## Informações necessárias para continuar
 
 Os relatórios já foram fornecidos para a simulação. A próxima solicitação ao TI deve priorizar dicionário de dados e confirmação das chaves/relacionamentos de SC5/SC6, OP/roteiro/revisão, empenhos, recursos/centros de trabalho e apontamentos/estornos, além de uma forma suportada de consulta somente leitura, autenticação, paginação e limites. Não solicitar nem armazenar senhas ou tokens em planilhas/documentos; quando houver acesso, mantê-los no mecanismo de segredos aprovado pela empresa.
+
+
+## Gestão de ocorrências
+
+O módulo local está integrado à navegação e à consulta de OP. Registros exigem uma OP existente no espelho e não escrevem no Protheus. Antes de testar gravações, aplicar e validar a migração incremental `20261029_production_occurrences.sql` no banco correto. Indicadores usam registros reais, sem estimar campos ausentes. Importação do histórico Excel e campos adicionais (setor, quantidade afetada e tempo parado) seguem pendentes de mapeamento e validação.

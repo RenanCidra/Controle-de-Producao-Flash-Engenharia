@@ -12,6 +12,7 @@ function inferEntityFromPath(path: string): AuditEntity {
   if (path.includes('/org')) return 'ORGANIZATION';
   if (path.includes('/integrations')) return 'INTEGRATION';
   if (path.includes('/protheus')) return 'PROTHEUS_SYNC';
+  if (path.includes('/occurrences')) return 'PRODUCTION_OCCURRENCE';
   if (path.includes('/auth')) return 'AUTH';
   return 'SYSTEM';
 }

@@ -568,6 +568,28 @@ class ApiService {
     }>('/traceability/metrics');
   }
 
+  public getOccurrences(params?: Record<string, string | number | boolean | undefined>) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') query.append(key, String(value));
+    });
+    return this.request<any>(`/occurrences?${query.toString()}`);
+  }
+  public getOccurrencesForOp(numeroOp: string) { return this.request<any[]>(`/occurrences/op/${encodeURIComponent(numeroOp)}`); }
+  public getOccurrence(id: number) { return this.request<any>(`/occurrences/${id}`); }
+  public searchOccurrenceOrders(search: string) {
+    const query = new URLSearchParams({ search });
+    return this.request<any[]>(`/occurrences/orders?${query.toString()}`);
+  }
+  public createOccurrence(payload: { numeroOp: string; occurrenceType: string; description: string; operation?: string; workstation?: string; immediateAction?: string; }) {
+    return this.request<any>('/occurrences', { method: 'POST', body: JSON.stringify(payload) });
+  }
+  public addOccurrenceEvent(id: number, message: string) {
+    return this.request<any>(`/occurrences/${id}/events`, { method: 'POST', body: JSON.stringify({ message }) });
+  }
+  public changeOccurrenceStatus(id: number, status: string, message: string) {
+    return this.request<any>(`/occurrences/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, message }) });
+  }
   public async downloadTraceabilityCsv(params?: Record<string, any>) {
     const query = new URLSearchParams();
     if (params) {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { getIntlLocale } from '../../i18n/index.ts';
+import { getIntlLocale, translateText } from '../../i18n/index.ts';
 import {
   X,
   Printer,
@@ -14,18 +14,28 @@ import {
   CheckCircle2,
   AlertTriangle,
   Package,
+  ClipboardList,
+  Plus,
 } from 'lucide-react';
 
 interface TraceabilityDetailModalProps {
   detail: any;
+  occurrences: any[];
+  occurrencesError: string | null;
+  canCreateOccurrence: boolean;
+  onManageOccurrences: () => void;
   onClose: () => void;
 }
 
 export const TraceabilityDetailModal: React.FC<TraceabilityDetailModalProps> = ({
   detail,
+  occurrences,
+  occurrencesError,
+  canCreateOccurrence,
+  onManageOccurrences,
   onClose,
 }) => {
-  const [activeTab, setActiveTab] = useState<'roteiro' | 'apontamentos' | 'estrutura' | 'pv'>('roteiro');
+  const [activeTab, setActiveTab] = useState<'roteiro' | 'apontamentos' | 'estrutura' | 'pv' | 'ocorrencias'>('roteiro');
 
   if (!detail) return null;
   const { op, produto, estrutura, roteiroComProgresso, apontamentos, pedidoVendaCompleto } = detail;
@@ -146,7 +156,7 @@ export const TraceabilityDetailModal: React.FC<TraceabilityDetailModalProps> = (
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-slate-800 bg-slate-900 px-5 gap-2 print:hidden">
+        <div className="flex overflow-x-auto border-b border-slate-800 bg-slate-900 px-5 gap-2 print:hidden">
           <button
             onClick={() => setActiveTab('roteiro')}
             className={`py-3 px-4 text-xs font-semibold border-b-2 transition flex items-center gap-2 ${
@@ -190,6 +200,12 @@ export const TraceabilityDetailModal: React.FC<TraceabilityDetailModalProps> = (
           >
             <Building className="h-4 w-4" />
             Pedido de Venda {op.numeroPv ? `(PV ${op.numeroPv})` : '(Sem vínculo)'}
+          </button>
+          <button
+            onClick={() => setActiveTab('ocorrencias')}
+            className={`shrink-0 py-3 px-4 text-xs font-semibold border-b-2 transition flex items-center gap-2 ${activeTab === 'ocorrencias' ? 'border-amber-500 text-amber-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
+          >
+            <ClipboardList className="h-4 w-4" />Ocorrências ({occurrences.length})
           </button>
         </div>
 
@@ -475,6 +491,13 @@ export const TraceabilityDetailModal: React.FC<TraceabilityDetailModalProps> = (
               )}
             </div>
           )}
+
+          {activeTab === 'ocorrencias' && <section className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-sm font-bold text-white">Ocorrências vinculadas a esta OP</h3><p className="mt-1 text-xs text-slate-400">Cada registro permanece separado e aparece também no painel consolidado por PV.</p></div>{canCreateOccurrence && <button type="button" onClick={onManageOccurrences} className="inline-flex items-center gap-1.5 rounded-md bg-amber-500 px-3 py-2 text-xs font-bold text-slate-950"><Plus className="h-3.5 w-3.5" />Registrar ocorrência</button>}</div>
+            {occurrencesError && <p role="alert" className="rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{occurrencesError}</p>}
+            {!occurrencesError && occurrences.length === 0 && <div className="rounded-lg border border-dashed border-slate-700 p-8 text-center text-xs text-slate-400">Nenhuma ocorrência registrada para esta OP.</div>}
+            {occurrences.map((item: any) => <article key={item.id} className="rounded-lg border border-slate-700 bg-slate-950/50 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><h4 className="text-sm font-semibold text-white">{item.occurrenceType}</h4><span className={`rounded-full border px-2 py-0.5 text-[10px] ${item.status === 'CLOSED' ? 'border-emerald-500/30 text-emerald-300' : item.status === 'IN_PROGRESS' ? 'border-amber-500/30 text-amber-300' : 'border-rose-500/30 text-rose-300'}`}>{translateText(item.status === 'CLOSED' ? 'Encerrada' : item.status === 'IN_PROGRESS' ? 'Em tratamento' : 'Aberta')}</span></div><p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-slate-300">{item.description}</p><div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-500"><span>Registrada por {item.createdByName}</span><span>{item.createdAt ? new Date(item.createdAt).toLocaleString(getIntlLocale()) : translateText('Data não informada')}</span>{item.operation && <span>Operação: {item.operation}</span>}{item.workstation && <span>Posto: {item.workstation}</span>}</div>{item.immediateAction && <p className="mt-2 text-[11px] text-slate-400">Ação imediata: {item.immediateAction}</p>}<div className="mt-3 space-y-1 border-l border-slate-700 pl-3">{item.events?.map((event: any) => <p key={event.id} className="text-[10px] text-slate-500">{event.authorName} · {event.createdAt ? new Date(event.createdAt).toLocaleString(getIntlLocale()) : ''} — {event.message}</p>)}</div></article>)}
+          </section>}
         </div>
 
         {/* Footer */}
@@ -491,3 +514,4 @@ export const TraceabilityDetailModal: React.FC<TraceabilityDetailModalProps> = (
     </div>
   );
 };
+

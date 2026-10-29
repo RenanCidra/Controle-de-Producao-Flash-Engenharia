@@ -55,6 +55,7 @@ export type AuditEntity =
   | 'INTEGRATION'
   | 'AUTH'
   | 'PROTHEUS_SYNC'
+  | 'PRODUCTION_OCCURRENCE'
   | 'SYSTEM';
 
 export interface AuditLogEntry {

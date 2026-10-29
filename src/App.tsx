@@ -6,6 +6,7 @@ import { Header } from './client/components/Header.tsx';
 import { AuthModal } from './client/modules/auth/AuthModal.tsx';
 import { DashboardView } from './client/modules/dashboard/DashboardView.tsx';
 import { TraceabilityView } from './client/modules/traceability/TraceabilityView.tsx';
+import { OccurrencesView } from './client/modules/occurrences/OccurrencesView.tsx';
 import { ProductionOrdersView } from './client/modules/production-orders/ProductionOrdersView.tsx';
 import { ProductionLinesView } from './client/modules/production-lines/ProductionLinesView.tsx';
 import { QualityView } from './client/modules/quality/QualityView.tsx';
@@ -36,6 +37,8 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [previousTab, setPreviousTab] = useState<ActiveTab>('dashboard');
+  const [occurrencesOpFilter, setOccurrencesOpFilter] = useState<string | null>(null);
+  const [traceabilityOpRequest, setTraceabilityOpRequest] = useState<string | null>(null);
   const [settingsSubTab, setSettingsSubTab] = useState<SettingsSubTab>('general');
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(DEV_PREVIEW_AUTH ? DEV_PREVIEW_USER : null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -219,6 +222,7 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser) return;
+    if (activeTab === 'occurrences') return;
     loadTabData(activeTab);
   }, [activeTab, currentUser]);
 
@@ -362,6 +366,22 @@ export default function App() {
                 <TraceabilityView
                   onSuccess={(msg) => showToast(msg, 'success')}
                   onError={(msg) => showToast(msg, 'error')}
+                  initialNumeroOp={traceabilityOpRequest}
+                  onManageOccurrences={(numeroOp) => {
+                    setOccurrencesOpFilter(numeroOp);
+                    setActiveTab('occurrences');
+                  }}
+                />
+              )}
+
+              {activeTab === 'occurrences' && (
+                <OccurrencesView
+                  initialNumeroOp={occurrencesOpFilter}
+                  onSuccess={(msg) => showToast(msg, 'success')}
+                  onOpenOp={(numeroOp) => {
+                    setTraceabilityOpRequest(numeroOp);
+                    setActiveTab('traceability');
+                  }}
                 />
               )}
 
@@ -453,3 +473,4 @@ export default function App() {
     </div>
   );
 }
+
