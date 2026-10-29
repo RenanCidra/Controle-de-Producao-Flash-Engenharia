@@ -32,6 +32,8 @@ export default function App() {
     window.sessionStorage.removeItem('flash-reopen-settings-after-language-change');
     return reopenSettings ? 'settings' : 'dashboard';
   });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [previousTab, setPreviousTab] = useState<ActiveTab>('dashboard');
   const [settingsSubTab, setSettingsSubTab] = useState<SettingsSubTab>('general');
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(DEV_PREVIEW_AUTH ? DEV_PREVIEW_USER : null);
@@ -54,6 +56,14 @@ export default function App() {
 
   const handleBackFromSettings = () => {
     setActiveTab(previousTab === 'settings' ? 'dashboard' : previousTab);
+  };
+
+  const handleToggleSidebar = () => {
+    if (window.matchMedia('(min-width: 768px)').matches) {
+      setSidebarCollapsed((collapsed) => !collapsed);
+    } else {
+      setMobileSidebarOpen(true);
+    }
   };
 
   const [stats, setStats] = useState<{
@@ -250,7 +260,7 @@ export default function App() {
       )}
       {message && (
         <div
-          className={`fixed top-4 right-4 z-50 flex items-center gap-3 rounded-lg px-4 py-3 shadow-xl transition-all border ${
+          className={`fixed left-3 right-3 top-3 z-50 flex items-center gap-3 rounded-lg border px-4 py-3 shadow-xl transition-all sm:left-auto sm:right-4 sm:top-4 sm:max-w-md ${
             message.type === 'success'
               ? 'bg-white border-emerald-300 text-emerald-800'
               : 'bg-white border-rose-300 text-rose-800'
@@ -261,7 +271,7 @@ export default function App() {
           ) : (
             <AlertCircle className="h-5 w-5 text-rose-600 shrink-0" />
           )}
-          <span className="text-sm font-medium">{message.text}</span>
+          <span className="min-w-0 break-words text-sm font-medium">{message.text}</span>
         </div>
       )}
 
@@ -294,7 +304,7 @@ export default function App() {
           onError={(msg) => showToast(msg, 'error')}
         />
       ) : (
-        <div className="flex h-screen w-screen overflow-hidden bg-[#F1F4F7]">
+        <div className="flex h-[100dvh] w-full min-w-0 overflow-hidden bg-[#F1F4F7]">
           <Sidebar
             activeTab={activeTab}
             setActiveTab={setActiveTab}
@@ -302,9 +312,13 @@ export default function App() {
             onOpenAuth={() => setAuthModalOpen(true)}
             onLogout={handleLogout}
             onOpenSettings={handleNavigateToSettings}
+            collapsed={sidebarCollapsed && !mobileSidebarOpen}
+            mobileOpen={mobileSidebarOpen}
+            onToggleCollapse={() => setSidebarCollapsed((collapsed) => !collapsed)}
+            onCloseMobile={() => setMobileSidebarOpen(false)}
           />
 
-          <main className="flex-1 flex flex-col overflow-hidden bg-[#F1F4F7]">
+          <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#F1F4F7]">
             <Header
               plantCode={factoryProfile?.plantCode}
               currentUser={currentUser}
@@ -314,9 +328,11 @@ export default function App() {
                 else void loadTabData(activeTab);
               }}
               onOpenAuth={() => setAuthModalOpen(true)}
+              sidebarCollapsed={sidebarCollapsed}
+              onToggleSidebar={handleToggleSidebar}
             />
 
-            <div className="flex-1 overflow-y-auto p-6 bg-[#F1F4F7]">
+            <div className="min-w-0 flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 bg-[#F1F4F7]">
               {activeTab === 'dashboard' && (
                 <DashboardView
                   stats={stats}

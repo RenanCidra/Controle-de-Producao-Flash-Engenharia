@@ -39,8 +39,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setupRequired, bootstrapEnab
   };
 
   return (
-    <main className="min-h-screen bg-[#0C1420] text-white selection:bg-amber-400/30">
-      <div className="mx-auto grid min-h-screen max-w-[1440px] lg:grid-cols-[1.08fr_0.92fr]">
+    <main className="min-h-[100dvh] bg-[#0C1420] text-white selection:bg-amber-400/30">
+      <div className="mx-auto grid min-h-[100dvh] max-w-[1440px] lg:grid-cols-[1.08fr_0.92fr]">
         <section className="relative flex flex-col justify-between overflow-hidden px-6 py-8 sm:px-10 lg:px-16 lg:py-12">
           <div className="pointer-events-none absolute -left-28 top-1/4 h-96 w-96 rounded-full bg-amber-500/10 blur-3xl" />
           <div className="relative flex items-center gap-3">

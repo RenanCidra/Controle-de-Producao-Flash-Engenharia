@@ -21,6 +21,7 @@ import {
   ChevronRight,
   Shield,
   FileText,
+  Menu,
 } from 'lucide-react';
 import { ProtheusSyncView } from '../protheus-sync/ProtheusSyncView.tsx';
 import { ProtheusTableBrowser } from '../protheus-sync/ProtheusTableBrowser.tsx';
@@ -85,6 +86,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [showAuditEvents, setShowAuditEvents] = useState(false);
   const [selectedProtheusTable, setSelectedProtheusTable] = useState<{ entity: string; table: string } | null>(null);
+  const [mobileSettingsNavOpen, setMobileSettingsNavOpen] = useState(false);
 
   // General Settings state
   const [language, setLanguage] = useState(getAppLanguage());
@@ -187,9 +189,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#0F141C] text-slate-200 select-none font-sans">
+    <div className="relative flex h-[100dvh] w-full min-w-0 overflow-hidden bg-[#0F141C] font-sans text-slate-200 select-none">
+      {mobileSettingsNavOpen && <button type="button" aria-label="Fechar navegação de configurações" onClick={() => setMobileSettingsNavOpen(false)} className="fixed inset-0 z-30 bg-black/60 md:hidden" />}
       {/* Dedicated Left Settings Sidebar (matching image_a72b3d4c.png) */}
-      <aside className="w-72 shrink-0 flex flex-col bg-[#141B24] border-r border-[#202936] text-slate-300">
+      <aside className={`fixed inset-y-0 left-0 z-40 flex h-[100dvh] w-72 shrink-0 flex-col border-r border-[#202936] bg-[#141B24] text-slate-300 transition-transform duration-200 md:relative md:z-20 md:translate-x-0 ${mobileSettingsNavOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         {/* Top return to app button */}
         <div className="p-4 border-b border-[#202936]">
           <button
@@ -236,7 +239,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 return (
                   <button
                     key={item.id}
-                    onClick={() => setActiveSubTab(item.id)}
+                    onClick={() => { setActiveSubTab(item.id); setMobileSettingsNavOpen(false); }}
                     className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all group ${
                       isActive
                         ? 'bg-[#222B38] text-white font-semibold border-l-2 border-l-[#FFAA00]'
@@ -288,22 +291,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </aside>
 
       {/* Main Right Content Panel (Dedicated Scope) */}
-      <main className="flex-1 flex flex-col overflow-hidden bg-[#0B0F15]">
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#0B0F15]">
         {/* Top Header of the Dedicated Scope */}
-        <div className="h-14 border-b border-[#202936] px-8 flex items-center justify-between bg-[#111720] shrink-0">
-          <div className="flex items-center gap-3">
-            <h2 className="text-base font-bold text-white tracking-tight">
+        <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-[#202936] bg-[#111720] px-3 sm:px-5 lg:px-8">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <button type="button" onClick={() => setMobileSettingsNavOpen(true)} aria-label="Abrir navegação de configurações" className="rounded-md p-1.5 text-slate-300 hover:bg-[#1C2532] md:hidden"><Menu className="h-5 w-5" /></button>
+            <h2 className="max-w-[48vw] truncate text-sm font-bold tracking-tight text-white sm:text-base">
               {getSubTabTitle()}
             </h2>
-            <span className="text-slate-600 text-xs">•</span>
-            <span className="text-xs text-slate-400">
+            <span className="hidden text-xs text-slate-600 sm:inline">•</span>
+            <span className="hidden text-xs text-slate-400 sm:inline">
               NexusPCP Flash Engenharia
             </span>
           </div>
 
           <button
             onClick={onBack}
-            className="text-xs font-semibold text-slate-400 hover:text-white px-3 py-1.5 rounded-lg hover:bg-[#1C2532] border border-[#202936] transition flex items-center gap-1.5"
+            className="flex items-center gap-1.5 rounded-lg border border-[#202936] px-2.5 py-1.5 text-xs font-semibold text-slate-400 transition hover:bg-[#1C2532] hover:text-white sm:px-3"
           >
             <span>Fechar</span>
             <X className="h-3.5 w-3.5 text-slate-500" />
@@ -311,7 +315,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-3 sm:p-5 lg:p-8">
           {/* TAB 1: GERAL (Styled exactly like image_a72b3d4c.png) */}
           {activeSubTab === 'general' && (
             <div className="max-w-4xl mx-auto space-y-4">

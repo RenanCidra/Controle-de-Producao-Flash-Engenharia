@@ -68,12 +68,12 @@ export const ProtheusTableBrowser: React.FC<ProtheusTableBrowserProps> = ({ enti
         </button>
       </div>
 
-      <form onSubmit={submitSearch} className="flex gap-2 rounded-xl border border-[#202936] bg-[#141B24] p-3">
-        <div className="relative flex-1">
+      <form onSubmit={submitSearch} className="flex flex-col gap-2 rounded-xl border border-[#202936] bg-[#141B24] p-3 sm:flex-row">
+        <div className="relative min-w-0 flex-1">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
           <input value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Buscar por código, descrição ou identificador" className="w-full rounded-lg border border-[#2D3A4B] bg-[#0F141C] py-2 pl-9 pr-3 text-xs text-white placeholder-slate-500 outline-none focus:border-[#FFAA00]" />
         </div>
-        <button type="submit" disabled={loading} className="inline-flex items-center gap-2 rounded-lg bg-[#FFAA00] px-4 py-2 text-xs font-bold text-[#151C25] transition hover:bg-[#e69900] disabled:opacity-60">
+        <button type="submit" disabled={loading} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#FFAA00] px-4 py-2 text-xs font-bold text-[#151C25] transition hover:bg-[#e69900] disabled:opacity-60 sm:w-auto">
           <Search className="h-3.5 w-3.5" /> Buscar
         </button>
       </form>

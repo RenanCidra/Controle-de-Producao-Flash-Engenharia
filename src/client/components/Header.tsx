@@ -7,6 +7,8 @@ import {
   RefreshCw,
   ShieldCheck,
   Lock,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { AuthUser } from '../api.ts';
 import { getIntlLocale } from '../i18n/index.ts';
@@ -17,6 +19,8 @@ interface HeaderProps {
   loading: boolean;
   onRefresh: () => void;
   onOpenAuth: () => void;
+  sidebarCollapsed: boolean;
+  onToggleSidebar: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -25,6 +29,8 @@ export const Header: React.FC<HeaderProps> = ({
   loading,
   onRefresh,
   onOpenAuth,
+  sidebarCollapsed,
+  onToggleSidebar,
 }) => {
   const [currentDateTime, setCurrentDateTime] = useState('');
 
@@ -45,38 +51,41 @@ export const Header: React.FC<HeaderProps> = ({
   }, []);
 
   return (
-    <header className="h-14 border-b border-[#DCE3EB] px-6 flex items-center justify-between bg-white text-[#263548] select-none z-10 shrink-0">
+    <header className="z-10 flex h-14 shrink-0 items-center justify-between gap-2 border-b border-[#DCE3EB] bg-white px-2 text-[#263548] select-none sm:px-4 lg:px-6">
       {/* Left branding and breadcrumb / title */}
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         <button
-          className="p-1.5 -ml-1 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-md transition"
-          title="Menu"
+          onClick={onToggleSidebar}
+          className="-ml-1 rounded-md p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+          title={sidebarCollapsed ? 'Expandir menu lateral' : 'Recolher/abrir menu lateral'}
+          aria-label="Abrir ou recolher menu lateral"
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="h-5 w-5 md:hidden" />
+          {sidebarCollapsed ? <PanelLeftOpen className="hidden h-5 w-5 md:block" /> : <PanelLeftClose className="hidden h-5 w-5 md:block" />}
         </button>
 
-        <div className="flex items-center gap-2">
-          <h1 className="text-sm font-bold text-[#263548] tracking-tight">
+        <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+          <h1 className="max-w-[42vw] truncate text-xs font-bold tracking-tight text-[#263548] sm:max-w-none sm:text-sm">
             Controle de Produção Industrial
           </h1>
-          <span className="text-slate-300 text-xs">•</span>
-          <span className="text-xs text-[#64748B] font-medium">
+          <span className="hidden text-xs text-slate-300 sm:inline">•</span>
+          <span className="hidden text-xs font-medium text-[#64748B] xl:inline">
             Flash Engenharia • Operação Interna
           </span>
         </div>
       </div>
 
       {/* Right controls */}
-      <div className="flex items-center gap-4">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 lg:gap-4">
         {/* Date and time display */}
-        <div className="hidden sm:flex items-center gap-2 text-xs text-[#64748B] font-mono">
+        <div className="hidden lg:flex items-center gap-2 text-xs text-[#64748B] font-mono">
           <Calendar className="h-4 w-4 text-slate-400" />
           <span>{currentDateTime}</span>
         </div>
 
         {/* Notifications with amber badge */}
         <button
-          className="relative p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-md transition"
+          className="relative hidden p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-md transition sm:block"
           title="Notificações e Alertas"
         >
           <Bell className="h-4 w-4" />
@@ -84,9 +93,9 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
 
         {/* Current plant context (settings are opened only from the profile menu) */}
-        <div title="Planta atual" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#DCE3EB] bg-white text-xs font-medium text-[#263548] shadow-xs">
+        <div title="Planta atual" className="hidden items-center gap-1.5 rounded-lg border border-[#DCE3EB] bg-white px-3 py-1.5 text-xs font-medium text-[#263548] shadow-xs md:flex">
           <MapPin className="h-3.5 w-3.5 text-[#FFAA00]" />
-          <span>{plantCode || 'Planta Sorocaba'}</span>
+          <span className="max-w-28 truncate">{plantCode || 'Planta Sorocaba'}</span>
         </div>
 
         {/* Refresh button */}
@@ -101,9 +110,9 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* User Badge / Login */}
         {currentUser ? (
-          <span className="inline-flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-md border border-emerald-200 font-medium">
+          <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-1 text-[10px] font-medium text-emerald-700 sm:px-2.5 sm:text-xs">
             <ShieldCheck className="h-3.5 w-3.5" />
-            {currentUser.role}
+            <span className="hidden sm:inline">{currentUser.role}</span>
           </span>
         ) : (
           <button

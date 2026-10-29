@@ -45,6 +45,7 @@ Quando o acesso à origem for definido, implementar sincronização incremental 
 - Em Configurações → Conectores Protheus, as tabelas normalizadas disponíveis são clicáveis e abrem uma grade paginada com busca: pedidos (SC5/SC6), OPs (SC2), produtos (SB1), estruturas (SG1), roteiros (SG2) e apontamentos (SH6). SC5 e SC6 estão consolidadas no mesmo armazenamento de pedidos/itens; a tela mostra explicitamente que é dado normalizado local, não dump bruto da tabela física.
 - A navegação de dados usa `protheus-data:read` no servidor (ADMIN, SUPERVISOR e AUDITOR; OPERATOR sem acesso). Ingestão manual requer `integrations:write`. As relações de empenhos e de recursos/setores aparecem como pendentes, sem inventar tabela/campos que ainda não foram fornecidos.
 - Configurações devem ser abertas somente pelo menu do perfil do usuário. Remover/evitar atalhos para configurações no menu principal, cabeçalho, dashboard e telas operacionais. A barra lateral principal deve crescer com funções de produção; atualmente reserva entradas visíveis, desabilitadas e marcadas “Planejado” para Gestão de Ocorrências e PMP.
+- A experiência responsiva usa barra lateral principal recolhível no desktop (ícones e marca Flash compacta) e gaveta no celular; o botão de menu no cabeçalho recolhe/expande no desktop e abre a gaveta em telas menores. A navegação interna de Configurações também vira gaveta em telas pequenas. Conteúdo usa `100dvh`, larguras mínimas flexíveis, tabelas com rolagem horizontal e espaçamentos responsivos.
 
 ## Direção conceitual para módulos futuros
 
