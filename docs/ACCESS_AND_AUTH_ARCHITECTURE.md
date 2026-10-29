@@ -77,6 +77,7 @@ A migração `src/db/migrations/20261029_access_accounts.sql` cria `organization
 - **Aplicado — login sem e-mail:** formulário e API usam `loginName` + senha. E-mail é opcional no cadastro de contas; o login também aceita e-mail antigo durante a migração. Novos logins aceitam 3–40 caracteres ASCII normalizados para minúsculas.
 - **Aplicado — primeiro administrador:** `/auth/setup-status` verifica se existe administrador ativo com senha configurada. `/auth/bootstrap-admin` cria um administrador sob `BOOTSTRAP_SECRET` de pelo menos 32 caracteres, em transação e com lock; isso também permite provisionar o acesso em bancos com contas legadas sem senha, sem abrir cadastro público. Remova o segredo de bootstrap do ambiente depois de configurar a conta.
 - **Aplicado — página de entrada:** usuários sem sessão veem uma página dedicada, com login, configuração protegida do primeiro administrador e explicação dos fluxos resolvidos pelo sistema (rastreabilidade, visibilidade da operação, dados Protheus e auditoria). O idioma escolhido também é respeitado nessa página. Falha ao consultar o estado de setup não libera nem presume acesso: mostra erro e permite tentar novamente.
+- **Aplicado — orientação para o primeiro acesso:** o passo a passo de secrets, migração, criação do administrador e remoção de `BOOTSTRAP_SECRET` está em `docs/PRIMEIRO_ACESSO.md`. Não há credencial padrão no código.
 - **Aplicado — separação de domínio:** existe `employees` sem credenciais e `users.employee_id` opcional. A área de Configurações chama o cadastro de contas de **Contas de acesso**, visível apenas para `ADMIN`; o cadastro/controle de colaboradores continua fora do escopo atual.
 - **Aplicado — senha:** novas contas criadas pelo administrador exigem 12 caracteres e são hashadas com bcrypt custo 12. Senhas legadas continuam aceitas durante a transição; Argon2id, troca obrigatória no primeiro acesso e recuperação administrativa ainda são melhorias futuras.
 - **Aplicado — contrato do login:** a API e o cliente concordam em `{ accessToken, user }`; login retorna erros genéricos para credenciais inválidas e registra tentativas sem registrar senha/chave de bootstrap.
@@ -100,6 +101,8 @@ A migração `src/db/migrations/20261029_access_accounts.sql` cria `organization
 3. **Em andamento — permissões:** matriz inicial centralizada por recurso/ação já protege as rotas; próxima parte é persistir perfis/permissões configuráveis e aplicar escopo por organização/planta.
 4. **Próxima — sessões:** reduzir a duração do access token, persistir sessões, rotacionar refresh token e permitir revogar logout/dispositivos; considerar cookie HttpOnly e proteção CSRF.
 5. **Futura — gestão de colaboradores:** construir telas e regras de gestão separadas, com vínculo opcional a conta.
+
+O procedimento operacional completo para criar a primeira conta `ADMIN` está em [`docs/PRIMEIRO_ACESSO.md`](./PRIMEIRO_ACESSO.md). Não existe usuário/senha padrão; o bootstrap protegido é o caminho de primeiro acesso.
 
 ## Critérios pendentes para considerar a autenticação completa
 

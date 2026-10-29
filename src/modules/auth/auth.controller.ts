@@ -28,7 +28,7 @@ export class AuthController {
       });
       return res.status(201).json(result);
     } catch (error: any) {
-      const setupError = String(error.message || '').includes('Configuração inicial');
+      const setupError = /configuração inicial/i.test(String(error.message || ''));
       return res.status(setupError ? 403 : 400).json({ error: error.message || 'Falha ao criar a conta inicial.' });
     }
   }

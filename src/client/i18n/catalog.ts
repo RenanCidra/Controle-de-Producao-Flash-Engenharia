@@ -415,6 +415,7 @@ Object.assign(en, {
   'As contas são administradas internamente. Não há cadastro público nem necessidade de e-mail para entrar.': 'Accounts are managed internally. There is no public sign-up and no email is required to sign in.',
   'Ainda não existe um administrador ativo com senha configurada. Configure o acesso inicial seguro da equipe.': 'There is no active administrator with a password yet. Set up secure initial access for the team.',
   'Tentar novamente': 'Try again',
+  'Confirme que o servidor foi reiniciado na versão atual e que a migração de acesso foi aplicada.': 'Confirm that the server was restarted with the current version and that the access migration was applied.',
 });
 
 Object.assign(es, {
@@ -440,6 +441,7 @@ Object.assign(es, {
   'As contas são administradas internamente. Não há cadastro público nem necessidade de e-mail para entrar.': 'Las cuentas se administran internamente. No hay registro público ni se necesita correo electrónico para iniciar sesión.',
   'Ainda não existe um administrador ativo com senha configurada. Configure o acesso inicial seguro da equipe.': 'Aún no hay un administrador activo con contraseña. Configure el acceso inicial seguro del equipo.',
   'Tentar novamente': 'Intentar de nuevo',
+  'Confirme que o servidor foi reiniciado na versão atual e que a migração de acesso foi aplicada.': 'Confirme que el servidor se reinició con la versión actual y que se aplicó la migración de acceso.',
 });
 
 export const catalogs: Record<Exclude<AppLanguage, 'pt-BR'>, Record<string, string>> = { 'en-US': en, 'es-ES': es };

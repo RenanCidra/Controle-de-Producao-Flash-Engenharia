@@ -86,7 +86,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setupRequired, bootstrapEnab
             </div>
 
             {!setupStatusChecked && <div className="mb-5 flex items-center gap-2 text-sm text-slate-400"><RefreshCw size={15} className="animate-spin" />{t('Verificando configuração de acesso...')}</div>}
-            {setupStatusError && <div role="alert" className="mb-5 rounded-xl border border-rose-800 bg-rose-950/40 p-4 text-sm leading-6 text-rose-200">{setupStatusError} <button type="button" onClick={() => window.location.reload()} className="ml-1 underline underline-offset-2">{t('Tentar novamente')}</button></div>}
+            {setupStatusError && <div role="alert" className="mb-5 rounded-xl border border-rose-800 bg-rose-950/40 p-4 text-sm leading-6 text-rose-200">
+              <p>{setupStatusError}</p>
+              <p className="mt-2 text-rose-200/80">{t('Confirme que o servidor foi reiniciado na versão atual e que a migração de acesso foi aplicada.')}</p>
+              <button type="button" onClick={() => window.location.reload()} className="mt-2 underline underline-offset-2">{t('Tentar novamente')}</button>
+            </div>}
 
             {setupRequired && setupStatusChecked && !bootstrapEnabled && (
               <div className="mb-5 rounded-xl border border-amber-700/60 bg-amber-950/30 p-4 text-sm leading-6 text-amber-100">
