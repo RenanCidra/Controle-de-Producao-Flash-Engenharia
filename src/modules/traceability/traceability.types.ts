@@ -9,6 +9,7 @@ export interface TraceabilityFilterParams {
   postoTrabalho?: string;
   dataInicio?: string; // YYYYMMDD or YYYY-MM-DD
   dataFim?: string;
+  situacaoPrazo?: PrazoStatus;
   apenasAtrasadas?: boolean;
   apenasComRefugo?: boolean;
   semVinculoPv?: boolean;
@@ -148,3 +149,14 @@ export interface TraceabilitySummaryMetrics {
   opsComRefugo: number;
   taxaEntregaPrazoPercentual: number | null;
 }
+
+export interface TraceabilityMatrixSummary {
+  totalOps: number;
+  totalPlanejado: number;
+  totalProduzido: number;
+  totalRefugo: number;
+  percentualProduzido: number | null;
+  porSituacao: Record<PrazoStatus, number>;
+  principaisProdutos: Array<{ codigoProduto: string; descricaoProduto: string; quantidadeProduzida: number; totalOps: number }>;
+}
+

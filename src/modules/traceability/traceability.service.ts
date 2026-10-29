@@ -4,6 +4,7 @@ import {
   TraceabilityFilterParams,
   TraceabilityMatrixItem,
   TraceabilitySummaryMetrics,
+  TraceabilityMatrixSummary,
 } from './traceability.types.ts';
 
 export class TraceabilityService {
@@ -12,6 +13,7 @@ export class TraceabilityService {
     total: number;
     page: number;
     limit: number;
+    summary: TraceabilityMatrixSummary;
   }> {
     return TraceabilityRepository.listMatrix(params);
   }
@@ -132,3 +134,4 @@ export class TraceabilityService {
     };
   }
 }
+

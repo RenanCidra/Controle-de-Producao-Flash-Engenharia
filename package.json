@@ -7,6 +7,7 @@
     "dev": "tsx server.ts",
     "start": "node server.ts",
     "build": "vite build",
+    "test": "tsx --test src/middleware/request-protection.test.ts",
     "preview": "vite preview",
     "db:migrate:access": "tsx src/db/migrations/run-access-migration.ts",
     "db:migrate:occurrences": "tsx src/db/migrations/run-occurrences-migration.ts",
@@ -49,3 +50,4 @@
     "typescript": "^7.0.2"
   }
 }
+

@@ -75,3 +75,4 @@ O fluxo percorre os cursores em ordem, valida a quantidade recebida por conjunto
 ## O que ainda precisa do TI
 
 Para substituir o mock por integração real, o TI precisa confirmar endpoints somente leitura, autenticação, filial/empresa, filtros e paginação, limites de chamadas, semântica das datas e quantidades, códigos de status, tratamento de cancelamentos/estornos e identificadores estáveis dos apontamentos. Não se deve reutilizar um mapeamento do mock como contrato de produção sem essa validação.
+

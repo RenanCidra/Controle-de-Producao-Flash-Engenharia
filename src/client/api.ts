@@ -530,6 +530,9 @@ class ApiService {
     statusOp?: string;
     statusPv?: string;
     postoTrabalho?: string;
+    dataInicio?: string;
+    dataFim?: string;
+    situacaoPrazo?: 'NO_PRAZO' | 'ATRASADO' | 'RISCO_ATRASO' | 'CONCLUIDO' | 'SEM_PREVISAO';
     apenasAtrasadas?: boolean;
     apenasComRefugo?: boolean;
     semVinculoPv?: boolean;
@@ -549,6 +552,15 @@ class ApiService {
       total: number;
       page: number;
       limit: number;
+      summary: {
+        totalOps: number;
+        totalPlanejado: number;
+        totalProduzido: number;
+        totalRefugo: number;
+        percentualProduzido: number | null;
+        porSituacao: Record<'NO_PRAZO' | 'ATRASADO' | 'RISCO_ATRASO' | 'CONCLUIDO' | 'SEM_PREVISAO', number>;
+        principaisProdutos: Array<{ codigoProduto: string; descricaoProduto: string; quantidadeProduzida: number; totalOps: number }>;
+      };
     }>(`/traceability/matrix?${query.toString()}`);
   }
 
@@ -575,21 +587,35 @@ class ApiService {
     });
     return this.request<any>(`/occurrences?${query.toString()}`);
   }
-  public getOccurrencesForOp(numeroOp: string) { return this.request<any[]>(`/occurrences/op/${encodeURIComponent(numeroOp)}`); }
-  public getOccurrence(id: number) { return this.request<any>(`/occurrences/${id}`); }
+
+  public getOccurrencesForOp(numeroOp: string) {
+    return this.request<any[]>(`/occurrences/op/${encodeURIComponent(numeroOp)}`);
+  }
+
+  public getOccurrence(id: number) {
+    return this.request<any>(`/occurrences/${id}`);
+  }
+
   public searchOccurrenceOrders(search: string) {
     const query = new URLSearchParams({ search });
     return this.request<any[]>(`/occurrences/orders?${query.toString()}`);
   }
-  public createOccurrence(payload: { numeroOp: string; occurrenceType: string; description: string; operation?: string; workstation?: string; immediateAction?: string; }) {
+
+  public createOccurrence(payload: {
+    numeroOp: string; occurrenceType: string; description: string;
+    operation?: string; workstation?: string; immediateAction?: string;
+  }) {
     return this.request<any>('/occurrences', { method: 'POST', body: JSON.stringify(payload) });
   }
+
   public addOccurrenceEvent(id: number, message: string) {
     return this.request<any>(`/occurrences/${id}/events`, { method: 'POST', body: JSON.stringify({ message }) });
   }
+
   public changeOccurrenceStatus(id: number, status: string, message: string) {
     return this.request<any>(`/occurrences/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, message }) });
   }
+
   public async downloadTraceabilityCsv(params?: Record<string, any>) {
     const query = new URLSearchParams();
     if (params) {
@@ -648,3 +674,4 @@ class ApiService {
 }
 
 export const api = new ApiService();
+

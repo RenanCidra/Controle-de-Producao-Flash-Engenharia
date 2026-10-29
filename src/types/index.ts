@@ -79,3 +79,4 @@ export type ProductionLineStatus = 'OPERATIONAL' | 'MAINTENANCE' | 'IDLE';
 export type IntegrationProvider = 'IOT_SENSOR' | 'WEBHOOK' | 'CUSTOM_REST' | 'MES_SYNC';
 export type AuthType = 'BEARER' | 'HEADER' | 'BASIC' | 'NONE';
 export type IntegrationStatus = 'CONFIGURED' | 'ACTIVE' | 'ERROR' | 'DISABLED';
+

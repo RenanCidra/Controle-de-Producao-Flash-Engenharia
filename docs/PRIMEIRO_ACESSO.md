@@ -28,7 +28,7 @@ O sistema não possui usuário ou senha padrão. A primeira conta `ADMIN` é cri
 
 1. Abra a página do sistema. Se não existir administrador ativo com senha, ela mostrará **Configure a conta administradora**.
 2. Cole no campo de chave temporária o valor de `BOOTSTRAP_SECRET` configurado no passo 1.
-3. Defina seu nome, um usuário de acesso (3–40 caracteres: letras sem acento, números, ponto, hífen ou sublinhado) e uma senha com pelo menos 12 caracteres.
+3. Defina seu nome, um usuário de acesso (3–40 caracteres: letras sem acento, números, ponto, hífen ou sublinhado) e uma senha com pelo menos 12 caracteres e no máximo 72 bytes.
 4. O sistema cria a conta como `ADMIN` e inicia a sessão. Depois, remova `BOOTSTRAP_SECRET` dos segredos do AI Studio e reimplante. Mantenha `JWT_SECRET` configurado.
 
 ## Se a tela mostrar apenas login
@@ -37,7 +37,7 @@ Isso significa que a API encontrou um administrador ativo com senha configurada.
 
 Se a página disser que não conseguiu verificar a configuração de acesso, confira primeiro se a migração foi aplicada e se o servidor consegue se conectar ao banco. O backend deste repositório expõe `GET /api/auth/setup-status`; uma resposta `404` normalmente indica implantação antiga ou rota base incorreta. Reimplante a versão atual e confirme o prefixo `/api`. O assistente não permite cadastro quando essa verificação falha.
 
-Depois de entrar com uma conta real, cada usuário pode alterar a própria senha em **Meu perfil**, informando a senha atual; a nova senha deve ter pelo menos 12 caracteres. Esse fluxo não recupera uma senha esquecida: nesse caso, um administrador deve usar o processo de redefinição de senha da conta. A foto e o idioma escolhidos no perfil ficam somente no navegador atual e não fazem parte do backup da conta.
+Depois de entrar com uma conta real, cada usuário pode alterar a própria senha em **Meu perfil**, informando a senha atual; a nova senha deve ter pelo menos 12 caracteres e no máximo 72 bytes. Esse fluxo não recupera uma senha esquecida: nesse caso, um administrador deve usar o processo de redefinição de senha da conta. A foto e o idioma escolhidos no perfil ficam somente no navegador atual e não fazem parte do backup da conta.
 
 ## Prévia local sem login (temporária)
 
@@ -51,3 +51,4 @@ VITE_DEV_PREVIEW_AUTH=true
 Reinicie `npm run dev`. A aplicação mostrará uma conta sintética `ADMIN` e uma faixa de aviso; o middleware só aceita esse modo quando `NODE_ENV` não é `production`. As rotas de negócio ficam em **somente leitura** durante a prévia: `POST`, `PUT`, `PATCH` e `DELETE` recebem `403`, então nenhum apontamento, cadastro ou sincronização é gravado.
 
 Para voltar à autenticação normal, remova as duas linhas do `.env` ou altere ambos os valores para `false` e reinicie `npm run dev`. O código da autenticação e a página de login permanecem no projeto; não é necessário removê-los ou reescrevê-los. O build de produção não ativa a identidade sintética porque a interface também exige `import.meta.env.DEV`.
+

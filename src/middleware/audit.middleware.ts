@@ -12,7 +12,6 @@ function inferEntityFromPath(path: string): AuditEntity {
   if (path.includes('/org')) return 'ORGANIZATION';
   if (path.includes('/integrations')) return 'INTEGRATION';
   if (path.includes('/protheus')) return 'PROTHEUS_SYNC';
-  if (path.includes('/occurrences')) return 'PRODUCTION_OCCURRENCE';
   if (path.includes('/auth')) return 'AUTH';
   return 'SYSTEM';
 }
@@ -62,15 +61,21 @@ export const auditHttpMiddleware = (
         return originalSend.call(this, body);
       }
 
-      const forwarded = req.headers['x-forwarded-for'];
-      const ipAddress = typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : req.socket.remoteAddress || '127.0.0.1';
+      const ipAddress = req.ip || req.socket.remoteAddress || '127.0.0.1';
       const userAgent = (req.headers['user-agent'] as string) || 'Unknown';
       const isSuccess = res.statusCode >= 200 && res.statusCode < 400;
 
-      const sanitizedBody = req.body && typeof req.body === 'object' ? { ...req.body } : {};
-      for (const sensitiveField of ['password', 'setupSecret', 'token', 'accessToken', 'refreshToken', 'apiKey', 'secret', 'newPassword']) {
-        if (sensitiveField in sanitizedBody) sanitizedBody[sensitiveField] = '***REDACTED***';
-      }
+      const sensitiveFields = new Set(['password', 'currentpassword', 'confirmpassword', 'passwordconfirm', 'setuppassword', 'setupsecret', 'token', 'accesstoken', 'refreshtoken', 'bearertoken', 'apikey', 'clientsecret', 'secretkey', 'privatekey', 'credential', 'credentials', 'secret', 'newpassword', 'authorization']);
+      const redact = (value: unknown, depth = 0): unknown => {
+        if (depth > 12) return '[OMITTED]';
+        if (Array.isArray(value)) return value.map((item) => redact(item, depth + 1));
+        if (!value || typeof value !== 'object') return value;
+        return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+          key,
+          sensitiveFields.has(key.toLowerCase().replace(/[_-]/g, '')) ? '***REDACTED***' : redact(item, depth + 1),
+        ]));
+      };
+      const sanitizedBody = redact(req.body && typeof req.body === 'object' ? req.body : {}) as Record<string, unknown>;
 
       AuditService.record({
         userId: req.user?.uid || (req.user?.userId ? String(req.user.userId) : null),
@@ -79,7 +84,7 @@ export const auditHttpMiddleware = (
         entity: inferEntityFromPath(req.originalUrl),
         entityId: req.params?.id || extractEntityId(req.originalUrl),
         details: {
-          path: req.originalUrl,
+          path: req.path,
           statusCode: res.statusCode,
           payload: sanitizedBody,
         },
@@ -93,3 +98,4 @@ export const auditHttpMiddleware = (
   }
   next();
 };
+

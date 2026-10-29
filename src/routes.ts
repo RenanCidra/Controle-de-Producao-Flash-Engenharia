@@ -32,9 +32,12 @@ import {
 import { desc, sql } from 'drizzle-orm';
 import { auditHttpMiddleware } from './middleware/audit.middleware.ts';
 import { authenticateToken } from './middleware/auth.middleware.ts';
+import { apiRateLimit, mutationRateLimit, validateRequestBody } from './middleware/request-protection.ts';
 
 const apiRouter = Router();
 
+apiRouter.use(apiRateLimit);
+apiRouter.use(validateRequestBody);
 apiRouter.use(auditHttpMiddleware);
 
 apiRouter.use('/auth', authRoutes);
@@ -59,6 +62,10 @@ apiRouter.get('/health', async (req: Request, res: Response) => {
 
 // Every business endpoint below this point requires a provisioned, active account.
 apiRouter.use(authenticateToken);
+apiRouter.use((req: Request, res: Response, next) => {
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return mutationRateLimit(req, res, next);
+  return next();
+});
 apiRouter.use((req: Request, res: Response, next) => {
   const previewAuthEnabled = process.env.DEV_PREVIEW_AUTH === 'true' && process.env.NODE_ENV !== 'production';
   const isMutation = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
@@ -149,3 +156,4 @@ apiRouter.get('/stats', async (req: Request, res: Response) => {
 });
 
 export default apiRouter;
+

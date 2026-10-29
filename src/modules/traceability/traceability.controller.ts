@@ -14,6 +14,9 @@ export class TraceabilityController {
         statusOp: req.query.statusOp ? String(req.query.statusOp) : undefined,
         statusPv: req.query.statusPv ? String(req.query.statusPv) : undefined,
         postoTrabalho: req.query.postoTrabalho ? String(req.query.postoTrabalho) : undefined,
+        dataInicio: req.query.dataInicio ? String(req.query.dataInicio) : undefined,
+        dataFim: req.query.dataFim ? String(req.query.dataFim) : undefined,
+        situacaoPrazo: req.query.situacaoPrazo ? String(req.query.situacaoPrazo) as TraceabilityFilterParams['situacaoPrazo'] : undefined,
         apenasAtrasadas: req.query.apenasAtrasadas === 'true',
         apenasComRefugo: req.query.apenasComRefugo === 'true',
         semVinculoPv: req.query.semVinculoPv === 'true',
@@ -112,3 +115,4 @@ export class TraceabilityController {
     }
   }
 }
+

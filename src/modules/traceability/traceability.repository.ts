@@ -15,6 +15,7 @@ import {
   TraceabilityFilterParams,
   TraceabilityMatrixItem,
   TraceabilitySummaryMetrics,
+  TraceabilityMatrixSummary,
 } from './traceability.types.ts';
 
 // Helper to normalize and compare dates in YYYYMMDD or YYYY-MM-DD
@@ -86,6 +87,7 @@ export class TraceabilityRepository {
     total: number;
     page: number;
     limit: number;
+    summary: TraceabilityMatrixSummary;
   }> {
     const page = Math.max(1, Number(params.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(params.limit) || 25));
@@ -319,6 +321,68 @@ export class TraceabilityRepository {
       matrixItems = matrixItems.filter((m) => m.statusPrazo === 'ATRASADO');
     }
 
+    if (params.situacaoPrazo) {
+      matrixItems = matrixItems.filter((m) => m.statusPrazo === params.situacaoPrazo);
+    }
+
+    const parseFilterDate = (value?: string) => {
+      if (!value) return null;
+      const digits = value.replace(/\D/g, '');
+      if (digits.length !== 8) return null;
+      const yearFirst = digits.startsWith('20');
+      const year = Number(yearFirst ? digits.slice(0, 4) : digits.slice(4, 8));
+      const month = Number(yearFirst ? digits.slice(4, 6) : digits.slice(2, 4));
+      const day = Number(yearFirst ? digits.slice(6, 8) : digits.slice(0, 2));
+      const date = new Date(Date.UTC(year, month - 1, day));
+      if (Number.isNaN(date.getTime()) || date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+      return date.toISOString().slice(0, 10);
+    };
+    const dateFrom = parseFilterDate(params.dataInicio);
+    const dateTo = parseFilterDate(params.dataFim);
+    if (dateFrom || dateTo) {
+      matrixItems = matrixItems.filter((item) => {
+        const issueDate = parseFilterDate(item.dataEmissaoOp);
+        if (!issueDate) return false;
+        return (!dateFrom || issueDate >= dateFrom) && (!dateTo || issueDate <= dateTo);
+      });
+    }
+
+    const porSituacao: TraceabilityMatrixSummary['porSituacao'] = {
+      NO_PRAZO: 0,
+      ATRASADO: 0,
+      RISCO_ATRASO: 0,
+      CONCLUIDO: 0,
+      SEM_PREVISAO: 0,
+    };
+    const products = new Map<string, TraceabilityMatrixSummary['principaisProdutos'][number]>();
+    let totalPlanejado = 0;
+    let totalProduzido = 0;
+    let totalRefugo = 0;
+    for (const item of matrixItems) {
+      porSituacao[item.statusPrazo]++;
+      totalPlanejado += item.quantidadePlanejada;
+      totalProduzido += item.quantidadeProduzida;
+      totalRefugo += item.quantidadeRefugo;
+      const product = products.get(item.codigoProduto) || {
+        codigoProduto: item.codigoProduto,
+        descricaoProduto: item.descricaoProduto,
+        quantidadeProduzida: 0,
+        totalOps: 0,
+      };
+      product.quantidadeProduzida += item.quantidadeProduzida;
+      product.totalOps++;
+      products.set(item.codigoProduto, product);
+    }
+    const summary: TraceabilityMatrixSummary = {
+      totalOps: matrixItems.length,
+      totalPlanejado,
+      totalProduzido,
+      totalRefugo,
+      percentualProduzido: totalPlanejado > 0 ? Math.round((totalProduzido / totalPlanejado) * 100) : null,
+      porSituacao,
+      principaisProdutos: [...products.values()].sort((a, b) => b.quantidadeProduzida - a.quantidadeProduzida).slice(0, 5),
+    };
+
     const total = matrixItems.length;
     const paginated = matrixItems.slice(offset, offset + limit);
 
@@ -327,6 +391,7 @@ export class TraceabilityRepository {
       total,
       page,
       limit,
+      summary,
     };
   }
 
@@ -631,3 +696,4 @@ export class TraceabilityRepository {
     };
   }
 }
+

@@ -318,3 +318,4 @@ export const qualityInspectionsRelations = relations(qualityInspections, ({ one 
     references: [productionOrders.id],
   }),
 }));
+
