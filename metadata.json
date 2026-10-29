@@ -1,0 +1,6 @@
+{
+  "name": "NexusPCP - Rastreabilidade Industrial TOTVS Protheus",
+  "description": "Rastreabilidade e controle de produção industrial integrado ao ERP TOTVS Protheus. Acompanhamento de pedidos de venda (PV), ordens de produção (OP), roteiros, estruturas de produtos e apontamentos de chão de fábrica.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
