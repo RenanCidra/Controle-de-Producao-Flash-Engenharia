@@ -41,7 +41,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setupRequired, bootstrapEnab
   return (
     <main className="min-h-[100dvh] bg-[#0C1420] text-white selection:bg-amber-400/30">
       <div className="mx-auto grid min-h-[100dvh] max-w-[1440px] lg:grid-cols-[1.08fr_0.92fr]">
-        <section className="relative flex flex-col justify-between overflow-hidden px-6 py-8 sm:px-10 lg:px-16 lg:py-12">
+        <section className="relative order-2 flex flex-col justify-between overflow-hidden px-5 py-6 sm:px-8 sm:py-10 lg:order-1 lg:px-16 lg:py-12">
           <div className="pointer-events-none absolute -left-28 top-1/4 h-96 w-96 rounded-full bg-amber-500/10 blur-3xl" />
           <div className="relative flex items-center gap-3">
             <div className="flex flex-col items-start gap-1.5">
@@ -50,18 +50,18 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setupRequired, bootstrapEnab
             </div>
           </div>
 
-          <div className="relative my-16 max-w-2xl lg:my-0">
+          <div className="relative my-10 max-w-2xl sm:my-12 lg:my-0">
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs font-medium text-amber-300">
               <Activity size={14} /> {t('Produção conectada, rastreável e sob controle')}
             </div>
-            <h1 className="max-w-xl text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
+            <h1 className="max-w-xl text-3xl font-bold leading-tight tracking-tight sm:text-4xl lg:text-5xl">
               {t('Da ordem de produção à entrega, com clareza em cada etapa.')}
             </h1>
             <p className="mt-5 max-w-xl text-base leading-7 text-slate-300">
               {t('Acompanhe a operação em um só lugar e transforme dados dispersos em decisões mais rápidas para a fábrica.')}
             </p>
 
-            <div className="mt-10 grid gap-3 sm:grid-cols-2">
+            <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:mt-10">
               <Feature icon={<Waypoints size={18} />} title={t('Rastreabilidade de ponta a ponta')} description={t('Conecte pedidos de venda, ordens de produção, etapas e apontamentos.')}/>
               <Feature icon={<Boxes size={18} />} title={t('Visibilidade da operação')} description={t('Encontre atrasos, saldo a produzir, refugo e disponibilidade de estoque.')}/>
               <Feature icon={<Activity size={18} />} title={t('Dados do Protheus integrados')} description={t('Centralize a leitura operacional de pedidos, produtos, roteiros e produção.')}/>
@@ -72,7 +72,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setupRequired, bootstrapEnab
           <div className="relative flex items-center gap-2 text-xs text-slate-500"><LockKeyhole size={14} /> {t('Acesso interno protegido por autenticação')}</div>
         </section>
 
-        <section className="flex items-center justify-center border-t border-slate-800 bg-[#111C2A] px-5 py-12 sm:px-10 lg:border-l lg:border-t-0">
+        <section className="order-1 flex items-center justify-center border-b border-slate-800 bg-[#111C2A] px-4 py-8 sm:px-8 sm:py-10 lg:order-2 lg:border-b-0 lg:border-l lg:px-10 lg:py-12">
           <div className="w-full max-w-md">
             <div className="mb-8">
               <div className="text-xs font-bold uppercase tracking-[0.18em] text-amber-400">{setupRequired ? t('Primeiro acesso') : t('Acesso ao sistema')}</div>
