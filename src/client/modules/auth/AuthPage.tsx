@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Activity, ArrowRight, Boxes, Eye, EyeOff, Factory, LockKeyhole, RefreshCw, ShieldCheck, Waypoints } from 'lucide-react';
+import { Activity, ArrowRight, Boxes, Eye, EyeOff, LockKeyhole, RefreshCw, ShieldCheck, Waypoints } from 'lucide-react';
 import { api, AuthUser } from '../../api.ts';
 import { translateText } from '../../i18n/index.ts';
 
@@ -44,10 +44,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setupRequired, bootstrapEnab
         <section className="relative flex flex-col justify-between overflow-hidden px-6 py-8 sm:px-10 lg:px-16 lg:py-12">
           <div className="pointer-events-none absolute -left-28 top-1/4 h-96 w-96 rounded-full bg-amber-500/10 blur-3xl" />
           <div className="relative flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500 text-slate-950"><Factory size={22} /></div>
-            <div>
-              <div className="text-sm font-black tracking-[0.16em]">FLASH ENGENHARIA</div>
-              <div className="mt-0.5 text-xs text-slate-400">{t('Controle de Produção Industrial')}</div>
+            <div className="flex flex-col items-start gap-1.5">
+              <img src="/assets/flash-brand.svg" alt="Flash Engenharia" className="h-12 w-[190px] object-contain object-left" />
+              <div className="text-xs text-slate-400">{t('Controle de Produção Industrial')}</div>
             </div>
           </div>
 

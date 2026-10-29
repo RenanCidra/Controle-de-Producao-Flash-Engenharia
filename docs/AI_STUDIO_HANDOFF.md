@@ -50,6 +50,7 @@ Quando o acesso à origem for definido, implementar sincronização incremental 
 - A tela de conexão trata respostas de um backend local antigo sem `databaseStatus`: nesse caso mantém a página aberta, informa que o banco não foi reportado e orienta reiniciar o backend. Não assumir que o status do backend prova conexão ao Protheus.
 - O estado técnico foi removido da navegação e do menu do perfil; o acesso fica somente em Configurações. A área de conexão é administrativa.
 - A navegação principal é responsiva: recolhe para ícones em desktop, vira gaveta em celular e usa conteúdo/grades flexíveis; a navegação de Configurações também vira gaveta em telas estreitas. Build e typecheck passaram após os últimos ajustes.
+- Identidade visual Flash atualizada usando a arte enviada pelo usuário: `public/assets/flash-brand.svg` compõe o letreiro em camadas, com a linha “ENGENHARIA” refeita como texto vetorial mais nítido; `public/assets/flash-wordmark.png` e `public/assets/flash-symbol.png` são as camadas de alta resolução usadas pelo SVG; o PNG original `public/assets/flash-brand.png` foi preservado. O símbolo compacto é usado na barra recolhida, e a marca SVG na barra expandida (em tamanho menor) e na tela dedicada de login. `public/assets/flash-favicon.png` é a versão quadrada para a aba do navegador. Não recriar a logo com texto/ícone genérico.
 
 ## Estado operacional e como retomar
 

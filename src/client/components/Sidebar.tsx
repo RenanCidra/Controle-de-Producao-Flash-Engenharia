@@ -14,7 +14,6 @@ import {
   LogOut,
   LogIn,
   LucideIcon,
-  Zap,
 } from 'lucide-react';
 import { AuthUser } from '../api.ts';
 
@@ -96,17 +95,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Brand Header */}
       <div className={`h-16 border-b border-[#202936] flex items-center ${collapsed ? 'justify-center px-2' : 'justify-between px-5'}`}>
         <div className={`flex items-center ${collapsed ? '' : 'gap-3'}`} title={collapsed ? 'Flash Engenharia' : undefined}>
-          <div className="h-8 w-8 rounded-md bg-[#FFAA00] flex items-center justify-center text-[#151C25] shadow-sm">
-            <Zap className="h-5 w-5 fill-[#151C25]" />
-          </div>
-          {!collapsed && <div className="flex flex-col">
-            <span className="text-lg font-black tracking-wider text-white leading-none">
-              FLASH
-            </span>
-            <span className="text-[9px] font-bold tracking-[0.28em] text-[#FFAA00] uppercase mt-0.5 leading-none">
-              ENGENHARIA
-            </span>
-          </div>}
+          <img
+            src={collapsed ? '/assets/flash-symbol.png' : '/assets/flash-brand.svg'}
+            alt="Flash Engenharia"
+            className={collapsed ? 'h-9 w-8 object-contain' : 'h-10 w-[150px] object-contain'}
+          />
         </div>
         {collapsed ? <button type="button" onClick={onToggleCollapse} title="Expandir menu" aria-label="Expandir menu" className="absolute right-[-13px] top-5 hidden h-7 w-7 items-center justify-center rounded-full border border-[#334155] bg-[#202936] text-slate-300 shadow-md hover:text-white md:flex"><PanelLeftOpen className="h-3.5 w-3.5" /></button> : <button type="button" onClick={onToggleCollapse} title="Recolher menu" aria-label="Recolher menu" className="hidden rounded-md p-1.5 text-slate-400 hover:bg-[#1C2532] hover:text-white md:block"><PanelLeftClose className="h-4 w-4" /></button>}
         {mobileOpen && <button type="button" onClick={onCloseMobile} title="Fechar menu" aria-label="Fechar menu" className="rounded-md p-1.5 text-slate-400 hover:bg-[#1C2532] hover:text-white md:hidden"><X className="h-4 w-4" /></button>}
