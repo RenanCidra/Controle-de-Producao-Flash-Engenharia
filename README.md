@@ -8,6 +8,7 @@ Aplicação web para acompanhar ordens de produção, rastreabilidade e auditori
 
 - Painel e rastreabilidade de pedidos e ordens de produção a partir dos dados presentes no banco da aplicação.
 - Visualização de dados Protheus normalizados, com busca e paginação, e ferramentas para validar a simulação local.
+- Consulta somente leitura de empenhos e recursos SH1 pela API simulada; esses dados de teste não são persistidos no espelho operacional.
 - Autenticação interna, perfis de acesso e trilha de auditoria.
 - Perfil pessoal com alteração de senha, foto e idioma. Foto e idioma ficam somente no navegador utilizado.
 - Interface responsiva, em português, inglês e espanhol.

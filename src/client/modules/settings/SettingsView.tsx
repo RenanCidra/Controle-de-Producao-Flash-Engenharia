@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { ProtheusSyncView } from '../protheus-sync/ProtheusSyncView.tsx';
 import { ProtheusTableBrowser } from '../protheus-sync/ProtheusTableBrowser.tsx';
+import { ProtheusSimulationTableBrowser } from '../protheus-sync/ProtheusSimulationTableBrowser.tsx';
 import { ProductionLinesView } from '../production-lines/ProductionLinesView.tsx';
 import { IntegrationsView } from '../integrations/IntegrationsView.tsx';
 import { FactoryView } from '../factory/FactoryView.tsx';
@@ -181,7 +182,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>(initialSubTab);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAuditEvents, setShowAuditEvents] = useState(false);
-  const [selectedProtheusTable, setSelectedProtheusTable] = useState<{ entity: string; table: string } | null>(null);
+  const [selectedProtheusTable, setSelectedProtheusTable] = useState<{ entity: string; table: string; source?: 'simulation' } | null>(null);
   const [mobileSettingsNavOpen, setMobileSettingsNavOpen] = useState(false);
 
   // General Settings state
@@ -587,11 +588,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </p>
 
               {selectedProtheusTable ? (
-                <ProtheusTableBrowser
-                  entity={selectedProtheusTable.entity}
-                  tableLabel={selectedProtheusTable.table}
-                  onBack={() => setSelectedProtheusTable(null)}
-                />
+                selectedProtheusTable.source === 'simulation' ? (
+                  <ProtheusSimulationTableBrowser
+                    entity={selectedProtheusTable.entity as 'commitments' | 'resources'}
+                    tableLabel={selectedProtheusTable.table}
+                    onBack={() => setSelectedProtheusTable(null)}
+                  />
+                ) : (
+                  <ProtheusTableBrowser
+                    entity={selectedProtheusTable.entity}
+                    tableLabel={selectedProtheusTable.table}
+                    onBack={() => setSelectedProtheusTable(null)}
+                  />
+                )
               ) : (
                 <div className="space-y-3">
                   {[
@@ -612,11 +621,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   ))}
                   <div className="grid gap-3 pt-2 sm:grid-cols-2">
                     {[
-                      { label: 'Empenhos entre OPs', detail: 'Aguardando amostra/campos da tabela para identificar OP pai e OP filha.' },
-                      { label: 'Recursos e setores', detail: 'Aguardando a relação oficial de recursos/postos com setores e subsetores.' },
-                    ].map((item) => <div key={item.label} className="rounded-xl border border-dashed border-[#344154] bg-[#111720] p-4"><h4 className="text-xs font-semibold text-slate-300">{item.label} · pendente</h4><p className="mt-1 text-xs text-slate-500">{item.detail}</p></div>)}
+                      { label: 'Empenhos entre OPs', detail: 'Consulte as referências de produto e OP disponíveis no relatório simulado.', entity: 'commitments', sourceTable: 'Empenhos' },
+                      { label: 'Recursos (SH1)', detail: 'Consulte o cadastro de recursos; setor/centro de trabalho só aparece quando informado pela origem.', entity: 'resources', sourceTable: 'Recursos SH1' },
+                    ].map((item) => <button key={item.entity} onClick={() => setSelectedProtheusTable({ entity: item.entity, table: item.sourceTable, source: 'simulation' })} className="flex w-full items-center justify-between rounded-xl border border-cyan-500/20 bg-[#141B24] p-4 text-left transition hover:border-cyan-400/50 hover:bg-[#19222D]">
+                      <span><span className="block text-xs font-semibold text-white">{item.label}</span><span className="mt-1 block text-xs text-slate-400">{item.detail}</span><span className="mt-2 inline-flex rounded border border-cyan-500/20 bg-cyan-950/30 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-200">API simulada · somente leitura</span></span>
+                      <span className="shrink-0 pl-3 text-xs font-semibold text-cyan-200">Consultar →</span>
+                    </button>)}
                   </div>
-                  <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-relaxed text-amber-200/80">A consulta exibe os dados normalizados armazenados neste sistema, não uma cópia bruta das tabelas físicas do Protheus. SC5 e SC6 estão consolidadas no mesmo conjunto de pedidos/itens. A API do Protheus ainda não está conectada para buscar registros sob demanda.</p>
+                  <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-relaxed text-amber-200/80">SC5/SC6, SC2, SB1, SG1, SG2 e SH6 consultam o espelho normalizado no banco da aplicação. Empenhos e recursos SH1 consultam a API simulada local em modo somente leitura; esses registros não são gravados no banco. SC5 e SC6 permanecem consolidadas no mesmo conjunto. A conexão à API real do Protheus ainda depende do TI.</p>
                 </div>
               )}
             </div>
