@@ -25,6 +25,8 @@ import {
 import { ProtheusSyncView } from '../protheus-sync/ProtheusSyncView.tsx';
 import { FactoryView } from '../factory/FactoryView.tsx';
 import { UsersView } from '../users/UsersView.tsx';
+import { AuditView } from '../audit/AuditView.tsx';
+import { getAppLanguage, setAppLanguage } from '../../i18n/index.ts';
 
 export type SettingsSubTab =
   | 'data-sync'
@@ -47,6 +49,8 @@ interface SettingsViewProps {
   onRefreshStats: () => void;
   onSuccess: (msg: string) => void;
   onError: (msg: string) => void;
+  auditLogs: any[];
+  onReloadAudit: () => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -61,12 +65,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onRefreshStats,
   onSuccess,
   onError,
+  auditLogs,
+  onReloadAudit,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>(initialSubTab);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showAuditEvents, setShowAuditEvents] = useState(false);
 
   // General Settings state
-  const [language, setLanguage] = useState('pt-BR');
+  const [language, setLanguage] = useState(getAppLanguage());
   const [timezone, setTimezone] = useState(factoryProfile?.timezone || 'America/Sao_Paulo');
   const [syncInterval, setSyncInterval] = useState('30s');
   const [autoSaveAudit, setAutoSaveAudit] = useState(true);
@@ -101,7 +108,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         },
         {
           id: 'users',
-          label: 'Configurações de Usuários',
+          label: 'Contas de acesso',
           icon: Users,
           badge: users?.length ? `${users.length}` : undefined,
         },
@@ -135,7 +142,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   ];
 
   // Search filter
-  const filteredGroups = menuGroups
+  const visibleGroups = menuGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => item.id !== 'users' || currentUser?.role === 'ADMIN'),
+    }))
+    .filter((group) => group.items.length > 0);
+
+  const filteredGroups = visibleGroups
     .map((group) => ({
       ...group,
       items: group.items.filter((item) =>
@@ -145,7 +159,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     .filter((group) => group.items.length > 0);
 
   const getSubTabTitle = () => {
-    for (const group of menuGroups) {
+    for (const group of visibleGroups) {
       const match = group.items.find((i) => i.id === activeSubTab);
       if (match) return match.label;
     }
@@ -294,8 +308,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <select
                   value={language}
                   onChange={(e) => {
-                    setLanguage(e.target.value);
-                    onSuccess('Idioma da interface atualizado.');
+                    const nextLanguage = e.target.value as 'pt-BR' | 'en-US' | 'es-ES';
+                    setLanguage(nextLanguage);
+                    setAppLanguage(nextLanguage);
+                    window.sessionStorage.setItem('flash-reopen-settings-after-language-change', 'true');
+                    window.location.reload();
                   }}
                   className="rounded-lg bg-[#1D2733] border border-[#2D3A4B] px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#FFAA00] cursor-pointer"
                 >
@@ -429,9 +446,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="max-w-6xl mx-auto space-y-6">
               <div className="flex items-center justify-between pb-2 border-b border-[#202936]">
                 <div>
-                  <h3 className="text-xl font-bold text-white">Configurações de Usuários</h3>
+                  <h3 className="text-xl font-bold text-white">Contas de acesso</h3>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Controle de acesso da equipe, operadores de linha, supervisores e inspetores.
+                    Contas que autenticam no sistema e recebem perfis de acesso. Colaboradores serão cadastrados separadamente.
                   </p>
                 </div>
               </div>
@@ -588,6 +605,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </p>
                 </div>
                 <span className="font-mono text-xs text-slate-400">HS256 24h</span>
+              </div>
+
+              <div className="space-y-4 pt-2">
+                <button
+                  onClick={() => setShowAuditEvents((visible) => !visible)}
+                  aria-expanded={showAuditEvents}
+                  className="inline-flex items-center gap-2 rounded-lg bg-[#FFAA00] px-4 py-2.5 text-xs font-bold text-[#151C25] transition hover:bg-[#e69900]"
+                >
+                  <FileText className="h-4 w-4" />
+                  {showAuditEvents ? 'Ocultar Eventos' : 'Ver Eventos'}
+                </button>
+
+                {showAuditEvents && (
+                  <div className="rounded-xl border border-[#202936] bg-[#141B24] p-5">
+                    <AuditView logs={auditLogs} onReload={onReloadAudit} />
+                  </div>
+                )}
               </div>
             </div>
           )}

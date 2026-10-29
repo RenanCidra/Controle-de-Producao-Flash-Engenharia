@@ -1,214 +1,123 @@
 import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { AuthRepository } from './auth.repository.ts';
+import { normalizeLoginName, validateLoginName, validatePassword } from './credentials.ts';
 import { TokenService } from '../../services/token.service.ts';
 import { AuditService } from '../../services/audit.service.ts';
-import { adminAuth } from '../../lib/firebase-admin.ts';
+import { normalizeUserRole } from '../../types/index.ts';
+
+const INVALID_CREDENTIALS = 'Credenciais inválidas.';
+
+function publicUser(user: any) {
+  return {
+    id: user.id,
+    uid: user.uid,
+    loginName: user.loginName,
+    email: user.email,
+    name: user.name,
+    role: normalizeUserRole(user.role),
+    department: user.department,
+  };
+}
+
+function issueAccessToken(user: any): string {
+  return TokenService.generateAccessToken({
+    userId: user.id,
+    uid: user.uid,
+    loginName: user.loginName,
+    email: user.email || undefined,
+    name: user.name,
+    role: normalizeUserRole(user.role),
+    status: user.status as 'ACTIVE' | 'INACTIVE',
+    department: user.department,
+  });
+}
 
 export class AuthService {
-  public static async register(data: {
-    email: string;
-    password?: string;
+  public static async getSetupStatus() {
+    const hasAdminCredential = await AuthRepository.hasActiveAdminCredential();
+    return {
+      setupRequired: !hasAdminCredential,
+      bootstrapEnabled: Boolean(process.env.BOOTSTRAP_SECRET && process.env.BOOTSTRAP_SECRET.length >= 32),
+    };
+  }
+
+  public static async bootstrapAdmin(data: {
+    setupSecret: string;
+    loginName: string;
+    password: string;
     name: string;
-    role?: 'ADMIN' | 'MANAGER' | 'OPERATOR' | 'VIEWER';
-    department?: string;
+    email?: string;
     ipAddress?: string;
   }) {
-    const existing = await AuthRepository.findByEmail(data.email);
-    if (existing) {
-      throw new Error('Já existe um usuário cadastrado com este e-mail.');
+    TokenService.assertConfigured();
+    const configuredSecret = process.env.BOOTSTRAP_SECRET;
+    const suppliedSecret = Buffer.from(data.setupSecret || '');
+    const expectedSecret = Buffer.from(configuredSecret || '');
+    if (expectedSecret.length < 32 || suppliedSecret.length !== expectedSecret.length || !crypto.timingSafeEqual(suppliedSecret, expectedSecret)) {
+      throw new Error('Configuração inicial indisponível ou chave inválida.');
     }
 
-    let passwordHash: string | undefined = undefined;
-    if (data.password) {
-      if (data.password.length < 6) {
-        throw new Error('A senha deve possuir no mínimo 6 caracteres.');
-      }
-      passwordHash = await bcrypt.hash(data.password, 10);
-    }
+    const loginName = validateLoginName(data.loginName);
+    validatePassword(data.password);
+    if (!data.name?.trim()) throw new Error('Informe o nome do administrador.');
 
-    const uid = 'usr_' + crypto.randomUUID();
-    const newUser = await AuthRepository.createUser({
-      uid,
+    const user = await AuthRepository.createFirstAdmin({
+      uid: `usr_${crypto.randomUUID()}`,
+      loginName,
       email: data.email,
       name: data.name,
-      passwordHash,
-      role: data.role || 'ADMIN',
-      department: data.department,
+      passwordHash: await bcrypt.hash(data.password, 12),
     });
-
-    const accessToken = TokenService.generateAccessToken({
-      userId: newUser.id,
-      uid: newUser.uid,
-      email: newUser.email,
-      name: newUser.name,
-      role: newUser.role as any,
-      status: newUser.status as any,
-      department: newUser.department,
-    });
-
-    const refreshToken = TokenService.generateRefreshToken({
-      userId: newUser.id,
-      uid: newUser.uid,
-      email: newUser.email,
-    });
-
+    await AuthRepository.updateLastLogin(user.id);
     await AuditService.record({
-      userId: newUser.uid,
-      userEmail: newUser.email,
+      userId: user.uid,
+      userEmail: user.email,
       action: 'LOGIN',
       entity: 'AUTH',
-      entityId: String(newUser.id),
-      details: { message: 'Conta de usuário criada com sucesso via JWT nativo' },
+      entityId: String(user.id),
+      details: { message: 'Conta administradora inicial provisionada' },
       ipAddress: data.ipAddress,
       status: 'SUCCESS',
     });
 
-    return {
-      user: {
-        id: newUser.id,
-        uid: newUser.uid,
-        email: newUser.email,
-        name: newUser.name,
-        role: newUser.role,
-        department: newUser.department,
-      },
-      accessToken,
-      refreshToken,
-    };
+    return { user: publicUser(user), accessToken: issueAccessToken(user) };
   }
 
-  public static async login(data: { email: string; password?: string; ipAddress?: string }) {
-    const user = await AuthRepository.findByEmail(data.email);
-    if (!user) {
-      throw new Error('Credenciais inválidas: e-mail ou senha incorretos.');
-    }
+  public static async login(data: { loginName: string; password?: string; ipAddress?: string }) {
+    TokenService.assertConfigured();
+    const loginName = normalizeLoginName(data.loginName);
+    const user = await AuthRepository.findByLoginName(loginName);
+    const passwordMatches = user?.passwordHash && data.password
+      ? await bcrypt.compare(data.password, user.passwordHash)
+      : false;
 
-    if (user.status !== 'ACTIVE') {
-      throw new Error('Esta conta está inativa ou suspensa. Contate o administrador do ERP.');
-    }
-
-    if (!user.passwordHash || !data.password) {
-      throw new Error('Esta conta requer autenticação federada (Google/Firebase) ou redefinição de senha.');
-    }
-
-    const isMatch = await bcrypt.compare(data.password, user.passwordHash);
-    if (!isMatch) {
+    if (!user || user.status !== 'ACTIVE' || !passwordMatches) {
       await AuditService.record({
-        userId: user.uid,
-        userEmail: user.email,
+        userId: user?.uid || null,
+        userEmail: user?.email || null,
         action: 'LOGIN',
         entity: 'AUTH',
-        entityId: String(user.id),
-        details: { message: 'Tentativa de login com senha incorreta' },
+        entityId: user ? String(user.id) : null,
+        details: { message: 'Tentativa de autenticação inválida', loginName },
         ipAddress: data.ipAddress,
         status: 'FAILURE',
       });
-      throw new Error('Credenciais inválidas: e-mail ou senha incorretos.');
+      throw new Error(INVALID_CREDENTIALS);
     }
 
     await AuthRepository.updateLastLogin(user.id);
-
-    const accessToken = TokenService.generateAccessToken({
-      userId: user.id,
-      uid: user.uid,
-      email: user.email,
-      name: user.name,
-      role: user.role as any,
-      status: user.status as any,
-      department: user.department,
-    });
-
-    const refreshToken = TokenService.generateRefreshToken({
-      userId: user.id,
-      uid: user.uid,
-      email: user.email,
-    });
-
     await AuditService.record({
       userId: user.uid,
       userEmail: user.email,
       action: 'LOGIN',
       entity: 'AUTH',
       entityId: String(user.id),
-      details: { message: 'Autenticação bem-sucedida via JWT' },
+      details: { message: 'Autenticação concluída', loginName },
       ipAddress: data.ipAddress,
       status: 'SUCCESS',
     });
 
-    return {
-      user: {
-        id: user.id,
-        uid: user.uid,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        department: user.department,
-      },
-      accessToken,
-      refreshToken,
-    };
-  }
-
-  public static async syncFirebaseUser(firebaseIdToken: string, ipAddress?: string) {
-    const decoded = await adminAuth.verifyIdToken(firebaseIdToken);
-    const email = decoded.email || `${decoded.uid}@google.auth`;
-    const name = decoded.name || email.split('@')[0];
-
-    let user = await AuthRepository.findByUid(decoded.uid);
-    if (!user) {
-      user = await AuthRepository.findByEmail(email);
-    }
-
-    if (!user) {
-      user = await AuthRepository.createUser({
-        uid: decoded.uid,
-        email,
-        name,
-        role: 'ADMIN', // First user or admin
-      });
-    } else {
-      await AuthRepository.updateLastLogin(user.id);
-    }
-
-    const accessToken = TokenService.generateAccessToken({
-      userId: user.id,
-      uid: user.uid,
-      email: user.email,
-      name: user.name,
-      role: user.role as any,
-      status: user.status as any,
-      department: user.department,
-    });
-
-    const refreshToken = TokenService.generateRefreshToken({
-      userId: user.id,
-      uid: user.uid,
-      email: user.email,
-    });
-
-    await AuditService.record({
-      userId: user.uid,
-      userEmail: user.email,
-      action: 'LOGIN',
-      entity: 'AUTH',
-      entityId: String(user.id),
-      details: { message: 'Sincronização e login com Google/Firebase completado' },
-      ipAddress,
-      status: 'SUCCESS',
-    });
-
-    return {
-      user: {
-        id: user.id,
-        uid: user.uid,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        department: user.department,
-      },
-      accessToken,
-      refreshToken,
-    };
+    return { user: publicUser(user), accessToken: issueAccessToken(user) };
   }
 }

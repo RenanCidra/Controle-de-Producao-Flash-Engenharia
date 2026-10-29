@@ -16,9 +16,13 @@
     "moduleDetection": "force",
     "allowJs": true,
     "jsx": "react-jsx",
+    "jsxImportSource": "@i18n",
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@i18n/*": [
+        "./src/client/i18n/*"
       ]
     },
     "resolveJsonModule": true,

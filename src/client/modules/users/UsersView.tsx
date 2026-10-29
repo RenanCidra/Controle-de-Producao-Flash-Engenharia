@@ -3,6 +3,7 @@ import { Users, Plus, Trash2 } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState.tsx';
 import { Modal } from '../../components/Modal.tsx';
 import { api } from '../../api.ts';
+import { confirmInCurrentLanguage } from '../../i18n/index.ts';
 
 interface UsersViewProps {
   users: any[];
@@ -19,6 +20,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
 }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [name, setName] = useState('');
+  const [loginName, setLoginName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('OPERATOR');
   const [department, setDepartment] = useState('');
@@ -29,6 +31,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
     try {
       await api.createUser({
         name,
+        loginName,
         email,
         role,
         department,
@@ -36,10 +39,11 @@ export const UsersView: React.FC<UsersViewProps> = ({
       });
       setModalOpen(false);
       setName('');
+      setLoginName('');
       setEmail('');
       setPassword('');
       setDepartment('');
-      onSuccess('Colaborador cadastrado.');
+      onSuccess('Conta de acesso cadastrada.');
       onReload();
     } catch (err: any) {
       onError(err.message);
@@ -47,10 +51,10 @@ export const UsersView: React.FC<UsersViewProps> = ({
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Deseja excluir este colaborador?')) return;
+    if (!confirmInCurrentLanguage('Deseja excluir esta conta de acesso?')) return;
     try {
       await api.deleteUser(id);
-      onSuccess('Colaborador excluído.');
+      onSuccess('Conta de acesso excluída.');
       onReload();
     } catch (err: any) {
       onError(err.message);
@@ -61,9 +65,9 @@ export const UsersView: React.FC<UsersViewProps> = ({
     <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-xl font-bold text-[#151C25]">Equipe de Produção</h3>
+          <h3 className="text-xl font-bold text-[#151C25]">Contas de acesso</h3>
           <p className="text-xs text-slate-500 mt-0.5">
-            Operadores, inspetores de qualidade e supervisores.
+            Gerencie credenciais e perfis de quem pode entrar no sistema.
           </p>
         </div>
         <button
@@ -71,15 +75,15 @@ export const UsersView: React.FC<UsersViewProps> = ({
           className="px-3.5 py-2 bg-[#FFAA00] hover:bg-[#e69900] text-[#151C25] font-bold rounded-lg text-xs transition flex items-center gap-2 shadow-xs"
         >
           <Plus className="h-3.5 w-3.5" />
-          Novo Colaborador
+          Nova conta
         </button>
       </div>
 
       {users.length === 0 ? (
         <EmptyState
           icon={Users}
-          title="Nenhum colaborador cadastrado."
-          actionLabel="Novo Colaborador"
+          title="Nenhuma conta de acesso cadastrada."
+          actionLabel="Criar conta de acesso"
           onAction={() => setModalOpen(true)}
         />
       ) : (
@@ -88,7 +92,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
             <thead className="bg-[#121820] text-slate-400 uppercase font-semibold border-b border-[#202936]">
               <tr>
                 <th className="py-3 px-4">Nome</th>
-                <th className="py-3 px-4">E-mail</th>
+                <th className="py-3 px-4">Usuário de acesso</th>
+                <th className="py-3 px-4">E-mail (opcional)</th>
                 <th className="py-3 px-4">Função</th>
                 <th className="py-3 px-4">Turno / Setor</th>
                 <th className="py-3 px-4">Status</th>
@@ -99,7 +104,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
               {users.map((u) => (
                 <tr key={u.id} className="hover:bg-[#1C2532] transition">
                   <td className="py-3 px-4 font-medium text-white">{u.name}</td>
-                  <td className="py-3 px-4 text-slate-300 font-mono">{u.email}</td>
+                  <td className="py-3 px-4 text-slate-300 font-mono">{u.loginName}</td>
+                  <td className="py-3 px-4 text-slate-400">{u.email || '—'}</td>
                   <td className="py-3 px-4">
                     <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[#1C2532] text-slate-300 border border-[#263342]">
                       {u.role}
@@ -127,7 +133,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
       <Modal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
-        title="Cadastrar Colaborador"
+        title="Cadastrar conta de acesso"
       >
         <form onSubmit={handleCreate} className="space-y-3">
           <div>
@@ -141,10 +147,22 @@ export const UsersView: React.FC<UsersViewProps> = ({
             />
           </div>
           <div>
-            <label className="text-xs text-slate-300">E-mail</label>
+            <label className="text-xs text-slate-300">Usuário de acesso</label>
+            <input
+              type="text"
+              required
+              minLength={3}
+              maxLength={40}
+              autoComplete="username"
+              value={loginName}
+              onChange={(e) => setLoginName(e.target.value)}
+              className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-slate-300">E-mail (opcional)</label>
             <input
               type="email"
-              required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
@@ -160,8 +178,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
               >
                 <option value="ADMIN">ADMIN</option>
                 <option value="SUPERVISOR">SUPERVISOR</option>
-                <option value="QUALITY_INSPECTOR">QUALITY_INSPECTOR</option>
                 <option value="OPERATOR">OPERATOR</option>
+                <option value="AUDITOR">AUDITOR</option>
               </select>
             </div>
             <div>
@@ -175,9 +193,11 @@ export const UsersView: React.FC<UsersViewProps> = ({
             </div>
           </div>
           <div>
-            <label className="text-xs text-slate-300">Senha Provisória</label>
+            <label className="text-xs text-slate-300">Senha inicial (mínimo 12 caracteres)</label>
             <input
               type="password"
+              required
+              minLength={12}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"

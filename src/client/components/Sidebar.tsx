@@ -10,7 +10,6 @@ import {
   Building,
   Users,
   Webhook,
-  Activity,
   Settings,
   ChevronDown,
   ChevronRight,
@@ -31,7 +30,6 @@ export type ActiveTab =
   | 'quality'
   | 'inventory'
   | 'integrations'
-  | 'audit'
   | 'settings';
 
 interface SidebarProps {
@@ -48,7 +46,6 @@ interface SidebarProps {
     totalProductionOrders?: number;
     totalQualityInspections?: number;
     totalIntegrations?: number;
-    totalAuditLogs?: number;
     totalProtheusPv?: number;
     totalProtheusOp?: number;
   } | null;
@@ -80,7 +77,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: Webhook,
       badge: stats?.totalIntegrations || 54,
     },
-    { id: 'audit', label: 'Auditoria de Eventos', icon: Activity },
   ];
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);

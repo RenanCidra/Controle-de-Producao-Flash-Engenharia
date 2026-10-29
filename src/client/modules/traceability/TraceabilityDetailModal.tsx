@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getIntlLocale } from '../../i18n/index.ts';
 import {
   X,
   Printer,
@@ -109,25 +110,25 @@ export const TraceabilityDetailModal: React.FC<TraceabilityDetailModalProps> = (
           <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800">
             <span className="text-slate-400 text-[11px] block">Qtd Planejada</span>
             <span className="text-base font-bold text-slate-100 font-mono print:text-black">
-              {op.quantidadePlanejada.toLocaleString('pt-BR')}
+              {op.quantidadePlanejada.toLocaleString(getIntlLocale())}
             </span>
           </div>
           <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800">
             <span className="text-slate-400 text-[11px] block">Qtd Produzida</span>
             <span className="text-base font-bold text-emerald-400 font-mono print:text-black">
-              {op.quantidadeProduzida.toLocaleString('pt-BR')}
+              {op.quantidadeProduzida.toLocaleString(getIntlLocale())}
             </span>
           </div>
           <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800">
             <span className="text-slate-400 text-[11px] block">Saldo a Produzir</span>
             <span className="text-base font-bold text-amber-400 font-mono print:text-black">
-              {op.saldoAProduzir.toLocaleString('pt-BR')}
+              {op.saldoAProduzir.toLocaleString(getIntlLocale())}
             </span>
           </div>
           <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800">
             <span className="text-slate-400 text-[11px] block">Refugo / Perda</span>
             <span className={`text-base font-bold font-mono ${op.quantidadeRefugo > 0 ? 'text-rose-400' : 'text-slate-400'} print:text-black`}>
-              {op.quantidadeRefugo.toLocaleString('pt-BR')}
+              {op.quantidadeRefugo.toLocaleString(getIntlLocale())}
             </span>
           </div>
           <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 col-span-2 md:col-span-1">
@@ -238,10 +239,10 @@ export const TraceabilityDetailModal: React.FC<TraceabilityDetailModalProps> = (
                             </td>
                             <td className="py-3 px-3 font-mono text-slate-300">{opItem.postoTrabalho || '-'}</td>
                             <td className="py-3 px-3 text-right font-mono font-semibold text-emerald-400">
-                              {opItem.quantidadeApontada.toLocaleString('pt-BR')}
+                              {opItem.quantidadeApontada.toLocaleString(getIntlLocale())}
                             </td>
                             <td className="py-3 px-3 text-right font-mono text-rose-400">
-                              {opItem.quantidadeRefugo > 0 ? opItem.quantidadeRefugo.toLocaleString('pt-BR') : '-'}
+                              {opItem.quantidadeRefugo > 0 ? opItem.quantidadeRefugo.toLocaleString(getIntlLocale()) : '-'}
                             </td>
                             <td className="py-3 px-3 text-center">
                               {opItem.concluida ? (
@@ -313,10 +314,10 @@ export const TraceabilityDetailModal: React.FC<TraceabilityDetailModalProps> = (
                             {a.operador || 'Operador não informado'}
                           </td>
                           <td className="py-2.5 px-3 text-right font-mono font-semibold text-emerald-400">
-                            {a.quantidadeProduzida.toLocaleString('pt-BR')}
+                            {a.quantidadeProduzida.toLocaleString(getIntlLocale())}
                           </td>
                           <td className="py-2.5 px-3 text-right font-mono text-rose-400">
-                            {a.quantidadeRefugo > 0 ? a.quantidadeRefugo.toLocaleString('pt-BR') : '-'}
+                            {a.quantidadeRefugo > 0 ? a.quantidadeRefugo.toLocaleString(getIntlLocale()) : '-'}
                           </td>
                           <td className="py-2.5 px-3 text-slate-400 text-[11px]">
                             {a.tipoApontamento}
@@ -450,10 +451,10 @@ export const TraceabilityDetailModal: React.FC<TraceabilityDetailModalProps> = (
                               <p className="text-slate-400 text-[11px]">{it.descricaoProduto || '-'}</p>
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-200">
-                              {it.quantidadePedida.toLocaleString('pt-BR')}
+                              {it.quantidadePedida.toLocaleString(getIntlLocale())}
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono text-emerald-400">
-                              {it.quantidadeEntregue.toLocaleString('pt-BR')}
+                              {it.quantidadeEntregue.toLocaleString(getIntlLocale())}
                             </td>
                             <td className="py-2.5 px-3 font-mono text-slate-300">{it.dataEntrega}</td>
                             <td className="py-2.5 px-3">

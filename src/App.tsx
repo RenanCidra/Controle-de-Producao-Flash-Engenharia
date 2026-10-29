@@ -11,17 +11,28 @@ import { ProductionLinesView } from './client/modules/production-lines/Productio
 import { QualityView } from './client/modules/quality/QualityView.tsx';
 import { InventoryView } from './client/modules/inventory/InventoryView.tsx';
 import { IntegrationsView } from './client/modules/integrations/IntegrationsView.tsx';
-import { AuditView } from './client/modules/audit/AuditView.tsx';
 import { SettingsView, SettingsSubTab } from './client/modules/settings/SettingsView.tsx';
+import { subscribeToLanguageChange } from './client/i18n/index.ts';
+import { AuthPage } from './client/modules/auth/AuthPage.tsx';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
+  const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
+    if (typeof window === 'undefined') return 'dashboard';
+    const reopenSettings = window.sessionStorage.getItem('flash-reopen-settings-after-language-change') === 'true';
+    window.sessionStorage.removeItem('flash-reopen-settings-after-language-change');
+    return reopenSettings ? 'settings' : 'dashboard';
+  });
   const [previousTab, setPreviousTab] = useState<ActiveTab>('dashboard');
   const [settingsSubTab, setSettingsSubTab] = useState<SettingsSubTab>('general');
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(api.getUser());
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [setupRequired, setSetupRequired] = useState(false);
+  const [bootstrapEnabled, setBootstrapEnabled] = useState(false);
+  const [setupStatusChecked, setSetupStatusChecked] = useState(false);
+  const [setupStatusError, setSetupStatusError] = useState('');
+  const [languageRevision, setLanguageRevision] = useState(0);
 
   const handleNavigateToSettings = (subTab: SettingsSubTab = 'general') => {
     if (activeTab !== 'settings') {
@@ -104,16 +115,15 @@ export default function App() {
       } else if (tab === 'integrations') {
         const res = await api.getIntegrations();
         setIntegrations(res);
-      } else if (tab === 'audit') {
-        const res = await api.getAuditLogs({ limit: 100 });
-        setAuditLogs(res);
       } else if (tab === 'settings') {
-        const [org, usr] = await Promise.all([
+        const [org, usr, logs] = await Promise.all([
           api.getOrg(),
           api.getUsers(),
+          api.getAuditLogs({ limit: 100 }),
         ]);
         setFactoryProfile(org);
         setUsers(usr);
+        setAuditLogs(logs);
       }
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -123,7 +133,9 @@ export default function App() {
   };
 
   useEffect(() => {
-    loadStats();
+    const unsubscribeFromLanguageChanges = subscribeToLanguageChange(() =>
+      setLanguageRevision((revision) => revision + 1),
+    );
     if (api.isAuthenticated()) {
       api.me()
         .then((res) => {
@@ -133,13 +145,27 @@ export default function App() {
         .catch(() => {
           api.clearSession();
           setCurrentUser(null);
+          setAuthModalOpen(true);
+          api.getAuthSetupStatus().then((status) => {
+            setSetupRequired(status.setupRequired);
+            setBootstrapEnabled(status.bootstrapEnabled);
+          }).catch((error) => setSetupStatusError(error.message || 'Não foi possível verificar a configuração de acesso.')).finally(() => setSetupStatusChecked(true));
         });
+    } else {
+      setAuthModalOpen(true);
+      api.getAuthSetupStatus().then((status) => {
+        setSetupRequired(status.setupRequired);
+        setBootstrapEnabled(status.bootstrapEnabled);
+      }).catch((error) => setSetupStatusError(error.message || 'Não foi possível verificar a configuração de acesso.')).finally(() => setSetupStatusChecked(true));
     }
+    return unsubscribeFromLanguageChanges;
   }, []);
 
   useEffect(() => {
+    if (!currentUser) return;
+    loadStats();
     loadTabData(activeTab);
-  }, [activeTab]);
+  }, [activeTab, currentUser]);
 
   const handleLogout = async () => {
     try {
@@ -150,8 +176,24 @@ export default function App() {
     showToast('Sessão encerrada.');
   };
 
+  if (!currentUser) {
+    return <AuthPage
+      key={languageRevision}
+      setupRequired={setupRequired}
+      bootstrapEnabled={bootstrapEnabled && setupStatusChecked}
+      setupStatusChecked={setupStatusChecked}
+      setupStatusError={setupStatusError}
+      onSuccess={(user, msg) => {
+        setCurrentUser(user);
+        setSetupRequired(false);
+        setAuthModalOpen(false);
+        showToast(msg, 'success');
+      }}
+    />;
+  }
+
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#F1F4F7] font-sans text-[#263548] antialiased">
+    <div key={languageRevision} className="flex h-screen w-screen overflow-hidden bg-[#F1F4F7] font-sans text-[#263548] antialiased">
       {message && (
         <div
           className={`fixed top-4 right-4 z-50 flex items-center gap-3 rounded-lg px-4 py-3 shadow-xl transition-all border ${
@@ -177,6 +219,10 @@ export default function App() {
           factoryProfile={factoryProfile}
           users={users}
           currentUser={currentUser}
+          auditLogs={auditLogs}
+          onReloadAudit={() =>
+            api.getAuditLogs({ limit: 100 }).then(setAuditLogs).catch((err) => showToast(err.message, 'error'))
+          }
           onReloadFactory={() => {
             api.getOrg().then(setFactoryProfile);
             loadStats();
@@ -301,12 +347,6 @@ export default function App() {
                 />
               )}
 
-              {activeTab === 'audit' && (
-                <AuditView
-                  logs={auditLogs}
-                  onReload={() => loadTabData('audit')}
-                />
-              )}
             </div>
           </main>
         </div>
@@ -314,12 +354,16 @@ export default function App() {
 
       <AuthModal
         isOpen={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
+        setupRequired={setupRequired}
+        bootstrapEnabled={bootstrapEnabled}
+        onClose={() => {
+          if (currentUser) setAuthModalOpen(false);
+        }}
         onSuccess={(usr, msg) => {
           setCurrentUser(usr);
+          setSetupRequired(false);
+          setAuthModalOpen(false);
           showToast(msg, 'success');
-          loadStats();
-          loadTabData(activeTab);
         }}
         onError={(err) => showToast(err, 'error')}
       />

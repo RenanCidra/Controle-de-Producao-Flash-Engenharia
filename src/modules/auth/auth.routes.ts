@@ -4,9 +4,9 @@ import { authenticateToken } from '../../middleware/auth.middleware.ts';
 
 const router = Router();
 
-router.post('/register', AuthController.register);
+router.get('/setup-status', AuthController.setupStatus);
+router.post('/bootstrap-admin', AuthController.bootstrapAdmin);
 router.post('/login', AuthController.login);
-router.post('/firebase-login', AuthController.firebaseAuth);
 router.get('/me', authenticateToken, AuthController.me);
 router.post('/logout', authenticateToken, AuthController.logout);
 

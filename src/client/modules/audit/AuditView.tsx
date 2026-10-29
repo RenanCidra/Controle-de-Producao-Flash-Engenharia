@@ -1,6 +1,7 @@
 import React from 'react';
 import { FileText, RefreshCw } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState.tsx';
+import { getIntlLocale } from '../../i18n/index.ts';
 
 interface AuditViewProps {
   logs: any[];
@@ -12,8 +13,8 @@ export const AuditView: React.FC<AuditViewProps> = ({ logs, onReload }) => {
     <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-xl font-bold text-[#151C25]">Auditoria de Eventos</h3>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <h3 className="text-xl font-bold text-white">Eventos</h3>
+          <p className="text-xs text-slate-400 mt-0.5">
             Rastreamento de ações, apontamentos e alterações de status industrial.
           </p>
         </div>
@@ -48,7 +49,7 @@ export const AuditView: React.FC<AuditViewProps> = ({ logs, onReload }) => {
               {logs.map((log) => (
                 <tr key={log.id} className="hover:bg-[#1C2532] transition">
                   <td className="py-3 px-4 font-mono text-slate-400 whitespace-nowrap">
-                    {new Date(log.createdAt).toLocaleString('pt-BR')}
+                    {new Date(log.createdAt).toLocaleString(getIntlLocale())}
                   </td>
                   <td className="py-3 px-4 font-bold text-[#FFAA00]">{log.action}</td>
                   <td className="py-3 px-4 font-semibold text-white">{log.entity}</td>

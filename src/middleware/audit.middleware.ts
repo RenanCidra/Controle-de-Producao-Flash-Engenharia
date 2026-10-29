@@ -44,8 +44,9 @@ export const auditHttpMiddleware = (
       const isSuccess = res.statusCode >= 200 && res.statusCode < 400;
 
       const sanitizedBody = { ...req.body };
-      if (sanitizedBody.password) sanitizedBody.password = '***REDACTED***';
-      if (sanitizedBody.apiKey) sanitizedBody.apiKey = '***REDACTED***';
+      for (const sensitiveField of ['password', 'setupSecret', 'token', 'accessToken', 'refreshToken', 'apiKey']) {
+        if (sensitiveField in sanitizedBody) sanitizedBody[sensitiveField] = '***REDACTED***';
+      }
 
       AuditService.record({
         userId: req.user?.uid || (req.user?.userId ? String(req.user.userId) : null),

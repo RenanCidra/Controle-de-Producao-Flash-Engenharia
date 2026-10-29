@@ -3,6 +3,7 @@ import { ShieldCheck, Plus, Trash2 } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState.tsx';
 import { Modal } from '../../components/Modal.tsx';
 import { api } from '../../api.ts';
+import { confirmInCurrentLanguage } from '../../i18n/index.ts';
 
 interface QualityViewProps {
   inspections: any[];
@@ -59,7 +60,7 @@ export const QualityView: React.FC<QualityViewProps> = ({
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Deseja excluir este laudo de inspeção?')) return;
+    if (!confirmInCurrentLanguage('Deseja excluir este laudo de inspeção?')) return;
     try {
       await api.deleteQualityInspection(id);
       onSuccess('Laudo excluído.');

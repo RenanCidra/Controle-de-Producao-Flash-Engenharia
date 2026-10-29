@@ -3,6 +3,7 @@ import { Boxes, Plus, Trash2 } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState.tsx';
 import { Modal } from '../../components/Modal.tsx';
 import { api } from '../../api.ts';
+import { confirmInCurrentLanguage } from '../../i18n/index.ts';
 
 interface InventoryViewProps {
   items: any[];
@@ -54,7 +55,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Deseja excluir este item do inventário?')) return;
+    if (!confirmInCurrentLanguage('Deseja excluir este item do inventário?')) return;
     try {
       await api.deleteInventoryItem(id);
       onSuccess('Item excluído.');

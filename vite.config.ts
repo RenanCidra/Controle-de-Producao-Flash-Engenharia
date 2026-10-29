@@ -5,9 +5,10 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react({ jsxImportSource: '@i18n' }), tailwindcss()],
     resolve: {
       alias: {
+        '@i18n': path.resolve(__dirname, 'src/client/i18n'),
         '@': path.resolve(__dirname, '.'),
       },
     },

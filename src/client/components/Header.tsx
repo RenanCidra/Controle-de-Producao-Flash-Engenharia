@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { AuthUser } from '../api.ts';
 import { ActiveTab } from './Sidebar.tsx';
+import { getIntlLocale } from '../i18n/index.ts';
 
 interface HeaderProps {
   activeTab: ActiveTab;
@@ -37,12 +38,13 @@ export const Header: React.FC<HeaderProps> = ({
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
-      const day = String(now.getDate()).padStart(2, '0');
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const year = now.getFullYear();
-      const hours = String(now.getHours()).padStart(2, '0');
-      const minutes = String(now.getMinutes()).padStart(2, '0');
-      setCurrentDateTime(`${day}/${month}/${year}  ${hours}:${minutes}`);
+      setCurrentDateTime(
+        now.toLocaleString(getIntlLocale(), {
+          dateStyle: 'short',
+          timeStyle: 'short',
+          hour12: getIntlLocale() === 'en-US',
+        }),
+      );
     };
     updateTime();
     const interval = setInterval(updateTime, 30000);

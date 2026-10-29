@@ -3,6 +3,7 @@ import { Factory, Plus, Trash2 } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState.tsx';
 import { Modal } from '../../components/Modal.tsx';
 import { api } from '../../api.ts';
+import { confirmInCurrentLanguage } from '../../i18n/index.ts';
 
 interface ProductionLinesViewProps {
   lines: any[];
@@ -50,7 +51,7 @@ export const ProductionLinesView: React.FC<ProductionLinesViewProps> = ({
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Deseja excluir este posto de trabalho?')) return;
+    if (!confirmInCurrentLanguage('Deseja excluir este posto de trabalho?')) return;
     try {
       await api.deleteProductionLine(id);
       onSuccess('Posto de trabalho excluído.');

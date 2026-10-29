@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { TokenService } from '../services/token.service.ts';
-import { adminAuth } from '../lib/firebase-admin.ts';
-import { JwtUserPayload, UserRole } from '../types/index.ts';
+import { AuthRepository } from '../modules/auth/auth.repository.ts';
+import { JwtUserPayload, normalizeUserRole, UserRole } from '../types/index.ts';
 
 export interface AuthenticatedRequest extends Request {
   user?: JwtUserPayload;
@@ -21,29 +21,33 @@ export const authenticateToken = async (
 
   const token = authHeader.split('Bearer ')[1].trim();
 
-  // 1. Try Native ERP JWT first
+  let tokenPayload: JwtUserPayload;
   try {
-    const userPayload = TokenService.verifyToken(token);
-    req.user = userPayload;
-    return next();
-  } catch (nativeJwtErr) {
-    // 2. If native JWT fails, attempt Firebase ID Token verification
-    try {
-      const decodedFirebaseToken = await adminAuth.verifyIdToken(token);
-      req.user = {
-        userId: 0, // Placeholder for Firebase federated identity
-        uid: decodedFirebaseToken.uid,
-        email: decodedFirebaseToken.email || 'firebase-user@nexuserp.local',
-        name: decodedFirebaseToken.name || decodedFirebaseToken.email || 'Usuário Google',
-        role: 'ADMIN', // Default role for authenticated cloud studio user
-        status: 'ACTIVE',
-      };
-      return next();
-    } catch {
-      return res.status(401).json({
-        error: 'Token inválido ou expirado. Faça login novamente.',
-      });
+    tokenPayload = TokenService.verifyToken(token);
+  } catch {
+    return res.status(401).json({ error: 'Token inválido ou expirado. Faça login novamente.' });
+  }
+
+  try {
+    const user = await AuthRepository.findByUid(tokenPayload.uid);
+    if (!user || user.status !== 'ACTIVE') {
+      return res.status(401).json({ error: 'Conta inativa ou sessão inválida. Faça login novamente.' });
     }
+
+    req.user = {
+      userId: user.id,
+      uid: user.uid,
+      loginName: user.loginName,
+      email: user.email,
+      name: user.name,
+      role: normalizeUserRole(user.role),
+      status: user.status as 'ACTIVE' | 'INACTIVE',
+      department: user.department,
+    };
+    return next();
+  } catch (error) {
+    console.error('Failed to validate authenticated account:', error);
+    return res.status(503).json({ error: 'Não foi possível validar a conta no momento.' });
   }
 };
 

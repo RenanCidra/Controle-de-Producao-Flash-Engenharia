@@ -1,23 +1,7 @@
 import { relations } from "drizzle-orm";
-import { integer, numeric, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { integer, numeric, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
-// 1. Users & Factory Team (RBAC)
-export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
-  uid: text("uid").notNull().unique(),
-  email: text("email").notNull().unique(),
-  name: text("name").notNull(),
-  passwordHash: text("password_hash"),
-  role: text("role").notNull().default("OPERATOR"),
-  status: text("status").notNull().default("ACTIVE"),
-  department: text("department"),
-  avatarUrl: text("avatar_url"),
-  lastLoginAt: timestamp("last_login_at"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-// 2. Factory / Plant Profile (Tenant)
+// Organizations own accounts, employee records, and operational data.
 export const organizations = pgTable("organizations", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -28,6 +12,36 @@ export const organizations = pgTable("organizations", {
   phone: text("phone"),
   timezone: text("timezone").notNull().default("America/Sao_Paulo"),
   address: text("address"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Employees are management records; they do not authenticate into the system.
+export const employees = pgTable("employees", {
+  id: serial("id").primaryKey(),
+  organizationId: integer("organization_id").references(() => organizations.id, { onDelete: "set null" }),
+  employeeCode: text("employee_code"),
+  name: text("name").notNull(),
+  department: text("department"),
+  status: text("status").notNull().default("ACTIVE"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [uniqueIndex("employees_org_code_unique").on(table.organizationId, table.employeeCode)]);
+
+// System accounts authenticate and receive roles; email is optional contact data.
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  uid: text("uid").notNull().unique(),
+  loginName: text("login_name").notNull().unique(),
+  email: text("email").unique(),
+  name: text("name").notNull(),
+  passwordHash: text("password_hash"),
+  role: text("role").notNull().default("OPERATOR"),
+  status: text("status").notNull().default("ACTIVE"),
+  department: text("department"),
+  avatarUrl: text("avatar_url"),
+  employeeId: integer("employee_id").references(() => employees.id, { onDelete: "set null" }),
+  lastLoginAt: timestamp("last_login_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

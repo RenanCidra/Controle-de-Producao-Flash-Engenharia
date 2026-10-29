@@ -18,6 +18,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { api, ProtheusSyncResult } from '../../api.ts';
+import { getIntlLocale } from '../../i18n/index.ts';
 
 interface ProtheusSyncViewProps {
   onSuccess: (msg: string) => void;
@@ -620,7 +621,7 @@ export const ProtheusSyncView: React.FC<ProtheusSyncViewProps> = ({
                         {b.summary || '-'}
                       </td>
                       <td className="py-3 px-4 font-mono text-slate-400">
-                        {new Date(b.createdAt).toLocaleString()}
+                        {new Date(b.createdAt).toLocaleString(getIntlLocale())}
                       </td>
                     </tr>
                   ))}

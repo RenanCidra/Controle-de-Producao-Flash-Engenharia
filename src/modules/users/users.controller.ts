@@ -15,9 +15,9 @@ export class UsersController {
 
   public static async create(req: AuthenticatedRequest, res: Response) {
     try {
-      const { name, email, password, role, department } = req.body;
-      if (!name || !email) {
-        return res.status(400).json({ error: 'Nome e e-mail são obrigatórios.' });
+      const { name, loginName, email, password, role, department } = req.body;
+      if (!name || !loginName || !password) {
+        return res.status(400).json({ error: 'Nome, usuário de acesso e senha são obrigatórios.' });
       }
 
       const actorId = req.user?.uid || String(req.user?.userId);
@@ -25,6 +25,7 @@ export class UsersController {
 
       const user = await UsersService.createUser(actorId, actorEmail, {
         name,
+        loginName,
         email,
         password,
         role: role || 'OPERATOR',
@@ -34,7 +35,7 @@ export class UsersController {
       return res.status(201).json(user);
     } catch (error: any) {
       console.error('Failed to create user:', error);
-      return res.status(400).json({ error: error.message || 'Falha ao cadastrar colaborador.' });
+      return res.status(400).json({ error: error.message || 'Falha ao cadastrar conta de acesso.' });
     }
   }
 
@@ -45,14 +46,19 @@ export class UsersController {
         return res.status(400).json({ error: 'ID inválido.' });
       }
 
+      if (id === req.user?.userId && ((req.body.role && req.body.role !== 'ADMIN') || req.body.status === 'INACTIVE')) {
+        return res.status(400).json({ error: 'Não é possível remover seus próprios privilégios administrativos ou desativar sua conta.' });
+      }
+
       const actorId = req.user?.uid || String(req.user?.userId);
       const actorEmail = req.user?.email || 'system';
 
-      const updated = await UsersService.updateUser(actorId, actorEmail, id, req.body);
+      const { name, role, status, department } = req.body;
+      const updated = await UsersService.updateUser(actorId, actorEmail, id, { name, role, status, department });
       return res.json(updated);
     } catch (error: any) {
       console.error('Failed to update user:', error);
-      return res.status(400).json({ error: error.message || 'Falha ao atualizar colaborador.' });
+      return res.status(400).json({ error: error.message || 'Falha ao atualizar conta de acesso.' });
     }
   }
 
@@ -63,6 +69,10 @@ export class UsersController {
         return res.status(400).json({ error: 'ID inválido.' });
       }
 
+      if (id === req.user?.userId) {
+        return res.status(400).json({ error: 'Não é possível excluir a própria conta em uso.' });
+      }
+
       const actorId = req.user?.uid || String(req.user?.userId);
       const actorEmail = req.user?.email || 'system';
 
@@ -70,7 +80,7 @@ export class UsersController {
       return res.json(result);
     } catch (error: any) {
       console.error('Failed to delete user:', error);
-      return res.status(400).json({ error: error.message || 'Falha ao remover colaborador.' });
+      return res.status(400).json({ error: error.message || 'Falha ao remover conta de acesso.' });
     }
   }
 }

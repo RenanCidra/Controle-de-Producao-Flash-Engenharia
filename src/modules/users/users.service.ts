@@ -1,9 +1,16 @@
 import { UsersRepository } from './users.repository.ts';
 import { AuthRepository } from '../auth/auth.repository.ts';
 import { AuditService } from '../../services/audit.service.ts';
-import { UserRole, UserStatus } from '../../types/index.ts';
+import { USER_ROLES, USER_STATUSES, UserRole, UserStatus } from '../../types/index.ts';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import { validateLoginName, validatePassword } from '../auth/credentials.ts';
+
+function publicAccount(user: any) {
+  if (!user) return user;
+  const { passwordHash: _passwordHash, ...safeUser } = user;
+  return safeUser;
+}
 
 export class UsersService {
   public static async listUsers() {
@@ -15,29 +22,37 @@ export class UsersService {
     actorEmail: string,
     data: {
       name: string;
-      email: string;
-      password?: string;
+      loginName: string;
+      email?: string;
+      password: string;
       role: UserRole;
       department?: string;
     }
   ) {
-    const existing = await AuthRepository.findByEmail(data.email);
+    const loginName = validateLoginName(data.loginName);
+    const existing = await AuthRepository.findByLoginName(loginName);
     if (existing) {
+      throw new Error('Este usuário de acesso já está em uso.');
+    }
+    if (data.email && await AuthRepository.findByEmail(data.email)) {
       throw new Error('E-mail já está em uso.');
     }
 
-    let passwordHash: string | undefined = undefined;
-    if (data.password) {
-      passwordHash = await bcrypt.hash(data.password, 10);
+    validatePassword(data.password);
+    if (!USER_ROLES.includes(data.role)) {
+      throw new Error('Perfil de acesso inválido.');
     }
+
+    const passwordHash = await bcrypt.hash(data.password, 12);
 
     const uid = 'usr_' + crypto.randomUUID();
     const created = await AuthRepository.createUser({
       uid,
+      loginName,
       email: data.email,
       name: data.name,
       passwordHash,
-      role: data.role as any,
+      role: data.role,
       department: data.department,
     });
 
@@ -47,10 +62,10 @@ export class UsersService {
       action: 'CREATE',
       entity: 'USER',
       entityId: String(created.id),
-      details: { email: created.email, role: created.role, department: created.department },
+      details: { loginName: created.loginName, role: created.role, department: created.department },
     });
 
-    return created;
+    return publicAccount(created);
   }
 
   public static async updateUser(
@@ -64,9 +79,22 @@ export class UsersService {
       department?: string;
     }
   ) {
+    if (data.role !== undefined && !USER_ROLES.includes(data.role)) {
+      throw new Error('Perfil de acesso inválido.');
+    }
+    if (data.status !== undefined && !USER_STATUSES.includes(data.status)) {
+      throw new Error('Estado da conta inválido.');
+    }
+
     const user = await UsersRepository.findById(id);
     if (!user) {
-      throw new Error('Colaborador não encontrado.');
+      throw new Error('Conta de acesso não encontrada.');
+    }
+
+    const isRemovingActiveAdmin = user.role === 'ADMIN'
+      && ((data.role !== undefined && data.role !== 'ADMIN') || data.status === 'INACTIVE');
+    if (isRemovingActiveAdmin && await UsersRepository.countActiveAdmins() <= 1) {
+      throw new Error('Não é possível desativar ou rebaixar a última conta administradora ativa.');
     }
 
     const updated = await UsersRepository.update(id, data);
@@ -80,13 +108,17 @@ export class UsersService {
       details: { previous: user, updated: data },
     });
 
-    return updated;
+    return publicAccount(updated);
   }
 
   public static async deleteUser(actorId: string, actorEmail: string, id: number) {
     const user = await UsersRepository.findById(id);
     if (!user) {
-      throw new Error('Colaborador não encontrado.');
+      throw new Error('Conta de acesso não encontrada.');
+    }
+
+    if (user.role === 'ADMIN' && await UsersRepository.countActiveAdmins() <= 1) {
+      throw new Error('Não é possível excluir a última conta administradora.');
     }
 
     await UsersRepository.delete(id);

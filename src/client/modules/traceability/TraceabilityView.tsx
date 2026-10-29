@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../api.ts';
 import { TraceabilityDetailModal } from './TraceabilityDetailModal.tsx';
+import { getIntlLocale } from '../../i18n/index.ts';
 
 interface TraceabilityViewProps {
   onNavigateToSync?: () => void;
@@ -573,21 +574,21 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
                     {/* Planned vs Produced */}
                     <td className="py-3 px-3.5 text-right font-mono">
                       <span className="text-slate-400 text-[11px] block">
-                        Plan: <strong className="text-white">{row.quantidadePlanejada.toLocaleString('pt-BR')}</strong>
+                        Planejado: <strong className="text-white">{row.quantidadePlanejada.toLocaleString(getIntlLocale())}</strong>
                       </span>
                       <span className="text-[#159B72] font-bold block">
-                        Prod: {row.quantidadeProduzida.toLocaleString('pt-BR')}
+                        Produzido: {row.quantidadeProduzida.toLocaleString(getIntlLocale())}
                       </span>
                     </td>
 
                     {/* Saldo vs Scrap */}
                     <td className="py-3 px-3.5 text-right font-mono">
                       <span className="text-[#FFAA00] font-medium block">
-                        Saldo: {row.saldoAProduzir.toLocaleString('pt-BR')}
+                        Saldo: {row.saldoAProduzir.toLocaleString(getIntlLocale())}
                       </span>
                       {row.quantidadeRefugo > 0 ? (
                         <span className="text-[#D64545] text-[11px] font-bold block">
-                          Perda: {row.quantidadeRefugo.toLocaleString('pt-BR')}
+                          Perda: {row.quantidadeRefugo.toLocaleString(getIntlLocale())}
                         </span>
                       ) : (
                         <span className="text-slate-500 text-[10px] block">Sem perda</span>

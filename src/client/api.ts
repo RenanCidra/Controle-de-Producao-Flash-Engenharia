@@ -4,9 +4,10 @@ const USER_KEY = 'nexus_erp_user_data';
 export interface AuthUser {
   id: number;
   uid: string;
-  email: string;
+  loginName: string;
+  email?: string | null;
   name: string;
-  role: 'ADMIN' | 'SUPERVISOR' | 'OPERATOR' | 'QUALITY_INSPECTOR';
+  role: 'ADMIN' | 'SUPERVISOR' | 'OPERATOR' | 'AUDITOR';
   department?: string | null;
 }
 
@@ -121,24 +122,22 @@ class ApiService {
   }
 
   // Auth
-  public async login(credentials: { email: string; password?: string; uid?: string; name?: string }) {
-    const res = await this.request<{ token: string; user: AuthUser }>('/auth/login', {
+  public async login(credentials: { loginName: string; password: string }) {
+    return this.request<{ accessToken: string; user: AuthUser }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify(credentials),
     });
-    return { ...res, accessToken: res.token };
   }
 
-  public async register(payload: { email: string; name: string; password?: string; role?: string; department?: string }) {
-    const res = await this.request<{ token: string; user: AuthUser }>('/auth/register', {
+  public getAuthSetupStatus() {
+    return this.request<{ setupRequired: boolean; bootstrapEnabled: boolean }>('/auth/setup-status');
+  }
+
+  public bootstrapAdmin(payload: { setupSecret: string; loginName: string; name: string; password: string }) {
+    return this.request<{ accessToken: string; user: AuthUser }>('/auth/bootstrap-admin', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
-    return { ...res, accessToken: res.token };
-  }
-
-  public firebaseLogin(idToken: string) {
-    return this.login({ email: 'firebase-user@applet.local', uid: idToken });
   }
 
   public me() {

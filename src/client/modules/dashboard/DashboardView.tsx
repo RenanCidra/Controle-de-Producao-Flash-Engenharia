@@ -5,7 +5,6 @@ import {
   ShieldCheck,
   Layers,
   Boxes,
-  Activity,
   ChevronRight,
   Database,
   Link2,
@@ -216,32 +215,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ stats, onNavigate 
           <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-[#FFAA00] transition shrink-0" />
         </div>
 
-        {/* Card 6: Registros de Auditoria (Slate / Gray) */}
-        <div
-          onClick={() => onNavigate('audit')}
-          className="bg-white rounded-lg border border-[#DCE3EB] border-l-[4px] border-l-[#64748B] p-4 flex items-center justify-between cursor-pointer hover:border-slate-300 hover:shadow-md transition shadow-xs group"
-        >
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-[#64748B] flex items-center justify-center text-white shrink-0 shadow-xs">
-              <Activity className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[11px] font-medium text-[#64748B] leading-tight">
-                Registros de Auditoria
-              </p>
-              <div className="flex items-baseline gap-1.5 mt-1">
-                <span className="text-xl font-bold text-[#263548] font-mono leading-none">
-                  {stats?.totalAuditLogs ?? 54}
-                </span>
-                <span className="text-[11px] font-semibold text-emerald-600 flex items-center">
-                  ↑ +15%
-                </span>
-              </div>
-              <p className="text-[10px] text-[#94A3B8] mt-0.5">vs. semana anterior</p>
-            </div>
-          </div>
-          <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-[#FFAA00] transition shrink-0" />
-        </div>
       </div>
     </div>
   );

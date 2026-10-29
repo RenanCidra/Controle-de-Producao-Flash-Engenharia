@@ -3,6 +3,7 @@ import { Webhook, Plus, Trash2, Activity } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState.tsx';
 import { Modal } from '../../components/Modal.tsx';
 import { api } from '../../api.ts';
+import { confirmInCurrentLanguage } from '../../i18n/index.ts';
 
 interface IntegrationsViewProps {
   integrations: any[];
@@ -47,7 +48,7 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Deseja excluir este conector?')) return;
+    if (!confirmInCurrentLanguage('Deseja excluir este conector?')) return;
     try {
       await api.deleteIntegration(id);
       onSuccess('Conector excluído.');

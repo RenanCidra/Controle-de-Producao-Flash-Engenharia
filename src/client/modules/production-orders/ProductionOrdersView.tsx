@@ -3,6 +3,7 @@ import { ClipboardList, Plus, Play, CheckCircle2, Sliders, Trash2 } from 'lucide
 import { EmptyState } from '../../components/EmptyState.tsx';
 import { Modal } from '../../components/Modal.tsx';
 import { api } from '../../api.ts';
+import { confirmInCurrentLanguage } from '../../i18n/index.ts';
 
 interface ProductionOrdersViewProps {
   orders: any[];
@@ -91,7 +92,7 @@ export const ProductionOrdersView: React.FC<ProductionOrdersViewProps> = ({
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Deseja excluir esta Ordem de Produção?')) return;
+    if (!confirmInCurrentLanguage('Deseja excluir esta Ordem de Produção?')) return;
     try {
       await api.deleteProductionOrder(id);
       onSuccess('Ordem de Produção excluída.');

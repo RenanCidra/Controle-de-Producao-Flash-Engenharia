@@ -27,12 +27,25 @@ import {
 } from './db/schema.ts';
 import { sql } from 'drizzle-orm';
 import { auditHttpMiddleware } from './middleware/audit.middleware.ts';
+import { authenticateToken } from './middleware/auth.middleware.ts';
 
 const apiRouter = Router();
 
 apiRouter.use(auditHttpMiddleware);
 
 apiRouter.use('/auth', authRoutes);
+apiRouter.get('/health', (req: Request, res: Response) => {
+  res.json({
+    status: 'online',
+    timestamp: new Date().toISOString(),
+    service: 'NexusPCP Production Control & Protheus Sync API',
+    database: 'PostgreSQL Cloud SQL',
+    version: '1.0.0',
+  });
+});
+
+// Every business endpoint below this point requires a provisioned, active account.
+apiRouter.use(authenticateToken);
 apiRouter.use('/users', usersRoutes);
 apiRouter.use('/org', orgRoutes);
 apiRouter.use('/inventory', inventoryRoutes);
@@ -43,16 +56,6 @@ apiRouter.use('/integrations', integrationsRoutes);
 apiRouter.use('/audit-logs', auditRoutes);
 apiRouter.use('/protheus', protheusRouter);
 apiRouter.use('/traceability', traceabilityRouter);
-
-apiRouter.get('/health', (req: Request, res: Response) => {
-  res.json({
-    status: 'online',
-    timestamp: new Date().toISOString(),
-    service: 'NexusPCP Production Control & Protheus Sync API',
-    database: 'PostgreSQL Cloud SQL',
-    version: '1.0.0',
-  });
-});
 
 apiRouter.get('/stats', async (req: Request, res: Response) => {
   try {

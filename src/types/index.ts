@@ -1,10 +1,30 @@
-export type UserRole = 'ADMIN' | 'SUPERVISOR' | 'OPERATOR' | 'QUALITY_INSPECTOR';
+export type UserRole = 'ADMIN' | 'SUPERVISOR' | 'OPERATOR' | 'AUDITOR';
 export type UserStatus = 'ACTIVE' | 'INACTIVE';
+export const USER_STATUSES: readonly UserStatus[] = ['ACTIVE', 'INACTIVE'];
+
+export const USER_ROLES: readonly UserRole[] = ['ADMIN', 'SUPERVISOR', 'OPERATOR', 'AUDITOR'];
+
+export function normalizeUserRole(role: string | null | undefined): UserRole {
+  switch (role?.toUpperCase()) {
+    case 'ADMIN':
+      return 'ADMIN';
+    case 'SUPERVISOR':
+    case 'MANAGER':
+      return 'SUPERVISOR';
+    case 'AUDITOR':
+    case 'VIEWER':
+      return 'AUDITOR';
+    case 'OPERATOR':
+    default:
+      return 'OPERATOR';
+  }
+}
 
 export interface JwtUserPayload {
   userId: number;
   uid: string;
-  email: string;
+  loginName: string;
+  email?: string | null;
   name: string;
   role: UserRole;
   status: UserStatus;
