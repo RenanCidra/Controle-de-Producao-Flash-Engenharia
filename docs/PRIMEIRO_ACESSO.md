@@ -36,3 +36,16 @@ O sistema não possui usuário ou senha padrão. A primeira conta `ADMIN` é cri
 Isso significa que a API encontrou um administrador ativo com senha configurada. Não há senha padrão nem modo de contorno na tela pública. Use as credenciais provisionadas pelo administrador atual. Se a empresa não conhece essas credenciais, será necessário um procedimento de recuperação administrativa; não apague nem recrie tabelas ou contas sem antes conferir o banco correto e preservar os dados.
 
 Se a página disser que não conseguiu verificar a configuração de acesso, confira primeiro se a migração foi aplicada e se o servidor consegue se conectar ao banco. Se mostrar `404`, reinicie/reimplante o backend na versão atual: esse servidor ainda não expõe a rota `/api/auth/setup-status`. O assistente não permite cadastro quando essa verificação falha.
+
+## Prévia local sem login (temporária)
+
+Para inspecionar as telas internas sem provisionar uma conta real, existe um modo exclusivo de desenvolvimento. Na raiz do projeto, use um `.env` local ignorado pelo Git com:
+
+```dotenv
+DEV_PREVIEW_AUTH=true
+VITE_DEV_PREVIEW_AUTH=true
+```
+
+Reinicie `npm run dev`. A aplicação mostrará uma conta sintética `ADMIN` e uma faixa de aviso; o middleware só aceita esse modo quando `NODE_ENV` não é `production`. As rotas de negócio ficam em **somente leitura** durante a prévia: `POST`, `PUT`, `PATCH` e `DELETE` recebem `403`, então nenhum apontamento, cadastro ou sincronização é gravado.
+
+Para voltar à autenticação normal, remova as duas linhas do `.env` ou altere ambos os valores para `false` e reinicie `npm run dev`. O código da autenticação e a página de login permanecem no projeto; não é necessário removê-los ou reescrevê-los. O build de produção não ativa a identidade sintética porque a interface também exige `import.meta.env.DEV`.

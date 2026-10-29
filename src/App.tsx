@@ -15,6 +15,16 @@ import { SettingsView, SettingsSubTab } from './client/modules/settings/Settings
 import { subscribeToLanguageChange } from './client/i18n/index.ts';
 import { AuthPage } from './client/modules/auth/AuthPage.tsx';
 
+const DEV_PREVIEW_AUTH = import.meta.env.DEV && import.meta.env.VITE_DEV_PREVIEW_AUTH === 'true';
+const DEV_PREVIEW_USER: AuthUser = {
+  id: 0,
+  uid: 'dev-preview-admin',
+  loginName: 'preview-admin',
+  name: 'Prévia local',
+  role: 'ADMIN',
+  department: 'Ambiente de desenvolvimento',
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
     if (typeof window === 'undefined') return 'dashboard';
@@ -24,7 +34,7 @@ export default function App() {
   });
   const [previousTab, setPreviousTab] = useState<ActiveTab>('dashboard');
   const [settingsSubTab, setSettingsSubTab] = useState<SettingsSubTab>('general');
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(DEV_PREVIEW_AUTH ? DEV_PREVIEW_USER : null);
   const [loading, setLoading] = useState<boolean>(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -136,6 +146,10 @@ export default function App() {
     const unsubscribeFromLanguageChanges = subscribeToLanguageChange(() =>
       setLanguageRevision((revision) => revision + 1),
     );
+    if (DEV_PREVIEW_AUTH) {
+      api.setSession('dev-preview', DEV_PREVIEW_USER);
+      return unsubscribeFromLanguageChanges;
+    }
     if (api.isAuthenticated()) {
       api.me()
         .then((res) => {
@@ -194,6 +208,11 @@ export default function App() {
 
   return (
     <div key={languageRevision} className="flex h-screen w-screen overflow-hidden bg-[#F1F4F7] font-sans text-[#263548] antialiased">
+      {DEV_PREVIEW_AUTH && (
+        <div className="fixed left-1/2 top-2 z-[60] -translate-x-1/2 rounded-full border border-amber-400/40 bg-slate-950/90 px-4 py-2 text-xs font-semibold text-amber-200 shadow-lg">
+          Prévia local autenticada · conta ADMIN simulada · alterações bloqueadas
+        </div>
+      )}
       {message && (
         <div
           className={`fixed top-4 right-4 z-50 flex items-center gap-3 rounded-lg px-4 py-3 shadow-xl transition-all border ${

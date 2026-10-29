@@ -46,6 +46,14 @@ apiRouter.get('/health', (req: Request, res: Response) => {
 
 // Every business endpoint below this point requires a provisioned, active account.
 apiRouter.use(authenticateToken);
+apiRouter.use((req: Request, res: Response, next) => {
+  const previewAuthEnabled = process.env.DEV_PREVIEW_AUTH === 'true' && process.env.NODE_ENV !== 'production';
+  const isMutation = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
+  if (previewAuthEnabled && isMutation) {
+    return res.status(403).json({ error: 'Modo de prévia local: alterações estão desativadas.' });
+  }
+  return next();
+});
 apiRouter.use('/users', usersRoutes);
 apiRouter.use('/org', orgRoutes);
 apiRouter.use('/inventory', inventoryRoutes);

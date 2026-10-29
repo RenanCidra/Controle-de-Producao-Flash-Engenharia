@@ -12,6 +12,19 @@ export const authenticateToken = async (
   res: Response,
   next: NextFunction
 ) => {
+  if (process.env.DEV_PREVIEW_AUTH === 'true' && process.env.NODE_ENV !== 'production') {
+    req.user = {
+      userId: 0,
+      uid: 'dev-preview-admin',
+      loginName: 'preview-admin',
+      name: 'Prévia local',
+      role: 'ADMIN',
+      status: 'ACTIVE',
+      department: 'Ambiente de desenvolvimento',
+    };
+    return next();
+  }
+
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({
