@@ -379,6 +379,18 @@ Object.assign(en, {
   'Controle de acesso da equipe, operadores de linha, supervisores e inspetores.': 'Manage access for team members, line operators, supervisors, and inspectors.',
   'Parâmetros da camada de persistência relacional e integridade de chaves.': 'Relational storage and key integrity settings.',
   'Mapeamento das tabelas de produção TOTVS e normalização Flash Standard.': 'TOTVS production table mapping and Flash Standard normalization.',
+  'Assistente Flash': 'Flash Assistant',
+  'Mago do PCP': 'Production Wizard',
+  'Copiloto Inteligente • Ctrl+K': 'Smart Copilot • Ctrl+K',
+  'Inteligência Industrial & Rastreabilidade Protheus': 'Industrial Intelligence & Protheus Traceability',
+  'Resumo do Turno': 'Shift Summary',
+  'Ações Rápidas:': 'Quick Actions:',
+  'Perguntas Frequentes': 'Frequently Asked Questions',
+  'Pergunte sobre OPs, ocorrências, insumos...': 'Ask about work orders, occurrences, materials...',
+  'Ouvindo... Fale agora': 'Listening... Speak now',
+  'Limpar conversa': 'Clear conversation',
+  'Enviar mensagem': 'Send message',
+  'Consultando chão de fábrica...': 'Querying shop floor...',
 });
 
 Object.assign(es, {
@@ -726,6 +738,18 @@ Object.assign(es, {
   'Nova situação': 'Nuevo estado', 'Reabrir ocorrência': 'Reabrir incidencia', 'Selecione uma situação': 'Seleccione un estado',
   'Reabrir como aberta': 'Reabrir como abierta', 'Reabrir em tratamento': 'Reabrir en curso', 'Motivo da reabertura': 'Motivo de reapertura',
   'Cancelar': 'Cancelar', 'Aplicar filtros': 'Aplicar filtros', 'Todas': 'Todas', 'Encerrada': 'Cerrada', 'Abrir OP': 'Abrir OP',
+  'Assistente Flash': 'Asistente Flash',
+  'Mago do PCP': 'Mago del PCP',
+  'Copiloto Inteligente • Ctrl+K': 'Copiloto Inteligente • Ctrl+K',
+  'Inteligência Industrial & Rastreabilidade Protheus': 'Inteligencia Industrial y Trazabilidad Protheus',
+  'Resumo do Turno': 'Resumen de Turno',
+  'Ações Rápidas:': 'Acciones Rápidas:',
+  'Perguntas Frequentes': 'Preguntas Frecuentes',
+  'Pergunte sobre OPs, ocorrências, insumos...': 'Pregunte sobre órdenes, incidencias, insumos...',
+  'Ouvindo... Fale agora': 'Escuchando... Hable ahora',
+  'Limpar conversa': 'Limpiar conversación',
+  'Enviar mensagem': 'Enviar mensaje',
+  'Consultando chão de fábrica...': 'Consultando planta de producción...',
 });
 
 export const catalogs: Record<Exclude<AppLanguage, 'pt-BR'>, Record<string, string>> = { 'en-US': en, 'es-ES': es };

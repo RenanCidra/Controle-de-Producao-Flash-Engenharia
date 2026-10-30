@@ -9,6 +9,7 @@ import {
   Lock,
   PanelLeftClose,
   PanelLeftOpen,
+  Zap,
 } from 'lucide-react';
 import { AuthUser } from '../api.ts';
 import { getIntlLocale } from '../i18n/index.ts';
@@ -19,6 +20,7 @@ interface HeaderProps {
   loading: boolean;
   onRefresh: () => void;
   onOpenAuth: () => void;
+  onOpenAssistant?: () => void;
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
 }
@@ -29,6 +31,7 @@ export const Header: React.FC<HeaderProps> = ({
   loading,
   onRefresh,
   onOpenAuth,
+  onOpenAssistant,
   sidebarCollapsed,
   onToggleSidebar,
 }) => {
@@ -97,6 +100,21 @@ export const Header: React.FC<HeaderProps> = ({
           <MapPin className="h-3.5 w-3.5 text-[#FFAA00]" />
           <span className="max-w-28 truncate">{plantCode || 'Planta Sorocaba'}</span>
         </div>
+
+        {/* Assistente Flash Button */}
+        {onOpenAssistant && (
+          <button
+            onClick={onOpenAssistant}
+            title="Assistente Flash • Mago do PCP (Ctrl + K)"
+            className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50/80 px-2.5 py-1 text-xs font-semibold text-amber-900 transition hover:bg-amber-100 hover:border-amber-400 shadow-xs"
+          >
+            <Zap className="h-3.5 w-3.5 fill-amber-500 text-amber-600" />
+            <span className="hidden sm:inline">Assistente Flash</span>
+            <kbd className="hidden md:inline-block rounded border border-amber-300 bg-white/80 px-1 text-[9px] text-amber-800 font-mono">
+              Ctrl+K
+            </kbd>
+          </button>
+        )}
 
         {/* Refresh button */}
         <button

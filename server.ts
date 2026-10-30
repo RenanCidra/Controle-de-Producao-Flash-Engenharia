@@ -10,7 +10,9 @@ const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  const PORT = process.env.NODE_ENV === 'production' && process.env.PORT
+    ? parseInt(process.env.PORT, 10)
+    : 3000;
   const frameAncestors = new Set(["'self'", 'https://aistudio.google.com']);
   for (const origin of (process.env.CSP_FRAME_ANCESTORS || '').split(/\s+/).filter(Boolean)) {
     try {
@@ -38,7 +40,7 @@ async function startServer() {
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(self), geolocation=()');
     res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
     res.setHeader('Content-Security-Policy', `base-uri 'self'; object-src 'none'; frame-ancestors ${[...frameAncestors].join(' ')}; form-action 'self'`);
     if (process.env.NODE_ENV === 'production') {
@@ -64,7 +66,7 @@ async function startServer() {
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
-        hmr: process.env.DISABLE_HMR !== 'true',
+        hmr: false,
       },
       appType: 'spa',
     });

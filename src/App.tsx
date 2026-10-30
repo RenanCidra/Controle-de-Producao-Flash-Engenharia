@@ -16,6 +16,7 @@ import { SettingsView, SettingsSubTab } from './client/modules/settings/Settings
 import { subscribeToLanguageChange } from './client/i18n/index.ts';
 import { AuthPage } from './client/modules/auth/AuthPage.tsx';
 import { UserProfileModal } from './client/modules/auth/UserProfileModal.tsx';
+import { FlashAssistantWidget } from './client/components/FlashAssistantWidget.tsx';
 
 const DEV_PREVIEW_AUTH = import.meta.env.DEV && import.meta.env.VITE_DEV_PREVIEW_AUTH === 'true';
 const DEV_PREVIEW_USER: AuthUser = {
@@ -50,6 +51,19 @@ export default function App() {
   const [setupStatusChecked, setSetupStatusChecked] = useState(false);
   const [setupStatusError, setSetupStatusError] = useState('');
   const [languageRevision, setLanguageRevision] = useState(0);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+
+  // Hotkey global (Ctrl+K ou Cmd+K) para alternar o Assistente Flash
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setAssistantOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const handleNavigateToSettings = (subTab: SettingsSubTab = 'general') => {
     if (activeTab !== 'settings') {
@@ -346,6 +360,7 @@ export default function App() {
                 else void loadTabData(activeTab);
               }}
               onOpenAuth={() => setAuthModalOpen(true)}
+              onOpenAssistant={() => setAssistantOpen(true)}
               sidebarCollapsed={sidebarCollapsed}
               onToggleSidebar={handleToggleSidebar}
             />
@@ -470,6 +485,40 @@ export default function App() {
         onError={(err) => showToast(err, 'error')}
       />
       <UserProfileModal isOpen={profileModalOpen} user={currentUser} onClose={() => setProfileModalOpen(false)} />
+
+      {currentUser && (
+        <FlashAssistantWidget
+          currentUser={currentUser}
+          isOpen={assistantOpen}
+          onToggle={() => setAssistantOpen((prev) => !prev)}
+          onNavigate={(targetTab, options) => {
+            if (targetTab === 'traceability') {
+              if (options?.op) {
+                setTraceabilityOpRequest(options.op);
+              }
+              setActiveTab('traceability');
+            } else if (targetTab === 'occurrences') {
+              if (options?.op) {
+                setOccurrencesOpFilter(options.op);
+              }
+              setActiveTab('occurrences');
+            } else if (targetTab === 'settings') {
+              handleNavigateToSettings((options?.subTab as SettingsSubTab) || 'general');
+            } else if (
+              [
+                'dashboard',
+                'production-orders',
+                'production-lines',
+                'quality',
+                'inventory',
+                'integrations',
+              ].includes(targetTab)
+            ) {
+              setActiveTab(targetTab as ActiveTab);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

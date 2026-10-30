@@ -671,6 +671,21 @@ class ApiService {
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
   }
+
+  // Assistente Flash (Copilot & PCP Intelligence)
+  public async sendCopilotMessage(
+    message: string,
+    history?: Array<{ role: 'user' | 'model'; text: string }>,
+  ): Promise<{ reply: string; actions?: Array<{ type: string; target: string; label: string; payload?: Record<string, unknown> }> }> {
+    return this.request('/copilot/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message, history }),
+    });
+  }
+
+  public async getCopilotBriefing(): Promise<{ reply: string; actions?: Array<{ type: string; target: string; label: string; payload?: Record<string, unknown> }> }> {
+    return this.request('/copilot/briefing');
+  }
 }
 
 export const api = new ApiService();
