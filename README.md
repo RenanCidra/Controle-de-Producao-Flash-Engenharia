@@ -1,5 +1,7 @@
 # Controle de Produção — Flash Engenharia
 
+> **Autoria:** idealização e desenvolvimento por [Renan Cidra](mailto:renancidra80@gmail.com).
+
 Aplicação web para acompanhar ordens de produção, rastreabilidade e auditoria operacional, com dados organizados para futura integração ao TOTVS Protheus.
 
 > **Estado da integração:** o sistema ainda não consulta o Protheus real. Os painéis operacionais leem o banco da aplicação, que pode receber dados por importação ou pela rota de ingestão. Há uma API simulada local, somente leitura, para validar relatórios Excel e contratos provisórios. Ela não grava dados no sistema nem confirma compatibilidade com a API oficial.
