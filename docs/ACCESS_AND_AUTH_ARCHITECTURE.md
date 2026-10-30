@@ -133,7 +133,7 @@ A migração `src/db/migrations/20261029_access_accounts.sql` cria `organization
 2. **Pendente operacional — banco e primeiro acesso:** revisar o ambiente e executar `npm run db:migrate:access` com as credenciais administrativas do banco correto; depois configurar `JWT_SECRET` e `BOOTSTRAP_SECRET` (pelo menos 32 caracteres), abrir a página de entrada, criar o administrador e remover `BOOTSTRAP_SECRET`.
 3. **Em andamento — permissões:** matriz inicial centralizada por recurso/ação já protege as rotas; próxima parte é persistir perfis/permissões configuráveis e aplicar escopo por organização/planta.
 4. **Em andamento — sessões:** reduzir a duração do access token, implementar refresh token rotativo e avaliar cookie HttpOnly com proteção CSRF. As sessões atuais já podem ser revogadas individualmente.
-5. **Futura — gestão de colaboradores:** construir telas e regras de gestão separadas, com vínculo opcional a conta.
+5. **Planejada — controle de operadores:** evoluir o cadastro de colaboradores sem credenciais para gestão de equipe, alocações com histórico, conciliação segura com apontamentos e autorização no backend. A primeira fase considera `ADMIN` e `SUPERVISOR`; perfil `LEADER` depende de definição de escopo. Ver [`PLANEJAMENTO_CONTROLE_OPERADORES.md`](./PLANEJAMENTO_CONTROLE_OPERADORES.md).
 
 O procedimento operacional completo para criar a primeira conta `ADMIN` está em [`docs/PRIMEIRO_ACESSO.md`](./PRIMEIRO_ACESSO.md). Não existe usuário/senha padrão; o bootstrap protegido é o caminho de primeiro acesso.
 
