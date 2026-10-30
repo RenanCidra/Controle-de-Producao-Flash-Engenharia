@@ -5,14 +5,26 @@ import { copilotService } from './copilot.service.ts';
 export async function handleCopilotChat(req: AuthenticatedRequest, res: Response) {
   try {
     const { message, history } = req.body;
-    if (!message || typeof message !== 'string' || message.trim().length === 0) {
-      return res.status(400).json({ error: 'A mensagem não pode ser vazia.' });
+    if (typeof message !== 'string' || !message.trim()) {
+      return res.status(400).json({ error: 'Digite uma pergunta para continuar.' });
     }
+    if (message.length > 2000) return res.status(400).json({ error: 'A pergunta excede o limite de 2.000 caracteres.' });
+    if (history !== undefined && !Array.isArray(history)) {
+      return res.status(400).json({ error: 'O histórico da conversa está inválido.' });
+    }
+    const safeHistory = (Array.isArray(history) ? history : []).slice(-10).flatMap((turn) => {
+      if (!turn || (turn.role !== 'user' && turn.role !== 'model') || typeof turn.text !== 'string') return [];
+      const text = turn.text.trim().slice(0, 1500);
+      return text ? [{ role: turn.role as 'user' | 'model', text }] : [];
+    });
+    const language = req.body?.language;
+    const safeLanguage = language === 'en-US' || language === 'es-ES' ? language : 'pt-BR';
 
     const user = req.user!;
     const response = await copilotService.chat({
       message: message.trim(),
-      history,
+      history: safeHistory,
+      language: safeLanguage,
       user: {
         uid: user.uid,
         name: user.name,
@@ -26,7 +38,6 @@ export async function handleCopilotChat(req: AuthenticatedRequest, res: Response
     console.error('Erro no controller do Assistente Flash:', error);
     return res.status(500).json({
       error: 'Falha ao processar solicitação no Assistente Flash.',
-      details: error?.message,
     });
   }
 }
@@ -43,7 +54,7 @@ export async function handleCopilotBriefing(req: AuthenticatedRequest, res: Resp
     console.error('Erro ao gerar briefing no Assistente Flash:', error);
     return res.status(500).json({
       error: 'Falha ao gerar briefing operacional.',
-      details: error?.message,
     });
   }
 }
+

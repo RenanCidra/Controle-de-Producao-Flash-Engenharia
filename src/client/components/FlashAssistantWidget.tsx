@@ -1,35 +1,17 @@
-import React, { useState, useRef, useEffect } from 'react';
-import {
-  Zap,
-  X,
-  Send,
-  Mic,
-  MicOff,
-  Sparkles,
-  Bot,
-  User,
-  ArrowRight,
-  RefreshCw,
-  Trash2,
-  Minimize2,
-  ChevronRight,
-  Clock,
-  AlertTriangle,
-  Package,
-  Layers,
-} from 'lucide-react';
-import { api, AuthUser } from '../api.ts';
+import React, { useEffect, useRef, useState } from 'react';
+import { ArrowRight, LoaderCircle, Mic, MicOff, Send, Sparkles, Trash2, X } from 'lucide-react';
+import { api } from '../api.ts';
+import type { AuthUser } from '../api.ts';
+import { getAppLanguage, getIntlLocale, translateText } from '../i18n/index.ts';
 
 interface Message {
   id: string;
   sender: 'user' | 'assistant';
   text: string;
   timestamp: string;
-  actions?: Array<{
-    type: string;
-    target: string;
-    label: string;
-  }>;
+  actions?: Array<{ type: string; target: string; label: string }>;
+  mode?: 'gemini' | 'data_fallback';
+  error?: boolean;
 }
 
 interface FlashAssistantWidgetProps {
@@ -39,488 +21,302 @@ interface FlashAssistantWidgetProps {
   onNavigate: (tab: string, options?: { op?: string; subTab?: string }) => void;
 }
 
+const t = (text: string) => translateText(text);
+const currentTime = () => new Date().toLocaleTimeString(getIntlLocale(), { hour: '2-digit', minute: '2-digit' });
+
+function makeWelcome(name?: string): Message {
+  return {
+    id: 'welcome',
+    sender: 'assistant',
+    text: `${name ? `${t('Olá')}, ${name}! ` : `${t('Olá')}! `}${t('Sou o Assistente Flash. Respondo com os dados disponíveis no sistema e aviso quando alguma fonte não puder ser consultada.')}\n\n${t('Pergunte sobre uma OP, ocorrências, estoque ou sincronização Protheus.')}`,
+    timestamp: currentTime(),
+  };
+}
+
+const quickQuestions = [
+  { label: 'Resumo do Turno', prompt: 'Resumo do Turno' },
+  { label: 'OPs atrasadas', prompt: 'Quais OPs estão atrasadas?' },
+  { label: 'Ocorrências abertas', prompt: 'Quais ocorrências estão abertas?' },
+  { label: 'Estoque crítico', prompt: 'Quais itens de estoque estão abaixo do mínimo?' },
+];
+
+function renderMessageText(text: string): React.ReactNode {
+  const renderInline = (value: string, lineIndex: number) => value.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, partIndex) => {
+    if (part.startsWith('**') && part.endsWith('**')) return <strong key={`${lineIndex}-${partIndex}`} className="font-semibold text-slate-900">{part.slice(2, -2)}</strong>;
+    if (part.startsWith('`') && part.endsWith('`')) return <code key={`${lineIndex}-${partIndex}`} className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[0.9em] text-slate-800">{part.slice(1, -1)}</code>;
+    return part;
+  });
+
+  return text.split('\n').map((line, index) => {
+    const trimmed = line.trim();
+    if (!trimmed) return <div aria-hidden="true" key={index} className="h-2" />;
+    const bullet = trimmed.match(/^(?:[-*])\s+(.+)$/);
+    const ordered = trimmed.match(/^\d+[.)]\s+(.+)$/);
+    if (bullet || ordered) {
+      return <p key={index} className="flex gap-2 leading-5"><span className="select-none text-amber-600">{bullet ? '•' : `${trimmed.match(/^\d+/)?.[0]}.`}</span><span>{renderInline((bullet || ordered)![1], index)}</span></p>;
+    }
+    const heading = trimmed.replace(/^#{1,3}\s+/, '');
+    return <p key={index} className="leading-5">{renderInline(heading, index)}</p>;
+  });
+}
+
 export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
   currentUser,
   isOpen,
   onToggle,
   onNavigate,
 }) => {
-  const [messages, setMessages] = useState<Message[]>(() => [
-    {
-      id: 'welcome',
-      sender: 'assistant',
-      text: `⚡ **Olá${currentUser?.name ? `, ${currentUser.name}` : ''}!** Sou o **Assistente Flash**, seu copiloto de chão de fábrica e "Mago do PCP".\n\nPosso monitorar ordens de produção (OPs), ocorrências, insumos críticos, apontamentos e dados integrados ao TOTVS Protheus.\n\nComo posso acelerar sua operação agora?`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>(() => [makeWelcome(currentUser?.name)]);
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
-  const [quickPills] = useState([
-    { label: '⚡ Resumo do Turno', prompt: 'Resumo do turno e briefing operacional' },
-    { label: '⚠️ OPs Atrasadas', prompt: 'Quais ordens de produção estão atrasadas ou paradas?' },
-    { label: '📋 Ocorrências Abertas', prompt: 'Quais ocorrências estão em aberto no chão de fábrica?' },
-    { label: '📦 Estoque Crítico', prompt: 'Quais insumos estão com estoque crítico ou abaixo do mínimo?' },
-    { label: '🔄 Status Protheus', prompt: 'Qual o status da última sincronização com o Protheus?' },
-  ]);
-
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const speechRecognitionRef = useRef<any>(null);
 
-  // Rolagem suave até a última mensagem
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  useEffect(() => {
+    if (!isOpen) return;
+    inputRef.current?.focus();
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [isOpen, messages, loading]);
 
   useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => {
-        inputRef.current?.focus();
-        scrollToBottom();
-      }, 100);
-    }
-  }, [isOpen, messages]);
+    if (!isOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onToggle();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onToggle]);
 
-  // Suporte a ditado por voz (Web Speech API)
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const SpeechRecognition =
-        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        setSpeechSupported(true);
-        const recognition = new SpeechRecognition();
-        recognition.continuous = false;
-        recognition.interimResults = false;
-        recognition.lang = 'pt-BR';
-
-        recognition.onresult = (event: any) => {
-          const transcript = event.results[0][0].transcript;
-          if (transcript) {
-            setInputValue((prev) => (prev ? `${prev} ${transcript}` : transcript));
-          }
-          setIsListening(false);
-        };
-
-        recognition.onerror = () => {
-          setIsListening(false);
-        };
-
-        recognition.onend = () => {
-          setIsListening(false);
-        };
-
-        speechRecognitionRef.current = recognition;
-      }
-    }
+    if (typeof window === 'undefined') return;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+    setSpeechSupported(true);
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = getIntlLocale();
+    recognition.onresult = (event: any) => {
+      const transcript = event.results?.[0]?.[0]?.transcript;
+      if (transcript) setInputValue((previous) => `${previous}${previous ? ' ' : ''}${transcript}`.slice(0, 2000));
+      setIsListening(false);
+    };
+    recognition.onerror = () => setIsListening(false);
+    recognition.onend = () => setIsListening(false);
+    speechRecognitionRef.current = recognition;
+    return () => {
+      recognition.onresult = null;
+      recognition.onerror = null;
+      recognition.onend = null;
+      try { recognition.stop(); } catch { /* Recognition may not have started. */ }
+      speechRecognitionRef.current = null;
+    };
   }, []);
 
-  const toggleListening = () => {
-    if (!speechRecognitionRef.current) return;
-    if (isListening) {
-      speechRecognitionRef.current.stop();
-      setIsListening(false);
-    } else {
-      try {
-        speechRecognitionRef.current.start();
-        setIsListening(true);
-      } catch (err) {
-        console.error('Falha ao iniciar reconhecimento de voz:', err);
-        setIsListening(false);
-      }
-    }
-  };
-
-  // Enviar mensagem
-  const handleSendMessage = async (textToSend?: string) => {
-    const text = (textToSend || inputValue).trim();
+  const handleSendMessage = async (suggestedText?: string) => {
+    const text = (suggestedText ?? inputValue).trim();
     if (!text || loading) return;
 
-    const userMessage: Message = {
-      id: `user-${Date.now()}`,
-      sender: 'user',
-      text,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
+    const history = messages
+      .filter((item) => item.id !== 'welcome' && !item.error)
+      .slice(-10)
+      .map((item) => ({ role: item.sender === 'user' ? 'user' as const : 'model' as const, text: item.text }));
+    const userMessage: Message = { id: `user-${Date.now()}`, sender: 'user', text, timestamp: currentTime() };
+    setMessages((previous) => [...previous, userMessage]);
     setInputValue('');
     setLoading(true);
 
     try {
-      const response = await api.sendCopilotMessage(text);
-      const assistantMessage: Message = {
+      const response = await api.sendCopilotMessage(text, history, getAppLanguage());
+      setMessages((previous) => [...previous, {
         id: `assistant-${Date.now()}`,
         sender: 'assistant',
         text: response.reply,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: currentTime(),
+        mode: response.mode,
         actions: response.actions,
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
-    } catch (err: any) {
-      const errorMessage: Message = {
-        id: `assistant-err-${Date.now()}`,
+      }]);
+    } catch (error: any) {
+      setMessages((previous) => [...previous, {
+        id: `assistant-error-${Date.now()}`,
         sender: 'assistant',
-        text: `⚠️ **Não foi possível completar a consulta no momento:** ${err?.message || 'Erro de comunicação.'}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Disparar Briefing de Turno direto
-  const handleQuickBriefing = async () => {
-    setLoading(true);
-    const userMessage: Message = {
-      id: `user-${Date.now()}`,
-      sender: 'user',
-      text: '⚡ Gerar Briefing Operacional do Turno',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-    setMessages((prev) => [...prev, userMessage]);
-
-    try {
-      const response = await api.getCopilotBriefing();
-      const assistantMessage: Message = {
-        id: `assistant-${Date.now()}`,
-        sender: 'assistant',
-        text: response.reply,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        actions: response.actions,
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
-    } catch (err: any) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `assistant-err-${Date.now()}`,
-          sender: 'assistant',
-          text: `⚠️ Falha ao gerar briefing: ${err?.message || 'Serviço temporariamente indisponível.'}`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-      ]);
+        text: error?.message || t('Não foi possível consultar o assistente agora. Verifique a conexão e tente novamente.'),
+        timestamp: currentTime(),
+        error: true,
+      }]);
     } finally {
       setLoading(false);
     }
   };
 
   const handleActionClick = (target: string) => {
-    // Ex: "traceability?op=000101" ou "occurrences" ou "inventory"
     const [tab, queryString] = target.split('?');
+    const validTabs = new Set(['dashboard', 'traceability', 'occurrences', 'inventory', 'production-lines', 'production-orders', 'settings']);
+    if (!validTabs.has(tab)) return;
     const params = new URLSearchParams(queryString || '');
-    const op = params.get('op') || undefined;
-    const subTab = params.get('sub') || undefined;
-
-    onNavigate(tab, { op, subTab });
+    onNavigate(tab, { op: params.get('op') || undefined, subTab: params.get('sub') || undefined });
   };
 
   const clearHistory = () => {
-    setMessages([
-      {
-        id: 'welcome',
-        sender: 'assistant',
-        text: `⚡ Histórico limpo. Como posso ajudar agora?`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      },
-    ]);
+    setMessages([makeWelcome(currentUser?.name)]);
+    setInputValue('');
   };
 
-  // Formatador simples de markdown para texto do assistente
-  const renderFormattedText = (text: string) => {
-    const lines = text.split('\n');
-    return lines.map((line, idx) => {
-      // Itens de lista
-      if (line.startsWith('* ') || line.startsWith('- ')) {
-        const itemContent = line.slice(2);
-        return (
-          <li key={idx} className="ml-4 list-disc text-xs leading-relaxed text-slate-200">
-            {renderInlineMarkdown(itemContent)}
-          </li>
-        );
-      }
-      if (line.trim() === '') {
-        return <div key={idx} className="h-1.5" />;
-      }
-      return (
-        <p key={idx} className="text-xs leading-relaxed text-slate-100">
-          {renderInlineMarkdown(line)}
-        </p>
-      );
-    });
-  };
-
-  const renderInlineMarkdown = (content: string) => {
-    // Processa **negrito** e `código`
-    const parts = content.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
-    return parts.map((part, i) => {
-      if (part.startsWith('**') && part.endsWith('**')) {
-        return (
-          <strong key={i} className="font-semibold text-amber-300">
-            {part.slice(2, -2)}
-          </strong>
-        );
-      }
-      if (part.startsWith('`') && part.endsWith('`')) {
-        return (
-          <code
-            key={i}
-            className="rounded bg-slate-800/80 px-1 py-0.5 font-mono text-[11px] text-amber-200"
-          >
-            {part.slice(1, -1)}
-          </code>
-        );
-      }
-      return part;
-    });
+  const toggleListening = () => {
+    const recognition = speechRecognitionRef.current;
+    if (!recognition) return;
+    if (isListening) {
+      recognition.stop();
+      setIsListening(false);
+      return;
+    }
+    try {
+      recognition.start();
+      setIsListening(true);
+    } catch {
+      setIsListening(false);
+    }
   };
 
   return (
     <>
-      {/* Botão flutuante de acionamento (canto inferior direito) */}
       {!isOpen && (
         <button
+          type="button"
           onClick={onToggle}
-          title="Abrir Assistente Flash (Ctrl + K)"
-          aria-label="Abrir Assistente Flash"
-          className="group fixed bottom-5 right-5 z-40 flex items-center gap-2.5 rounded-full bg-[#1E293B] py-2.5 pl-3.5 pr-4 text-white shadow-xl shadow-amber-950/20 ring-1 ring-[#FFAA00]/40 transition-all duration-200 hover:scale-105 hover:bg-[#0F172A] hover:ring-[#FFAA00] active:scale-95"
+          title={`${t('Abrir Assistente Flash')} · Ctrl+K`}
+          aria-label={`${t('Abrir Assistente Flash')} (Ctrl+K)`}
+          className="fixed bottom-4 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full border border-amber-300 bg-slate-900 shadow-lg shadow-slate-950/20 ring-2 ring-white transition hover:scale-105 hover:bg-slate-800 hover:shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 sm:bottom-5 sm:right-5"
         >
-          <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-[#FFAA00] to-amber-300 text-slate-950 shadow-sm">
-            <Zap className="h-4 w-4 fill-slate-950 text-slate-950" />
-            <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
-            </span>
-          </div>
-
-          <div className="flex flex-col text-left">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-bold tracking-tight text-white">Assistente Flash</span>
-              <span className="rounded bg-amber-500/20 px-1.5 py-0.2 text-[9px] font-semibold text-amber-400">
-                PCP
-              </span>
-            </div>
-            <span className="text-[10px] text-slate-400">Copiloto Inteligente • Ctrl+K</span>
-          </div>
+          <img src="/assets/flash-symbol.png" alt="" aria-hidden="true" className="h-7 w-7 object-contain" />
         </button>
       )}
 
-      {/* Janela Drawer do Assistente */}
       {isOpen && (
-        <div
-          className="fixed bottom-4 right-4 z-50 flex h-[620px] max-h-[calc(100vh-32px)] w-[440px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-2xl border border-slate-700/70 bg-gradient-to-b from-[#182232] via-[#0F172A] to-[#0B0F19] text-white shadow-2xl shadow-black/60 ring-1 ring-white/10"
+        <section
           role="dialog"
-          aria-label="Janela do Assistente Flash"
+          aria-modal="true"
+          aria-label={t('Assistente Flash')}
+          className="fixed inset-x-3 bottom-3 top-3 z-50 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[#DCE3EB] bg-white text-[#263548] shadow-2xl shadow-slate-950/25 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-auto sm:h-[min(680px,calc(100dvh-32px))] sm:w-[420px]"
         >
-          {/* Header */}
-          <div className="flex shrink-0 items-center justify-between border-b border-slate-700/60 bg-[#1E293B]/80 px-4 py-3 backdrop-blur-md">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-[#FFAA00] to-amber-300 text-slate-950 shadow-md shadow-amber-500/20">
-                <Zap className="h-5 w-5 fill-slate-950 text-slate-950" />
+          <header className="flex shrink-0 items-center justify-between border-b border-[#E7ECF1] bg-white px-4 py-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 ring-1 ring-amber-300">
+                <img src="/assets/flash-symbol.png" alt="" aria-hidden="true" className="h-5 w-5 object-contain" />
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-bold tracking-tight text-white">Assistente Flash</h2>
-                  <span className="flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                    Mago do PCP
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400">
-                  Inteligência Industrial & Rastreabilidade Protheus
-                </p>
+              <div className="min-w-0">
+                <h2 className="truncate text-sm font-bold text-[#263548]">{t('Assistente Flash')}</h2>
+                <p className="truncate text-[11px] text-slate-500">{t('Dados disponíveis no sistema')}</p>
               </div>
             </div>
-
-            <div className="flex items-center gap-1">
-              <button
-                onClick={clearHistory}
-                title="Limpar conversa"
-                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-700/60 hover:text-white"
-              >
+            <div className="ml-3 flex shrink-0 items-center gap-1">
+              <button type="button" onClick={clearHistory} disabled={loading} title={t('Limpar conversa')} aria-label={t('Limpar conversa')} className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40">
                 <Trash2 className="h-4 w-4" />
               </button>
-              <button
-                onClick={onToggle}
-                title="Fechar"
-                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-700/60 hover:text-white"
-              >
+              <button type="button" onClick={onToggle} title={t('Fechar')} aria-label={t('Fechar')} className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">
                 <X className="h-4 w-4" />
               </button>
             </div>
-          </div>
+          </header>
 
-          {/* Barra de ação rápida no topo (Briefing em 1 clique) */}
-          <div className="flex shrink-0 items-center justify-between border-b border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs">
-            <div className="flex items-center gap-1 text-[11px] text-slate-400">
-              <Sparkles className="h-3.5 w-3.5 text-amber-400" />
-              <span>Ações Rápidas:</span>
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#E7ECF1] bg-[#F8FAFC] px-4 py-2">
+            <div className="flex min-w-0 items-center gap-2 text-xs font-medium text-slate-600">
+              <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+              <span className="truncate">{t('Consulta operacional')}</span>
             </div>
-            <button
-              onClick={handleQuickBriefing}
-              disabled={loading}
-              className="flex items-center gap-1.5 rounded-md bg-amber-500/15 px-2.5 py-1 text-[11px] font-semibold text-amber-300 transition hover:bg-amber-500/25 active:scale-95 disabled:opacity-50"
-            >
-              <Zap className="h-3 w-3 fill-amber-300" />
-              <span>Resumo do Turno</span>
+            <button type="button" onClick={() => void handleSendMessage(t('Resumo do turno'))} disabled={loading} className="shrink-0 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] font-semibold text-amber-900 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50">
+              {t('Resumo do turno')}
             </button>
           </div>
 
-          {/* Área de Mensagens */}
-          <div className="flex-1 space-y-4 overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex gap-2.5 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                {msg.sender === 'assistant' && (
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-800 ring-1 ring-amber-500/40 text-amber-400 shadow-sm">
-                    <Zap className="h-3.5 w-3.5 fill-amber-400" />
+          <div className="flex-1 space-y-4 overflow-y-auto bg-white p-4" aria-live="polite">
+            {messages.map((message) => (
+              <article key={message.id} className={`flex gap-2.5 ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                {message.sender === 'assistant' && (
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-900 ring-1 ring-amber-300">
+                    <img src="/assets/flash-symbol.png" alt="" aria-hidden="true" className="h-4 w-4 object-contain" />
                   </div>
                 )}
-
-                <div className={`max-w-[85%] space-y-2`}>
-                  <div
-                    className={`rounded-2xl px-3.5 py-2.5 shadow-sm text-xs leading-relaxed ${
-                      msg.sender === 'user'
-                        ? 'bg-amber-500 text-slate-950 font-medium rounded-tr-xs'
-                        : 'bg-slate-800/90 text-slate-100 border border-slate-700/60 rounded-tl-xs'
-                    }`}
-                  >
-                    {msg.sender === 'user' ? (
-                      <p className="whitespace-pre-wrap">{msg.text}</p>
-                    ) : (
-                      <div className="space-y-1">{renderFormattedText(msg.text)}</div>
-                    )}
+                <div className={`min-w-0 max-w-[88%] space-y-1.5 ${message.sender === 'user' ? 'text-right' : ''}`}>
+                  <div className={`rounded-2xl px-3.5 py-2.5 text-[13px] shadow-sm ${message.sender === 'user'
+                    ? 'rounded-tr-sm bg-amber-400 text-slate-950'
+                    : message.error
+                      ? 'rounded-tl-sm border border-rose-200 bg-rose-50 text-rose-900'
+                      : 'rounded-tl-sm border border-[#E7ECF1] bg-[#F8FAFC] text-[#263548]'}`}>
+                    <div className="space-y-1">{renderMessageText(message.text)}</div>
                   </div>
-
-                  {/* Ações interativas / botões de navegação sugeridos pelo assistente */}
-                  {msg.actions && msg.actions.length > 0 && (
+                  {message.mode === 'data_fallback' && (
+                    <p className="text-left text-[10px] text-slate-500">{t('Resposta baseada em regras e dados; IA indisponível.')}</p>
+                  )}
+                  {message.actions && message.actions.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 pt-1">
-                      {msg.actions.map((act, aIdx) => (
-                        <button
-                          key={aIdx}
-                          onClick={() => handleActionClick(act.target)}
-                          className="flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-slate-900/90 px-2.5 py-1 text-[11px] font-medium text-amber-300 shadow-xs transition hover:bg-amber-500 hover:text-slate-950 active:scale-95"
-                        >
-                          <span>{act.label}</span>
-                          <ArrowRight className="h-3 w-3" />
+                      {message.actions.map((action, index) => (
+                        <button key={`${message.id}-${index}`} type="button" onClick={() => handleActionClick(action.target)} className="inline-flex items-center gap-1.5 rounded-lg border border-[#DCE3EB] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:border-amber-400 hover:bg-amber-50 hover:text-slate-950">
+                          <span>{action.label}</span><ArrowRight className="h-3 w-3" />
                         </button>
                       ))}
                     </div>
                   )}
-
-                  <span
-                    className={`block text-[10px] text-slate-500 ${
-                      msg.sender === 'user' ? 'text-right' : 'text-left'
-                    }`}
-                  >
-                    {msg.timestamp}
-                  </span>
+                  <time className={`block text-[10px] text-slate-400 ${message.sender === 'user' ? 'text-right' : 'text-left'}`}>{message.timestamp}</time>
                 </div>
-
-                {msg.sender === 'user' && (
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-600/30 ring-1 ring-amber-500/50 text-amber-300">
-                    <User className="h-3.5 w-3.5" />
-                  </div>
-                )}
-              </div>
+              </article>
             ))}
 
-            {/* Indicador de carregamento */}
-            {loading && (
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-800 ring-1 ring-amber-500/40 text-amber-400">
-                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                </div>
-                <div className="rounded-2xl rounded-tl-xs border border-slate-700/60 bg-slate-800/90 px-3.5 py-2.5 shadow-sm text-xs text-slate-300 flex items-center gap-2">
-                  <span className="flex space-x-1">
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-bounce"></span>
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-bounce [animation-delay:0.2s]"></span>
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-bounce [animation-delay:0.4s]"></span>
-                  </span>
-                  <span className="text-[11px] text-slate-400 font-mono">
-                    Consultando chão de fábrica...
-                  </span>
+            {messages.length === 1 && !loading && (
+              <div className="space-y-2 pl-10">
+                <p className="text-[11px] font-semibold text-slate-500">{t('Sugestões')}</p>
+                <div className="flex flex-wrap gap-2">
+                  {quickQuestions.map((question) => (
+                    <button key={question.label} type="button" onClick={() => void handleSendMessage(t(question.prompt))} className="rounded-full border border-[#DCE3EB] bg-white px-3 py-1.5 text-[11px] font-medium text-slate-600 transition hover:border-amber-400 hover:bg-amber-50 hover:text-slate-900">
+                      {t(question.label)}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
 
+            {loading && (
+              <div className="flex items-center gap-2.5 pl-10 text-xs text-slate-500">
+                <LoaderCircle className="h-4 w-4 animate-spin text-amber-600" />
+                <span>{t('Consultando dados do sistema…')}</span>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Sugestões rápidas (Chips industriais) */}
-          {messages.length <= 3 && (
-            <div className="shrink-0 border-t border-slate-800/80 bg-slate-900/40 px-3 py-2">
-              <p className="mb-1.5 text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
-                Perguntas Frequentes
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {quickPills.map((pill, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleSendMessage(pill.prompt)}
-                    className="rounded-md border border-slate-700 bg-slate-800/70 px-2 py-1 text-[11px] text-slate-300 transition hover:border-amber-500/60 hover:bg-slate-700 hover:text-white active:scale-95"
-                  >
-                    {pill.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Barra de Entrada / Input */}
-          <div className="shrink-0 border-t border-slate-700/60 bg-[#1E293B]/90 p-3 backdrop-blur-md">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSendMessage();
-              }}
-              className="flex items-center gap-1.5"
-            >
+          <footer className="shrink-0 border-t border-[#E7ECF1] bg-[#F8FAFC] p-3">
+            {speechSupported && (
+              <div className="mb-2 text-[10px] text-slate-500" aria-live="polite">{isListening ? t('Ouvindo... Fale agora') : ''}</div>
+            )}
+            <form onSubmit={(event) => { event.preventDefault(); void handleSendMessage(); }} className="flex items-center gap-2">
               {speechSupported && (
-                <button
-                  type="button"
-                  onClick={toggleListening}
-                  title={isListening ? 'Ouvindo... Clique para parar' : 'Ditar pergunta por voz'}
-                  className={`rounded-xl p-2 transition ${
-                    isListening
-                      ? 'bg-rose-500 text-white animate-pulse ring-2 ring-rose-400'
-                      : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-amber-400'
-                  }`}
-                >
+                <button type="button" onClick={toggleListening} disabled={loading} title={t(isListening ? 'Parar ditado' : 'Ditar pergunta por voz')} aria-label={t(isListening ? 'Parar ditado' : 'Ditar pergunta por voz')} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition disabled:opacity-40 ${isListening ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-[#DCE3EB] bg-white text-slate-500 hover:border-amber-300 hover:text-slate-900'}`}>
                   {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                 </button>
               )}
-
               <input
                 ref={inputRef}
                 type="text"
                 value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                placeholder={
-                  isListening
-                    ? 'Ouvindo... Fale agora'
-                    : 'Pergunte sobre OPs, ocorrências, insumos...'
-                }
+                onChange={(event) => setInputValue(event.target.value.slice(0, 2000))}
+                maxLength={2000}
+                placeholder={t('Pergunte sobre OPs, ocorrências, insumos...')}
                 disabled={loading}
-                className="flex-1 rounded-xl border border-slate-700 bg-slate-900/90 px-3.5 py-2 text-xs text-white placeholder-slate-400 shadow-inner focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 disabled:opacity-50"
+                aria-label={t('Pergunte sobre OPs, ocorrências, insumos...')}
+                className="h-10 min-w-0 flex-1 rounded-xl border border-[#DCE3EB] bg-white px-3 text-[13px] text-[#263548] placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 disabled:bg-slate-100"
               />
-
-              <button
-                type="submit"
-                disabled={!inputValue.trim() || loading}
-                title="Enviar mensagem"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-[#FFAA00] to-amber-300 text-slate-950 shadow-sm transition hover:opacity-95 active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
-              >
+              <button type="submit" disabled={!inputValue.trim() || loading} title={t('Enviar mensagem')} aria-label={t('Enviar mensagem')} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-400 text-slate-950 transition hover:bg-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
                 <Send className="h-4 w-4" />
               </button>
             </form>
-          </div>
-        </div>
+            <p className="mt-2 text-center text-[10px] text-slate-400">{t('Confira informações críticas na tela de origem antes de agir.')}</p>
+          </footer>
+        </section>
       )}
     </>
   );
 };
+

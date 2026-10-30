@@ -676,17 +676,19 @@ class ApiService {
   public async sendCopilotMessage(
     message: string,
     history?: Array<{ role: 'user' | 'model'; text: string }>,
-  ): Promise<{ reply: string; actions?: Array<{ type: string; target: string; label: string; payload?: Record<string, unknown> }> }> {
+    language: 'pt-BR' | 'en-US' | 'es-ES' = 'pt-BR',
+  ): Promise<{ reply: string; mode: 'gemini' | 'data_fallback'; actions?: Array<{ type: string; target: string; label: string }> }> {
     return this.request('/copilot/chat', {
       method: 'POST',
-      body: JSON.stringify({ message, history }),
+      body: JSON.stringify({ message, history, language }),
     });
   }
 
-  public async getCopilotBriefing(): Promise<{ reply: string; actions?: Array<{ type: string; target: string; label: string; payload?: Record<string, unknown> }> }> {
+  public async getCopilotBriefing(): Promise<{ reply: string; mode: 'gemini' | 'data_fallback'; actions?: Array<{ type: string; target: string; label: string }> }> {
     return this.request('/copilot/briefing');
   }
 }
 
 export const api = new ApiService();
+
 
