@@ -964,6 +964,13 @@ const es: Record<string, string> = {
 	"Próxima": "Siguiente"
 };
 Object.assign(en, {
+  'Consultar dados normalizados': 'View normalized data',
+  'Ver dados': 'View data',
+  'Empenhos': 'Commitments',
+  'SH1': 'SH1',
+  'Vínculo entre OP, produto, saldo, lote e sequência conforme campos disponíveis na origem.': 'Links work order, product, balance, lot, and sequence using fields available in the source.',
+  'Cadastro de recursos por filial, preservando centro de custo e setor apenas quando informados.': 'Resource master by branch; cost center and work center are shown only when present in the source.',
+  'SC5/SC6, SC2, SB1, SG1, SG2, SH6, empenhos e recursos SH1 são mantidos no espelho normalizado da aplicação. A ingestão requer uma carga pelo endpoint de sincronização e a migração incremental das novas tabelas. O relatório da API simulada continua disponível para validar os campos, sem gravar dados automaticamente. A conexão à API real do Protheus ainda depende do TI.': 'SC5/SC6, SC2, SB1, SG1, SG2, SH6, commitments, and SH1 resources are kept in the application normalized mirror. Ingestion requires a load through the sync endpoint and the incremental migration for the new tables. The simulated API report remains available for field validation and does not write data automatically. Connection to the real Protheus API still depends on IT.',
   'Dados do espelho indisponíveis': 'Mirror data unavailable',
   'Ver Conectores Protheus': 'View Protheus Connectors',
   'Não foi possível consultar o espelho de produção. Verifique a conexão e as tabelas em Configurações > Conectores Protheus.': 'Could not query the production mirror. Check the connection and tables in Settings > Protheus Connectors.',
@@ -1134,6 +1141,13 @@ Object.assign(en, {
 	"Consultando chão de fábrica...": "Querying shop floor..."
 });
 Object.assign(es, {
+  'Consultar dados normalizados': 'Consultar datos normalizados',
+  'Ver dados': 'Ver datos',
+  'Empenhos': 'Reservas',
+  'SH1': 'SH1',
+  'Vínculo entre OP, produto, saldo, lote e sequência conforme campos disponíveis na origem.': 'Vínculo entre OP, producto, saldo, lote y secuencia según los campos disponibles en el origen.',
+  'Cadastro de recursos por filial, preservando centro de custo e setor apenas quando informados.': 'Maestro de recursos por sucursal; el centro de costo y el centro de trabajo solo se muestran si el origen los informa.',
+  'SC5/SC6, SC2, SB1, SG1, SG2, SH6, empenhos e recursos SH1 são mantidos no espelho normalizado da aplicação. A ingestão requer uma carga pelo endpoint de sincronização e a migração incremental das novas tabelas. O relatório da API simulada continua disponível para validar os campos, sem gravar dados automaticamente. A conexão à API real do Protheus ainda depende do TI.': 'SC5/SC6, SC2, SB1, SG1, SG2, SH6, reservas y recursos SH1 se mantienen en el espejo normalizado de la aplicación. La ingesta requiere una carga por el endpoint de sincronización y la migración incremental de las nuevas tablas. El informe de la API simulada sigue disponible para validar campos y no guarda datos automáticamente. La conexión a la API real de Protheus aún depende de TI.',
   'Dados do espelho indisponíveis': 'Datos del espejo no disponibles',
   'Ver Conectores Protheus': 'Ver conectores Protheus',
   'Não foi possível consultar o espelho de produção. Verifique a conexão e as tabelas em Configurações > Conectores Protheus.': 'No se pudo consultar el espejo de producción. Verifique la conexión y las tablas en Configuración > Conectores Protheus.',

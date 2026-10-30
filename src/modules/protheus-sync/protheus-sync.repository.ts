@@ -7,6 +7,8 @@ import {
   protheusSalesOrders,
   protheusProductionOrders,
   protheusProductionAppointments,
+  protheusResources,
+  protheusCommitments,
 } from '../../db/schema.ts';
 import { sql, eq, desc, and, ilike, or } from 'drizzle-orm';
 import {
@@ -16,11 +18,41 @@ import {
   NormalizedSalesOrder,
   NormalizedProductionOrder,
   NormalizedAppointment,
+  NormalizedResource,
+  NormalizedCommitment,
   ProtheusSourceType,
   ProtheusEntityType,
 } from './protheus-sync.types.ts';
 
 export class ProtheusSyncRepository {
+  public static async upsertResources(resources: NormalizedResource[], batchId: number, executor: any = db) {
+    let count = 0;
+    for (const resource of resources) {
+      await executor.insert(protheusResources).values({
+        ...resource, batchId, updatedAt: new Date(),
+      }).onConflictDoUpdate({
+        target: [protheusResources.branch, protheusResources.resourceCode],
+        set: { ...resource, batchId, updatedAt: new Date() },
+      });
+      count++;
+    }
+    return count;
+  }
+
+  public static async upsertCommitments(commitments: NormalizedCommitment[], batchId: number, executor: any = db) {
+    let count = 0;
+    for (const commitment of commitments) {
+      await executor.insert(protheusCommitments).values({
+        ...commitment, batchId, updatedAt: new Date(),
+      }).onConflictDoUpdate({
+        target: protheusCommitments.sourceKey,
+        set: { ...commitment, batchId, updatedAt: new Date() },
+      });
+      count++;
+    }
+    return count;
+  }
+
   public static async createBatch(
     batchCode: string,
     sourceType: ProtheusSourceType,
@@ -508,6 +540,14 @@ export class ProtheusSyncRepository {
       appointments: {
         table: protheusProductionAppointments,
         searchColumns: [protheusProductionAppointments.numeroOp, protheusProductionAppointments.sequenciaOperacao, protheusProductionAppointments.codigoOperacao, protheusProductionAppointments.descricaoOperacao, protheusProductionAppointments.postoTrabalho, protheusProductionAppointments.operador],
+      },
+      resources: {
+        table: protheusResources,
+        searchColumns: [protheusResources.branch, protheusResources.resourceCode, protheusResources.resourceName, protheusResources.costCenter, protheusResources.workCenterRaw],
+      },
+      commitments: {
+        table: protheusCommitments,
+        searchColumns: [protheusCommitments.productionOrder, protheusCommitments.productCode, protheusCommitments.description, protheusCommitments.parentProductCode, protheusCommitments.warehouse, protheusCommitments.sourceSituation],
       },
     };
     const source = sourceMap[params.entity];

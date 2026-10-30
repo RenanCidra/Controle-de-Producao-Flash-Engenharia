@@ -56,6 +56,8 @@ export class ProtheusSyncController {
         else if (entityType === 'SALES_ORDERS') bundle.salesOrders = req.body;
         else if (entityType === 'PRODUCTION_ORDERS') bundle.productionOrders = req.body;
         else if (entityType === 'APPOINTMENTS') bundle.appointments = req.body;
+        else if (entityType === 'RESOURCES') bundle.resources = req.body;
+        else if (entityType === 'COMMITMENTS') bundle.commitments = req.body;
         else bundle.products = req.body;
       } else {
         bundle = req.body;

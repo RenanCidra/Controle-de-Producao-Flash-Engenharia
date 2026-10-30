@@ -48,6 +48,8 @@ export class ProtheusSyncService {
       salesOrders: prepare('Pedido de venda', bundle.salesOrders, ProtheusNormalizer.normalizeSalesOrder.bind(ProtheusNormalizer), ['numeroPv', 'itemPv', 'clienteNome', 'codigoProduto', 'quantidadePedida', 'quantidadeEntregue', 'unidadeMedida', 'dataEmissao', 'dataEntrega', 'statusProtheus']),
       productionOrders: prepare('Ordem de produção', bundle.productionOrders, ProtheusNormalizer.normalizeProductionOrder.bind(ProtheusNormalizer), ['numeroOp', 'codigoProduto', 'quantidadePlanejada', 'quantidadeProduzida', 'quantidadeRefugo', 'saldoAProduzir', 'statusProtheus', 'dataEmissao', 'dataPrevisaoFim']),
       appointments: prepare('Apontamento', bundle.appointments, ProtheusNormalizer.normalizeAppointment.bind(ProtheusNormalizer), ['numeroOp', 'sequenciaOperacao', 'quantidadeProduzida', 'quantidadeRefugo', 'dataApontamento', 'tipoApontamento']),
+      resources: prepare('Recurso SH1', bundle.resources, ProtheusNormalizer.normalizeResource.bind(ProtheusNormalizer), ['branch', 'resourceCode', 'resourceName']),
+      commitments: prepare('Empenho', bundle.commitments, ProtheusNormalizer.normalizeCommitment.bind(ProtheusNormalizer), ['sourceKey', 'branch', 'productCode', 'productionOrder']),
     };
     if (Object.values(normalized).every((rows) => rows.length === 0)) {
       throw new Error('O lote não contém registros para importar.');
@@ -106,6 +108,18 @@ export class ProtheusSyncService {
       if (normalized.appointments.length > 0) {
         const count = await ProtheusSyncRepository.insertAppointments(normalized.appointments, batch.id, tx);
         details.appointments = count;
+        totalProcessed += count;
+      }
+
+      if (normalized.resources.length > 0) {
+        const count = await ProtheusSyncRepository.upsertResources(normalized.resources, batch.id, tx);
+        details.resources = count;
+        totalProcessed += count;
+      }
+
+      if (normalized.commitments.length > 0) {
+        const count = await ProtheusSyncRepository.upsertCommitments(normalized.commitments, batch.id, tx);
+        details.commitments = count;
         totalProcessed += count;
       }
 
@@ -195,6 +209,8 @@ export class ProtheusSyncService {
           else if (entityType === 'SALES_ORDERS') bundle.salesOrders = parsed;
           else if (entityType === 'PRODUCTION_ORDERS') bundle.productionOrders = parsed;
           else if (entityType === 'APPOINTMENTS') bundle.appointments = parsed;
+          else if (entityType === 'RESOURCES') bundle.resources = parsed;
+          else if (entityType === 'COMMITMENTS') bundle.commitments = parsed;
           else throw new Error('A entidade BUNDLE não aceita uma lista simples. Informe a entidade ou envie um objeto com os grupos de dados.');
 
           return this.processBundle(bundle, 'FILE_IMPORT', importedBy);
@@ -223,6 +239,8 @@ export class ProtheusSyncService {
     else if (entityType === 'SALES_ORDERS') bundle.salesOrders = rows;
     else if (entityType === 'PRODUCTION_ORDERS') bundle.productionOrders = rows;
     else if (entityType === 'APPOINTMENTS') bundle.appointments = rows;
+    else if (entityType === 'RESOURCES') bundle.resources = rows;
+    else if (entityType === 'COMMITMENTS') bundle.commitments = rows;
     else throw new Error('Não foi possível identificar a entidade deste CSV. Selecione o tipo de dado antes de importar.');
 
     return this.processBundle(bundle, 'FILE_IMPORT', importedBy);

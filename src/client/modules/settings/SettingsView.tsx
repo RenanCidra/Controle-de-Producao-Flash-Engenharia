@@ -28,7 +28,6 @@ import {
 } from 'lucide-react';
 import { ProtheusSyncView } from '../protheus-sync/ProtheusSyncView.tsx';
 import { ProtheusTableBrowser } from '../protheus-sync/ProtheusTableBrowser.tsx';
-import { ProtheusSimulationTableBrowser } from '../protheus-sync/ProtheusSimulationTableBrowser.tsx';
 import { ProductionLinesView } from '../production-lines/ProductionLinesView.tsx';
 import { IntegrationsView } from '../integrations/IntegrationsView.tsx';
 import { FactoryView } from '../factory/FactoryView.tsx';
@@ -231,7 +230,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>(initialSubTab);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAuditEvents, setShowAuditEvents] = useState(false);
-  const [selectedProtheusTable, setSelectedProtheusTable] = useState<{ entity: string; table: string; source?: 'simulation' } | null>(null);
+  const [selectedProtheusTable, setSelectedProtheusTable] = useState<{ entity: string; table: string } | null>(null);
   const [mobileSettingsNavOpen, setMobileSettingsNavOpen] = useState(false);
 
   // General Settings state
@@ -645,19 +644,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <ProtheusConnectorIssuePanel />
 
               {selectedProtheusTable ? (
-                selectedProtheusTable.source === 'simulation' ? (
-                  <ProtheusSimulationTableBrowser
-                    entity={selectedProtheusTable.entity as 'commitments' | 'resources'}
-                    tableLabel={selectedProtheusTable.table}
-                    onBack={() => setSelectedProtheusTable(null)}
-                  />
-                ) : (
-                  <ProtheusTableBrowser
-                    entity={selectedProtheusTable.entity}
-                    tableLabel={selectedProtheusTable.table}
-                    onBack={() => setSelectedProtheusTable(null)}
-                  />
-                )
+                <ProtheusTableBrowser
+                  entity={selectedProtheusTable.entity}
+                  tableLabel={selectedProtheusTable.table}
+                  onBack={() => setSelectedProtheusTable(null)}
+                />
               ) : (
                 <div className="space-y-3">
                   {[
@@ -667,25 +658,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     { table: 'SG1', desc: 'Estrutura de produto: relação entre produto pai e componente.', entity: 'structures' },
                     { table: 'SG2', desc: 'Roteiros e operações por produto, com posto/recurso quando fornecido.', entity: 'routings' },
                     { table: 'SH6', desc: 'Apontamentos de operações de produção recebidos do Protheus.', entity: 'appointments' },
+                    { table: 'Empenhos', desc: 'Vínculo entre OP, produto, saldo, lote e sequência conforme campos disponíveis na origem.', entity: 'commitments' },
+                    { table: 'SH1', desc: 'Cadastro de recursos por filial, preservando centro de custo e setor apenas quando informados.', entity: 'resources' },
                   ].map((item) => (
                     <button key={item.table} onClick={() => setSelectedProtheusTable({ entity: item.entity, table: item.table })} className="flex w-full items-center justify-between rounded-xl border border-[#202936] bg-[#141B24] p-4 text-left transition hover:border-[#FFAA00]/60 hover:bg-[#19222D]">
                       <span className="flex items-center gap-3">
-                        <span className="rounded border border-[#FFAA00]/30 bg-[#1E2734] px-2.5 py-1 font-mono text-sm font-bold text-[#FFAA00]">{item.table}</span>
-                        <span><span className="block text-xs font-semibold text-white">Consultar dados normalizados</span><span className="mt-0.5 block text-xs text-slate-400">{item.desc}</span></span>
+                        <span className="rounded border border-[#FFAA00]/30 bg-[#1E2734] px-2.5 py-1 font-mono text-sm font-bold text-[#FFAA00]">{translateText(item.table)}</span>
+                        <span><span className="block text-xs font-semibold text-white">{translateText('Consultar dados normalizados')}</span><span className="mt-0.5 block text-xs text-slate-400">{translateText(item.desc)}</span></span>
                       </span>
-                      <span className="text-xs font-semibold text-[#FFAA00]">Ver dados →</span>
+                      <span className="text-xs font-semibold text-[#FFAA00]">{translateText('Ver dados')} →</span>
                     </button>
                   ))}
-                  <div className="grid gap-3 pt-2 sm:grid-cols-2">
-                    {[
-                      { label: 'Empenhos entre OPs', detail: 'Consulte as referências de produto e OP disponíveis no relatório simulado.', entity: 'commitments', sourceTable: 'Empenhos' },
-                      { label: 'Recursos (SH1)', detail: 'Consulte o cadastro de recursos; setor/centro de trabalho só aparece quando informado pela origem.', entity: 'resources', sourceTable: 'Recursos SH1' },
-                    ].map((item) => <button key={item.entity} onClick={() => setSelectedProtheusTable({ entity: item.entity, table: item.sourceTable, source: 'simulation' })} className="flex w-full items-center justify-between rounded-xl border border-cyan-500/20 bg-[#141B24] p-4 text-left transition hover:border-cyan-400/50 hover:bg-[#19222D]">
-                      <span><span className="block text-xs font-semibold text-white">{item.label}</span><span className="mt-1 block text-xs text-slate-400">{item.detail}</span><span className="mt-2 inline-flex rounded border border-cyan-500/20 bg-cyan-950/30 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-200">API simulada · somente leitura</span></span>
-                      <span className="shrink-0 pl-3 text-xs font-semibold text-cyan-200">Consultar →</span>
-                    </button>)}
-                  </div>
-                  <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-relaxed text-amber-200/80">SC5/SC6, SC2, SB1, SG1, SG2 e SH6 consultam o espelho normalizado no banco da aplicação. Empenhos e recursos SH1 consultam a API simulada local em modo somente leitura; esses registros não são gravados no banco. SC5 e SC6 permanecem consolidadas no mesmo conjunto. A conexão à API real do Protheus ainda depende do TI.</p>
+                  <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-relaxed text-amber-200/80">{translateText('SC5/SC6, SC2, SB1, SG1, SG2, SH6, empenhos e recursos SH1 são mantidos no espelho normalizado da aplicação. A ingestão requer uma carga pelo endpoint de sincronização e a migração incremental das novas tabelas. O relatório da API simulada continua disponível para validar os campos, sem gravar dados automaticamente. A conexão à API real do Protheus ainda depende do TI.')}</p>
                 </div>
               )}
             </div>

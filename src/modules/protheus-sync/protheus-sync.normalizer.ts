@@ -5,6 +5,8 @@ import {
   NormalizedSalesOrder,
   NormalizedProductionOrder,
   NormalizedAppointment,
+  NormalizedResource,
+  NormalizedCommitment,
   ProtheusEntityType,
 } from './protheus-sync.types.ts';
 
@@ -138,6 +140,9 @@ export class ProtheusNormalizer {
 
   public static detectEntityTypeFromHeaders(headers: string[]): ProtheusEntityType {
     const headerStr = headers.join(' ').toUpperCase();
+
+    if (headerStr.includes('H1_') || headerStr.includes('RESOURCECODE') || headerStr.includes('RECURSOCODE')) return 'RESOURCES';
+    if (headerStr.includes('D4_') || headerStr.includes('EMpenho'.toUpperCase()) || headerStr.includes('COMMITTEDQUANTITY')) return 'COMMITMENTS';
 
     if (headerStr.includes('C5_') || headerStr.includes('C6_') || headerStr.includes('PEDIDO_VENDA') || (headerStr.includes('PV') && headerStr.includes('CLIENTE'))) {
       return 'SALES_ORDERS';
@@ -479,6 +484,78 @@ export class ProtheusNormalizer {
       horaFim,
       tipoApontamento,
       motivoRefugo,
+    };
+  }
+
+  public static normalizeResource(raw: Record<string, any>): NormalizedResource {
+    const get = (...keys: string[]) => {
+      for (const key of keys) {
+        const value = raw[key];
+        if (value !== undefined && value !== null && String(value).trim() !== '') return String(value).trim();
+      }
+      return undefined;
+    };
+    return {
+      branch: get('branch', 'H1_FILIAL', 'FILIAL') || '',
+      resourceCode: get('resourceCode', 'codigoRecurso', 'H1_CODIGO', 'H1_COD', 'COD_RECURSO', 'CODIGO') || '',
+      resourceName: get('resourceName', 'nomeRecurso', 'H1_DESCRI', 'H1_DESC', 'DESCRICAO', 'NOME') || '',
+      productionLineRaw: get('productionLineRaw', 'linhaProducao', 'H1_LINHA', 'LINHA_PRODUCAO'),
+      laborEfficiencyRaw: get('laborEfficiencyRaw', 'eficienciaMaoObra', 'H1_EFICIEN', 'EFICIENCIA'),
+      costCenter: get('costCenter', 'centroCusto', 'H1_CC', 'CENTRO_CUSTO'),
+      lastMaintenanceRaw: get('lastMaintenanceRaw', 'ultimaManutencao', 'H1_ULTMAN', 'ULTIMA_MANUTENCAO'),
+      maintenanceIntervalRaw: get('maintenanceIntervalRaw', 'intervaloManutencao', 'H1_INTVEN', 'INTERVALO_MANUTENCAO'),
+      utilizationIndexRaw: get('utilizationIndexRaw', 'indiceUtilizacao', 'H1_UTILIZ', 'INDICE_UTILIZACAO'),
+      workCenterRaw: get('workCenterRaw', 'centroTrabalho', 'H1_CENTR', 'CENTRO_TRABALHO'),
+      calendarRaw: get('calendarRaw', 'calendario', 'H1_CALEND', 'CALENDARIO'),
+      unlimitedResourceFlagRaw: get('unlimitedResourceFlagRaw', 'recursoInfinito', 'H1_RECURSO_INFINITO'),
+      costCenterGroupRaw: get('costCenterGroupRaw', 'grupoCentroCusto', 'H1_GRUPOCC', 'GRUPO_CENTRO_CUSTO'),
+    };
+  }
+
+  public static normalizeCommitment(raw: Record<string, any>): NormalizedCommitment {
+    const get = (...keys: string[]) => {
+      for (const key of keys) {
+        const value = raw[key];
+        if (value !== undefined && value !== null && String(value).trim() !== '') return String(value).trim();
+      }
+      return undefined;
+    };
+    const number = (...keys: string[]) => {
+      const value = keys.map((key) => raw[key]).find((item) => item !== undefined && item !== null && String(item).trim() !== '');
+      return value === undefined ? undefined : this.normalizeNumber(value);
+    };
+    const branch = get('branch', 'filial', 'D4_FILIAL') || '';
+    const productCode = get('productCode', 'codigoProduto', 'D4_COD', 'CODIGO_PRODUTO') || '';
+    const productionOrder = get('productionOrder', 'numeroOp', 'D4_OP', 'OP') || '';
+    const warehouse = get('warehouse', 'armazem', 'D4_LOCAL', 'LOCAL') || '';
+    const structureSequence = get('structureSequence', 'sequenciaEstrutura', 'D4_TRT', 'ESTRUTURA_SEQ') || '';
+    const sourceSequence = get('sourceSequence', 'sequenciaOrigem', 'D4_SEQ', 'SEQUENCIA') || '';
+    const lot = get('lot', 'lote', 'D4_LOTECTL', 'LOTE') || '';
+    const subLot = get('subLot', 'sublote', 'D4_NUMLOTE', 'SUBLOTE') || '';
+    // Stable source identity, built solely from key fields actually present in the source row.
+    const sourceKey = get('sourceKey', 'sourceCompositeKey') || JSON.stringify([branch, productionOrder, productCode, warehouse, structureSequence, sourceSequence, lot, subLot]);
+    return {
+      sourceKey, branch, productCode,
+      description: get('description', 'descricao', 'D4_DESC'),
+      productionOrder, warehouse,
+      commitmentDateRaw: get('commitmentDateRaw', 'dataEmpenho', 'D4_DATA', 'DATA'),
+      suspendedQuantity: number('suspendedQuantity', 'quantidadeSuspensa', 'D4_QTDEORI', 'QTD_SUSPENSA'),
+      sourceSituation: get('sourceSituation', 'situacao', 'D4_SITUAC'),
+      committedQuantity: number('committedQuantity', 'quantidadeEmpenhada', 'D4_QUANT', 'QUANTIDADE_EMPENHADA'),
+      commitmentBalance: number('commitmentBalance', 'saldoEmpenho', 'D4_QTDEDEV', 'SALDO_EMPENHO'),
+      valueClass: get('valueClass', 'classeValor'),
+      structureSequence, lot, subLot,
+      expirationDateRaw: get('expirationDateRaw', 'validadeRaw', 'D4_DTVALID'),
+      originOrder: get('originOrder', 'ordemOrigem'),
+      alternateUnitBalance: number('alternateUnitBalance', 'saldoUnidadeAlternativa'),
+      maintenanceOrder: get('maintenanceOrder', 'ordemManutencao'),
+      sourceSequence, lotPower: get('lotPower', 'potenciaLote'),
+      processQuantity: number('processQuantity', 'quantidadeProcesso'),
+      parentProductCode: get('parentProductCode', 'codigoProdutoPai'),
+      routingCode: get('routingCode', 'codigoRoteiro'),
+      operation: get('operation', 'operacao'), phantom: get('phantom', 'fantasma'),
+      observation: get('observation', 'observacao'),
+      createdByName: get('createdByName', 'nomeCriador'), createdByCode: get('createdByCode', 'codigoCriador'),
     };
   }
 }

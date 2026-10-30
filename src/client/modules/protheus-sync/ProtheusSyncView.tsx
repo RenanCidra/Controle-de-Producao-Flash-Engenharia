@@ -353,6 +353,8 @@ export const ProtheusSyncView: React.FC<ProtheusSyncViewProps> = ({
                   <option value="STRUCTURES">Estrutura de Produtos / BOM (SG1)</option>
                   <option value="ROUTINGS">Roteiros e Operações (SG2)</option>
                   <option value="APPOINTMENTS">Apontamentos de Chão de Fábrica (SH6)</option>
+                  <option value="RESOURCES">Recursos (SH1)</option>
+                  <option value="COMMITMENTS">Empenhos</option>
                 </select>
               </div>
 

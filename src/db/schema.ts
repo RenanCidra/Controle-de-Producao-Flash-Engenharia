@@ -263,6 +263,64 @@ export const protheusProductionAppointments = pgTable("protheus_production_appoi
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// SH1 resource master mirror. Raw fields retain source units when interpretation is not confirmed.
+export const protheusResources = pgTable("protheus_resources", {
+  id: serial("id").primaryKey(),
+  branch: text("branch").notNull(),
+  resourceCode: text("resource_code").notNull(),
+  resourceName: text("resource_name").notNull(),
+  productionLineRaw: text("production_line_raw"),
+  laborEfficiencyRaw: text("labor_efficiency_raw"),
+  costCenter: text("cost_center"),
+  lastMaintenanceRaw: text("last_maintenance_raw"),
+  maintenanceIntervalRaw: text("maintenance_interval_raw"),
+  utilizationIndexRaw: text("utilization_index_raw"),
+  workCenterRaw: text("work_center_raw"),
+  calendarRaw: text("calendar_raw"),
+  unlimitedResourceFlagRaw: text("unlimited_resource_flag_raw"),
+  costCenterGroupRaw: text("cost_center_group_raw"),
+  batchId: integer("batch_id").references(() => protheusImportBatches.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [uniqueIndex("protheus_resources_branch_code_uidx").on(table.branch, table.resourceCode)]);
+
+// Commitment mirror. sourceKey is built only from source identity columns, never from inferred relationships.
+export const protheusCommitments = pgTable("protheus_commitments", {
+  id: serial("id").primaryKey(),
+  sourceKey: text("source_key").notNull(),
+  branch: text("branch").notNull(),
+  productCode: text("product_code").notNull(),
+  description: text("description"),
+  productionOrder: text("production_order").notNull(),
+  warehouse: text("warehouse"),
+  commitmentDateRaw: text("commitment_date_raw"),
+  suspendedQuantity: numeric("suspended_quantity"),
+  sourceSituation: text("source_situation"),
+  committedQuantity: numeric("committed_quantity"),
+  commitmentBalance: numeric("commitment_balance"),
+  valueClass: text("value_class"),
+  structureSequence: text("structure_sequence"),
+  lot: text("lot"),
+  subLot: text("sub_lot"),
+  expirationDateRaw: text("expiration_date_raw"),
+  originOrder: text("origin_order"),
+  alternateUnitBalance: numeric("alternate_unit_balance"),
+  maintenanceOrder: text("maintenance_order"),
+  sourceSequence: text("source_sequence"),
+  lotPower: text("lot_power"),
+  processQuantity: numeric("process_quantity"),
+  parentProductCode: text("parent_product_code"),
+  routingCode: text("routing_code"),
+  operation: text("operation"),
+  phantom: text("phantom"),
+  observation: text("observation"),
+  createdByName: text("created_by_name"),
+  createdByCode: text("created_by_code"),
+  batchId: integer("batch_id").references(() => protheusImportBatches.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [uniqueIndex("protheus_commitments_source_key_uidx").on(table.sourceKey)]);
+
 // User-entered operational occurrences are linked to, but never written back to, Protheus.
 export const productionOccurrences = pgTable("production_occurrences", {
   id: serial("id").primaryKey(),

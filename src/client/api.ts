@@ -30,6 +30,8 @@ export interface ProtheusSyncResult {
     salesOrders?: number;
     productionOrders?: number;
     appointments?: number;
+    resources?: number;
+    commitments?: number;
   };
   errors: string[];
   createdAt: string;
