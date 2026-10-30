@@ -28,7 +28,7 @@ function makeWelcome(name?: string): Message {
   return {
     id: 'welcome',
     sender: 'assistant',
-    text: `${name ? `${t('Olá')}, ${name}! ` : `${t('Olá')}! `}${t('Sou o Assistente Flash. Respondo com os dados disponíveis no sistema e aviso quando alguma fonte não puder ser consultada.')}\n\n${t('Pergunte sobre uma OP, ocorrências, estoque ou sincronização Protheus.')}`,
+    text: `${name ? `${t('Olá')}, ${name}!` : `${t('Olá')}!`} ${t('Sou o Assistente Flash, seu copiloto no PCP e chão de fábrica.')}\n\n${t('Posso tirar dúvidas sobre a produção, analisar o andamento do turno, checar qualquer OP ou te guiar pelo sistema. Como posso te ajudar hoje?')}`,
     timestamp: currentTime(),
   };
 }
@@ -42,21 +42,27 @@ const quickQuestions = [
 
 function renderMessageText(text: string): React.ReactNode {
   const renderInline = (value: string, lineIndex: number) => value.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, partIndex) => {
-    if (part.startsWith('**') && part.endsWith('**')) return <strong key={`${lineIndex}-${partIndex}`} className="font-semibold text-slate-900">{part.slice(2, -2)}</strong>;
-    if (part.startsWith('`') && part.endsWith('`')) return <code key={`${lineIndex}-${partIndex}`} className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[0.9em] text-slate-800">{part.slice(1, -1)}</code>;
-    return part;
+    const key = `${lineIndex}-${partIndex}`;
+    if (part.startsWith('**') && part.endsWith('**')) return <strong key={key} className="font-semibold text-slate-900">{part.slice(2, -2)}</strong>;
+    if (part.startsWith('`') && part.endsWith('`')) return <code key={key} className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[0.9em] text-slate-800">{part.slice(1, -1)}</code>;
+    return <React.Fragment key={key}>{part}</React.Fragment>;
   });
 
   return text.split('\n').map((line, index) => {
     const trimmed = line.trim();
-    if (!trimmed) return <div aria-hidden="true" key={index} className="h-2" />;
+    if (!trimmed) return <div aria-hidden="true" key={`blank-${index}`} className="h-2" />;
     const bullet = trimmed.match(/^(?:[-*])\s+(.+)$/);
     const ordered = trimmed.match(/^\d+[.)]\s+(.+)$/);
     if (bullet || ordered) {
-      return <p key={index} className="flex gap-2 leading-5"><span className="select-none text-amber-600">{bullet ? '•' : `${trimmed.match(/^\d+/)?.[0]}.`}</span><span>{renderInline((bullet || ordered)![1], index)}</span></p>;
+      return (
+        <p key={`line-${index}`} className="flex gap-2 leading-5">
+          <span className="select-none text-amber-600">{bullet ? '•' : `${trimmed.match(/^\d+/)?.[0]}.`}</span>
+          <span>{renderInline((bullet || ordered)![1], index)}</span>
+        </p>
+      );
     }
     const heading = trimmed.replace(/^#{1,3}\s+/, '');
-    return <p key={index} className="leading-5">{renderInline(heading, index)}</p>;
+    return <p key={`line-${index}`} className="leading-5">{renderInline(heading, index)}</p>;
   });
 }
 
@@ -248,8 +254,10 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
                       : 'rounded-tl-sm border border-[#E7ECF1] bg-[#F8FAFC] text-[#263548]'}`}>
                     <div className="space-y-1">{renderMessageText(message.text)}</div>
                   </div>
-                  {message.mode === 'data_fallback' && (
-                    <p className="text-left text-[10px] text-slate-500">{t('Resposta baseada em regras e dados; IA indisponível.')}</p>
+                  {message.mode === 'gemini' && (
+                    <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                      ⚡ {t('Assistente Flash')}
+                    </span>
                   )}
                   {message.actions && message.actions.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 pt-1">
