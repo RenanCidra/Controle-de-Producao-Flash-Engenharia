@@ -1,1 +1,29 @@
 @import "tailwindcss";
+
+@keyframes flash-assistant-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+    box-shadow: 0 10px 24px rgb(15 23 42 / 22%), 0 0 0 0 rgb(245 158 11 / 0%);
+  }
+
+  50% {
+    transform: translate3d(0, -4px, 0);
+    box-shadow: 0 14px 28px rgb(15 23 42 / 25%), 0 0 0 6px rgb(245 158 11 / 10%);
+  }
+}
+
+.flash-assistant-float {
+  animation: flash-assistant-float 3.8s ease-in-out infinite;
+}
+
+.flash-assistant-float:hover,
+.flash-assistant-float:focus-visible {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flash-assistant-float {
+    animation: none;
+  }
+}

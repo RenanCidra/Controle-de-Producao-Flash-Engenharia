@@ -1709,4 +1709,32 @@ Object.assign(es, {
   'Prezado(a)': 'Estimado(a)',
 });
 
+Object.assign(en, {
+  'Histórico de conversas': 'Conversation history',
+  'Conversas salvas neste navegador': 'Conversations saved in this browser',
+  'Nova conversa': 'New conversation',
+  'Nenhuma conversa salva ainda': 'No saved conversations yet',
+  'mensagens': 'messages',
+  'Excluir conversa': 'Delete conversation',
+  'Configurações do assistente': 'Assistant settings',
+  'Personalize o jeito como o assistente conversa com você.': 'Personalize how the assistant talks with you.',
+  'A preferência é salva para seu usuário neste navegador.': 'This preference is saved for your user in this browser.',
+  'Expandir para tela cheia': 'Expand to full screen',
+  'Sair da tela cheia': 'Exit full screen',
+});
+
+Object.assign(es, {
+  'Histórico de conversas': 'Historial de conversaciones',
+  'Conversas salvas neste navegador': 'Conversaciones guardadas en este navegador',
+  'Nova conversa': 'Nueva conversación',
+  'Nenhuma conversa salva ainda': 'Aún no hay conversaciones guardadas',
+  'mensagens': 'mensajes',
+  'Excluir conversa': 'Eliminar conversación',
+  'Configurações do assistente': 'Configuración del asistente',
+  'Personalize o jeito como o assistente conversa com você.': 'Personalice la forma en que el asistente conversa con usted.',
+  'A preferência é salva para seu usuário neste navegador.': 'Esta preferencia se guarda para su usuario en este navegador.',
+  'Expandir para tela cheia': 'Expandir a pantalla completa',
+  'Sair da tela cheia': 'Salir de pantalla completa',
+});
+
 export const catalogs: Record<Exclude<AppLanguage, 'pt-BR'>, Record<string, string>> = { 'en-US': en, 'es-ES': es };

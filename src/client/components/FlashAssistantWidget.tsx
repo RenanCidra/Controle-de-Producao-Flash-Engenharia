@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Briefcase, Coffee, LoaderCircle, Mic, MicOff, Send, Sparkles, Trash2, X, Zap } from 'lucide-react';
+import { ArrowRight, Briefcase, Coffee, History, LoaderCircle, Maximize2, MessageSquarePlus, Mic, MicOff, Minimize2, Send, Settings2, Sparkles, Trash2, X, Zap } from 'lucide-react';
 import { api } from '../api.ts';
 import type { AuthUser } from '../api.ts';
 import { getAppLanguage, getIntlLocale, translateText } from '../i18n/index.ts';
@@ -16,6 +16,13 @@ interface Message {
   error?: boolean;
 }
 
+interface Conversation {
+  id: string;
+  title: string;
+  updatedAt: string;
+  messages: Message[];
+}
+
 interface FlashAssistantWidgetProps {
   currentUser: AuthUser | null;
   isOpen: boolean;
@@ -25,6 +32,54 @@ interface FlashAssistantWidgetProps {
 
 const t = (text: string) => translateText(text);
 const currentTime = () => new Date().toLocaleTimeString(getIntlLocale(), { hour: '2-digit', minute: '2-digit' });
+const personalityStorageKey = (uid?: string) => `nexus_copilot_personality_${uid || 'guest'}`;
+const conversationStorageKey = (uid?: string) => `nexus_copilot_conversations_${uid || 'guest'}`;
+const MAX_SAVED_CONVERSATIONS = 25;
+const MAX_SAVED_MESSAGES = 80;
+
+function createConversation(name?: string, mode: PersonalityMode = 'casual'): Conversation {
+  return {
+    id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `conversation-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    title: t('Nova conversa'),
+    updatedAt: new Date().toISOString(),
+    messages: [makeWelcome(name, mode)],
+  };
+}
+
+function loadConversations(uid?: string, name?: string, mode: PersonalityMode = 'casual'): Conversation[] {
+  if (typeof window === 'undefined') return [createConversation(name, mode)];
+  try {
+    const stored = localStorage.getItem(conversationStorageKey(uid));
+    const parsed = stored ? JSON.parse(stored) : null;
+    if (Array.isArray(parsed)) {
+      const valid = parsed.filter((item): item is Conversation => Boolean(
+        item && typeof item.id === 'string' && typeof item.title === 'string'
+        && typeof item.updatedAt === 'string' && Array.isArray(item.messages)
+        && item.messages.every((message: any) => message && typeof message.id === 'string'
+          && (message.sender === 'user' || message.sender === 'assistant')
+          && typeof message.text === 'string' && typeof message.timestamp === 'string'),
+      )).slice(0, MAX_SAVED_CONVERSATIONS).map((item) => ({
+        ...item,
+        messages: item.messages.slice(-MAX_SAVED_MESSAGES),
+      }));
+      if (valid.length) return valid;
+    }
+  } catch {
+    // Storage may be unavailable or contain an older invalid value.
+  }
+  return [createConversation(name, mode)];
+}
+
+const personalityOptions: Array<{
+  value: PersonalityMode;
+  label: string;
+  description: string;
+  Icon: typeof Zap;
+}> = [
+  { value: 'direct', label: 'Direto', description: 'Direto: respostas curtas, números e foco prático', Icon: Zap },
+  { value: 'casual', label: 'Despojado', description: 'Despojado: tom descontraído, amigável e parceiro de fábrica', Icon: Coffee },
+  { value: 'formal', label: 'Formal', description: 'Formal: tom executivo, corporativo e técnico', Icon: Briefcase },
+];
 
 function makeWelcome(name?: string, mode: PersonalityMode = 'casual'): Message {
   let text = '';
@@ -84,20 +139,19 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
 }) => {
   const [personality, setPersonality] = useState<PersonalityMode>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('nexus_copilot_personality');
+      const saved = localStorage.getItem(personalityStorageKey(currentUser?.uid));
       if (saved === 'direct' || saved === 'formal' || saved === 'casual') return saved;
     }
     return 'casual';
   });
-  const [messages, setMessages] = useState<Message[]>(() => {
-    const initialMode: PersonalityMode =
-      typeof window !== 'undefined' &&
-      (localStorage.getItem('nexus_copilot_personality') === 'direct' ||
-        localStorage.getItem('nexus_copilot_personality') === 'formal')
-        ? (localStorage.getItem('nexus_copilot_personality') as PersonalityMode)
-        : 'casual';
-    return [makeWelcome(currentUser?.name, initialMode)];
-  });
+  const [conversations, setConversations] = useState<Conversation[]>(() =>
+    loadConversations(currentUser?.uid, currentUser?.name, personality),
+  );
+  const [activeConversationId, setActiveConversationId] = useState(() => conversations[0]?.id || '');
+  const [messages, setMessages] = useState<Message[]>(() => conversations[0]?.messages || [makeWelcome(currentUser?.name, personality)]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [fullScreen, setFullScreen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -106,11 +160,36 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const speechRecognitionRef = useRef<any>(null);
 
+  useEffect(() => {
+    setConversations((previous) => {
+      const title = messages.find((message) => message.sender === 'user')?.text.trim().slice(0, 64) || t('Nova conversa');
+      const existing = previous.some((conversation) => conversation.id === activeConversationId);
+      const nextConversation: Conversation = {
+        id: activeConversationId,
+        title,
+        updatedAt: new Date().toISOString(),
+        messages: messages.slice(-MAX_SAVED_MESSAGES),
+      };
+      const updated = existing
+        ? previous.map((conversation) => conversation.id === activeConversationId ? nextConversation : conversation)
+        : [nextConversation, ...previous];
+      return updated.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, MAX_SAVED_CONVERSATIONS);
+    });
+  }, [messages, activeConversationId]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(conversationStorageKey(currentUser?.uid), JSON.stringify(conversations));
+    } catch {
+      // Keep the conversation usable when browser storage is full or unavailable.
+    }
+  }, [conversations, currentUser?.uid]);
+
   const handlePersonalityChange = (newMode: PersonalityMode) => {
     setPersonality(newMode);
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem('nexus_copilot_personality', newMode);
+        localStorage.setItem(personalityStorageKey(currentUser?.uid), newMode);
       } catch {
         // Storage unavailable
       }
@@ -132,11 +211,14 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onToggle();
+      if (event.key === 'Escape') {
+        if (fullScreen) setFullScreen(false);
+        else onToggle();
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isOpen, onToggle]);
+  }, [isOpen, fullScreen, onToggle]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -208,9 +290,35 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
     onNavigate(tab, { op: params.get('op') || undefined, subTab: params.get('sub') || undefined });
   };
 
-  const clearHistory = () => {
-    setMessages([makeWelcome(currentUser?.name, personality)]);
+  const startNewConversation = () => {
+    const conversation = createConversation(currentUser?.name, personality);
+    setConversations((previous) => [conversation, ...previous].slice(0, MAX_SAVED_CONVERSATIONS));
+    setActiveConversationId(conversation.id);
+    setMessages(conversation.messages);
+    setHistoryOpen(false);
+    setSettingsOpen(false);
     setInputValue('');
+  };
+
+  const openConversation = (conversation: Conversation) => {
+    setActiveConversationId(conversation.id);
+    setMessages(conversation.messages);
+    setHistoryOpen(false);
+    setSettingsOpen(false);
+    setInputValue('');
+  };
+
+  const deleteConversation = (conversationId: string) => {
+    const remaining = conversations.filter((conversation) => conversation.id !== conversationId);
+    if (conversationId === activeConversationId) {
+      const next = remaining[0] || createConversation(currentUser?.name, personality);
+      setConversations(remaining.length ? remaining : [next]);
+      setActiveConversationId(next.id);
+      setMessages(next.messages);
+      setInputValue('');
+    } else {
+      setConversations(remaining);
+    }
   };
 
   const toggleListening = () => {
@@ -237,7 +345,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
           onClick={onToggle}
           title={`${t('Abrir Assistente Flash')} · Ctrl+K`}
           aria-label={`${t('Abrir Assistente Flash')} (Ctrl+K)`}
-          className="fixed bottom-4 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full border border-amber-300 bg-slate-900 shadow-lg shadow-slate-950/20 ring-2 ring-white transition hover:scale-105 hover:bg-slate-800 hover:shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 sm:bottom-5 sm:right-5"
+          className="flash-assistant-float fixed bottom-4 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full border border-amber-300 bg-slate-900 shadow-lg shadow-slate-950/20 ring-2 ring-white transition-colors hover:bg-slate-800 hover:shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 sm:bottom-5 sm:right-5"
         >
           <img src="/assets/flash-symbol.png" alt="" aria-hidden="true" className="h-7 w-7 object-contain" />
         </button>
@@ -248,41 +356,148 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
           role="dialog"
           aria-modal="true"
           aria-label={t('Assistente Flash')}
-          className="fixed inset-x-3 bottom-3 top-3 z-50 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[#DCE3EB] bg-white text-[#263548] shadow-2xl shadow-slate-950/25 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-auto sm:h-[min(680px,calc(100dvh-32px))] sm:w-[420px]"
+          className={fullScreen
+            ? 'fixed inset-0 z-50 flex min-h-0 flex-col overflow-hidden bg-[#090b10] text-slate-100 md:flex-row'
+            : 'fixed inset-x-3 bottom-3 top-3 z-50 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[#DCE3EB] bg-white text-[#263548] shadow-2xl shadow-slate-950/25 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-auto sm:h-[min(680px,calc(100dvh-32px))] sm:w-[420px]'}
         >
-          <header className="flex shrink-0 items-center justify-between border-b border-[#E7ECF1] bg-white px-4 py-3">
+          {fullScreen && (
+            <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-700 bg-slate-900 text-white md:flex lg:w-72">
+              <div className="flex items-center gap-3 border-b border-white/10 px-5 py-5">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 ring-1 ring-amber-400/70">
+                  <img src="/assets/flash-symbol.png" alt="" aria-hidden="true" className="h-5 w-5 object-contain" />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold">{t('Assistente Flash')}</p>
+                  <p className="truncate text-[11px] text-slate-400">{t('Dados disponíveis no sistema')}</p>
+                </div>
+              </div>
+              <div className="p-4">
+                <button type="button" onClick={startNewConversation} disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-xs font-semibold text-white transition hover:border-amber-400/70 hover:bg-white/10 disabled:opacity-40">
+                  <MessageSquarePlus className="h-4 w-4 text-amber-400" />{t('Nova conversa')}
+                </button>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+                <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{t('Histórico de conversas')}</p>
+                <div className="space-y-1">
+                  {conversations.map((conversation) => (
+                    <div key={conversation.id} className={`group flex items-center gap-1 rounded-lg ${conversation.id === activeConversationId ? 'bg-white/10 text-white' : 'text-slate-300 hover:bg-white/5'}`}>
+                      <button type="button" onClick={() => openConversation(conversation)} aria-current={conversation.id === activeConversationId ? 'true' : undefined} className="min-w-0 flex-1 truncate px-3 py-2.5 text-left text-xs">
+                        {conversation.title}
+                      </button>
+                      <button type="button" onClick={() => deleteConversation(conversation.id)} disabled={loading} title={t('Excluir conversa')} aria-label={`${t('Excluir conversa')}: ${conversation.title}`} className="mr-1 rounded-md p-1.5 text-slate-400 opacity-0 transition hover:bg-rose-500/15 hover:text-rose-300 focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-30">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </aside>
+          )}
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <header className={`flex shrink-0 items-center justify-between border-b px-4 py-3 ${fullScreen ? 'border-white/10 bg-[#0d1119]' : 'border-[#E7ECF1] bg-white'}`}>
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 ring-1 ring-amber-300">
                 <img src="/assets/flash-symbol.png" alt="" aria-hidden="true" className="h-5 w-5 object-contain" />
               </div>
               <div className="min-w-0">
-                <h2 className="truncate text-sm font-bold text-[#263548]">{t('Assistente Flash')}</h2>
-                <p className="truncate text-[11px] text-slate-500">{t('Dados disponíveis no sistema')}</p>
+                <h2 className={`truncate text-sm font-bold ${fullScreen ? 'text-white' : 'text-[#263548]'}`}>{t('Assistente Flash')}</h2>
+                <p className={`truncate text-[11px] ${fullScreen ? 'text-slate-400' : 'text-slate-500'}`}>{t('Dados disponíveis no sistema')}</p>
               </div>
             </div>
             <div className="ml-3 flex shrink-0 items-center gap-1">
-              <button type="button" onClick={clearHistory} disabled={loading} title={t('Limpar conversa')} aria-label={t('Limpar conversa')} className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40">
-                <Trash2 className="h-4 w-4" />
+              <button type="button" onClick={startNewConversation} disabled={loading} title={t('Nova conversa')} aria-label={t('Nova conversa')} className={`rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 ${fullScreen ? 'md:hidden' : ''}`}>
+                <MessageSquarePlus className="h-4 w-4" />
               </button>
-              <button type="button" onClick={onToggle} title={t('Fechar')} aria-label={t('Fechar')} className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">
+              <button type="button" onClick={() => { setHistoryOpen((open) => !open); setSettingsOpen(false); }} aria-pressed={historyOpen} title={t('Histórico de conversas')} aria-label={t('Histórico de conversas')} className={`rounded-lg p-2 transition ${fullScreen ? 'md:hidden' : ''} ${historyOpen ? 'bg-amber-50 text-amber-700' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
+                <History className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={() => { setSettingsOpen((open) => !open); setHistoryOpen(false); }} aria-pressed={settingsOpen} title={t('Configurações do assistente')} aria-label={t('Configurações do assistente')} className={`rounded-lg p-2 transition ${settingsOpen ? 'bg-amber-50 text-amber-700' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
+                <Settings2 className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={() => setFullScreen((expanded) => !expanded)} aria-pressed={fullScreen} title={t(fullScreen ? 'Sair da tela cheia' : 'Expandir para tela cheia')} aria-label={t(fullScreen ? 'Sair da tela cheia' : 'Expandir para tela cheia')} className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">
+                {fullScreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              </button>
+              <button type="button" onClick={() => { setFullScreen(false); onToggle(); }} title={t('Fechar')} aria-label={t('Fechar')} className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">
                 <X className="h-4 w-4" />
               </button>
             </div>
           </header>
 
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#E7ECF1] bg-[#F8FAFC] px-4 py-2">
+          <div className={`flex shrink-0 items-center justify-between gap-3 border-b px-4 py-2 ${fullScreen ? 'border-white/10 bg-[#0d1119]' : 'border-[#E7ECF1] bg-[#F8FAFC]'}`}>
             <div className="flex min-w-0 items-center gap-2 text-xs font-medium text-slate-600">
               <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-              <span className="truncate">{t('Consulta operacional')}</span>
+              <span className={`truncate ${fullScreen ? 'text-slate-200' : ''}`}>{t('Consulta operacional')}</span>
             </div>
             <button type="button" onClick={() => void handleSendMessage(t('Resumo do turno'))} disabled={loading} className="shrink-0 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] font-semibold text-amber-900 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50">
               {t('Resumo do turno')}
             </button>
           </div>
 
-          <div className="flex-1 space-y-4 overflow-y-auto bg-white p-4" aria-live="polite">
+          {settingsOpen ? (
+            <section className="flex-1 space-y-4 overflow-y-auto bg-white p-4" aria-label={t('Configurações do assistente')}>
+              <div>
+                <h3 className="text-sm font-bold text-slate-800">{t('Configurações do assistente')}</h3>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{t('Personalize o jeito como o assistente conversa com você.')}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="mb-2">
+                  <p className="text-xs font-semibold text-slate-800">{t('Modo de personalidade')}</p>
+                  <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{t(personalityOptions.find((option) => option.value === personality)?.description || '')}</p>
+                </div>
+                <div role="group" aria-label={t('Modo de personalidade')} className="grid grid-cols-3 gap-1 rounded-xl bg-slate-200/70 p-1">
+                  {personalityOptions.map(({ value, label, description, Icon }) => {
+                    const selected = personality === value;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => handlePersonalityChange(value)}
+                        aria-pressed={selected}
+                        title={t(description)}
+                        className={`inline-flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[11px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${selected ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:bg-white/70 hover:text-slate-800'}`}
+                      >
+                        <Icon className={`h-3.5 w-3.5 shrink-0 ${selected ? 'text-amber-600' : ''}`} aria-hidden="true" />
+                        <span className="truncate">{t(label)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <p className="rounded-lg border border-[#E7ECF1] px-3 py-2 text-[11px] leading-4 text-slate-500">{t('A preferência é salva para seu usuário neste navegador.')}</p>
+            </section>
+          ) : historyOpen ? (
+            <div className="flex-1 space-y-3 overflow-y-auto bg-white p-4" aria-label={t('Histórico de conversas')}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">{t('Histórico de conversas')}</h3>
+                  <p className="mt-0.5 text-[11px] text-slate-500">{t('Conversas salvas neste navegador')}</p>
+                </div>
+                <button type="button" onClick={startNewConversation} disabled={loading} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-amber-400 px-2.5 py-2 text-[11px] font-semibold text-slate-950 transition hover:bg-amber-300 disabled:opacity-50">
+                  <MessageSquarePlus className="h-3.5 w-3.5" />{t('Nova conversa')}
+                </button>
+              </div>
+              {conversations.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center text-xs text-slate-500">{t('Nenhuma conversa salva ainda')}</div>
+              ) : (
+                <div className="space-y-2">
+                  {conversations.map((conversation) => (
+                    <div key={conversation.id} className={`flex items-center gap-2 rounded-xl border p-2 ${conversation.id === activeConversationId ? 'border-amber-300 bg-amber-50/60' : 'border-slate-200 bg-white'}`}>
+                      <button type="button" onClick={() => openConversation(conversation)} aria-current={conversation.id === activeConversationId ? 'true' : undefined} className="min-w-0 flex-1 rounded-lg px-2 py-1.5 text-left hover:bg-white/80">
+                        <span className="block truncate text-xs font-semibold text-slate-800">{conversation.title}</span>
+                        <span className="mt-1 block text-[10px] text-slate-500">{new Date(conversation.updatedAt).toLocaleString(getIntlLocale(), { dateStyle: 'short', timeStyle: 'short' })} · {conversation.messages.length} {t('mensagens')}</span>
+                      </button>
+                      <button type="button" onClick={() => deleteConversation(conversation.id)} disabled={loading} title={t('Excluir conversa')} aria-label={`${t('Excluir conversa')}: ${conversation.title}`} className="rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-700 disabled:opacity-40">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+          <div className={`flex-1 space-y-4 overflow-y-auto p-4 ${fullScreen ? 'bg-[#090b10]' : 'bg-white'}`} aria-live="polite">
             {messages.map((message) => (
-              <article key={message.id} className={`flex gap-2.5 ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <article key={message.id} className={`flex gap-2.5 ${fullScreen ? 'mx-auto w-full max-w-4xl' : ''} ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {message.sender === 'assistant' && (
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-900 ring-1 ring-amber-300">
                     <img src="/assets/flash-symbol.png" alt="" aria-hidden="true" className="h-4 w-4 object-contain" />
@@ -293,7 +508,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
                     ? 'rounded-tr-sm bg-amber-400 text-slate-950'
                     : message.error
                       ? 'rounded-tl-sm border border-rose-200 bg-rose-50 text-rose-900'
-                      : 'rounded-tl-sm border border-[#E7ECF1] bg-[#F8FAFC] text-[#263548]'}`}>
+                      : fullScreen ? 'rounded-tl-sm border border-white/10 bg-[#151a23] text-slate-100' : 'rounded-tl-sm border border-[#E7ECF1] bg-[#F8FAFC] text-[#263548]'}`}>
                     <div className="space-y-1">{renderMessageText(message.text)}</div>
                   </div>
                   {message.mode === 'gemini' && (
@@ -339,12 +554,13 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
             )}
             <div ref={messagesEndRef} />
           </div>
+          )}
 
-          <footer className="shrink-0 border-t border-[#E7ECF1] bg-[#F8FAFC] p-3">
+          {!historyOpen && !settingsOpen && <footer className={`shrink-0 border-t p-3 ${fullScreen ? 'border-white/10 bg-[#0d1119] px-4 py-4' : 'border-[#E7ECF1] bg-[#F8FAFC]'}`}>
             {speechSupported && (
               <div className="mb-2 text-[10px] text-slate-500" aria-live="polite">{isListening ? t('Ouvindo... Fale agora') : ''}</div>
             )}
-            <form onSubmit={(event) => { event.preventDefault(); void handleSendMessage(); }} className="flex items-center gap-2">
+            <form onSubmit={(event) => { event.preventDefault(); void handleSendMessage(); }} className={`mx-auto flex w-full items-center gap-2 ${fullScreen ? 'max-w-4xl' : ''}`}>
               {speechSupported && (
                 <button type="button" onClick={toggleListening} disabled={loading} title={t(isListening ? 'Parar ditado' : 'Ditar pergunta por voz')} aria-label={t(isListening ? 'Parar ditado' : 'Ditar pergunta por voz')} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition disabled:opacity-40 ${isListening ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-[#DCE3EB] bg-white text-slate-500 hover:border-amber-300 hover:text-slate-900'}`}>
                   {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
@@ -359,14 +575,15 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
                 placeholder={t('Pergunte sobre OPs, ocorrências, insumos...')}
                 disabled={loading}
                 aria-label={t('Pergunte sobre OPs, ocorrências, insumos...')}
-                className="h-10 min-w-0 flex-1 rounded-xl border border-[#DCE3EB] bg-white px-3 text-[13px] text-[#263548] placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 disabled:bg-slate-100"
+                className={`h-10 min-w-0 flex-1 rounded-xl border px-3 text-[13px] focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 ${fullScreen ? 'border-white/15 bg-[#171c25] text-white placeholder:text-slate-500 disabled:bg-[#11151d]' : 'border-[#DCE3EB] bg-white text-[#263548] placeholder:text-slate-400 disabled:bg-slate-100'}`}
               />
               <button type="submit" disabled={!inputValue.trim() || loading} title={t('Enviar mensagem')} aria-label={t('Enviar mensagem')} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-400 text-slate-950 transition hover:bg-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
                 <Send className="h-4 w-4" />
               </button>
             </form>
             <p className="mt-2 text-center text-[10px] text-slate-400">{t('Confira informações críticas na tela de origem antes de agir.')}</p>
-          </footer>
+          </footer>}
+          </div>
         </section>
       )}
     </>
