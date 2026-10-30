@@ -964,6 +964,20 @@ const es: Record<string, string> = {
 	"Próxima": "Siguiente"
 };
 Object.assign(en, {
+  'Dados do espelho indisponíveis': 'Mirror data unavailable',
+  'Ver Conectores Protheus': 'View Protheus Connectors',
+  'Não foi possível consultar o espelho de produção. Verifique a conexão e as tabelas em Configurações > Conectores Protheus.': 'Could not query the production mirror. Check the connection and tables in Settings > Protheus Connectors.',
+  'A importação não foi concluída. Revise o arquivo e o mapeamento em Configurações > Conectores Protheus.': 'The import did not complete. Review the file and mapping in Settings > Protheus Connectors.',
+  'Não foi possível conectar ao serviço de importação. Verifique a API e tente novamente em Configurações > Conectores Protheus.': 'Could not connect to the import service. Check the API and try again in Settings > Protheus Connectors.',
+  'A carga foi processada parcialmente. Confira os registros sinalizados em Configurações > Conectores Protheus.': 'The load was partially processed. Review the flagged records in Settings > Protheus Connectors.',
+  'A carga foi processada parcialmente. Confira os registros sinalizados em Conectores Protheus.': 'The load was partially processed. Review the flagged records in Protheus Connectors.',
+  'Atenção ao conector Protheus': 'Protheus connector alert',
+  'Estado da conexão com o banco': 'Database connection status',
+  'O teste verifica a disponibilidade do banco usado pelo espelho. A integração direta com o Protheus ainda não está configurada.': 'This check verifies the database used by the mirror. Direct integration with Protheus is not configured yet.',
+  'Registrado em': 'Recorded at',
+  'Banco de dados': 'Database',
+  'Verificar conexão': 'Check connection',
+  'Dispensar aviso': 'Dismiss alert',
 	"Da ordem de produção à entrega.": "From production order to delivery.",
 	"Clareza em cada etapa.": "Clarity at every step.",
 	"Consistência do fluxo de dados": "Data flow consistency",
@@ -1120,6 +1134,20 @@ Object.assign(en, {
 	"Consultando chão de fábrica...": "Querying shop floor..."
 });
 Object.assign(es, {
+  'Dados do espelho indisponíveis': 'Datos del espejo no disponibles',
+  'Ver Conectores Protheus': 'Ver conectores Protheus',
+  'Não foi possível consultar o espelho de produção. Verifique a conexão e as tabelas em Configurações > Conectores Protheus.': 'No se pudo consultar el espejo de producción. Verifique la conexión y las tablas en Configuración > Conectores Protheus.',
+  'A importação não foi concluída. Revise o arquivo e o mapeamento em Configurações > Conectores Protheus.': 'La importación no se completó. Revise el archivo y el mapeo en Configuración > Conectores Protheus.',
+  'Não foi possível conectar ao serviço de importação. Verifique a API e tente novamente em Configurações > Conectores Protheus.': 'No se pudo conectar al servicio de importación. Verifique la API e inténtelo de nuevo en Configuración > Conectores Protheus.',
+  'A carga foi processada parcialmente. Confira os registros sinalizados em Configurações > Conectores Protheus.': 'La carga se procesó parcialmente. Revise los registros señalados en Configuración > Conectores Protheus.',
+  'A carga foi processada parcialmente. Confira os registros sinalizados em Conectores Protheus.': 'La carga se procesó parcialmente. Revise los registros señalados en Conectores Protheus.',
+  'Atenção ao conector Protheus': 'Aviso del conector Protheus',
+  'Estado da conexão com o banco': 'Estado de conexión con la base de datos',
+  'O teste verifica a disponibilidade do banco usado pelo espelho. A integração direta com o Protheus ainda não está configurada.': 'Esta prueba verifica la disponibilidad de la base de datos del espejo. La integración directa con Protheus aún no está configurada.',
+  'Registrado em': 'Registrado el',
+  'Banco de dados': 'Base de datos',
+  'Verificar conexão': 'Verificar conexión',
+  'Dispensar aviso': 'Descartar aviso',
 	"Da ordem de produção à entrega.": "De la orden de producción a la entrega.",
 	"Clareza em cada etapa.": "Claridad en cada etapa.",
 	"Consistência do fluxo de dados": "Consistencia del flujo de datos",

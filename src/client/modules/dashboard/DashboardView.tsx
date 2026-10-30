@@ -45,6 +45,7 @@ interface DashboardViewProps {
   statsUpdatedAt: string | null;
   onRefresh: () => void;
   onNavigate: (tab: ActiveTab) => void;
+  onNavigateToConnectors: () => void;
 }
 
 const formatDateTime = (date: string | null | undefined) => {
@@ -61,7 +62,7 @@ const situationColors: Record<string, string> = {
   ATRASADO: '#DC2626', RISCO_ATRASO: '#D97706', NO_PRAZO: '#0284C7', CONCLUIDO: '#159B72', SEM_PREVISAO: '#64748B',
 };
 
-export const DashboardView: React.FC<DashboardViewProps> = ({ stats, refreshing, refreshError, statsUpdatedAt, onRefresh, onNavigate }) => {
+export const DashboardView: React.FC<DashboardViewProps> = ({ stats, refreshing, refreshError, statsUpdatedAt, onRefresh, onNavigate, onNavigateToConnectors }) => {
   const [draft, setDraft] = useState<Filters>(emptyFilters);
   const [applied, setApplied] = useState<Filters>(emptyFilters);
   const [showFilters, setShowFilters] = useState(false);
@@ -131,7 +132,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ stats, refreshing,
           </div>
           <button onClick={() => { onRefresh(); void loadProduction(applied); }} disabled={refreshing || loading} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-[#CBD5E1] bg-white px-3 py-2 text-xs font-semibold text-[#263548] transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"><RefreshCw className={`h-3.5 w-3.5 ${refreshing || loading ? 'animate-spin' : ''}`} />{refreshing || loading ? 'Atualizando…' : 'Atualizar painel'}</button>
         </div>
-        {(refreshError || error) && <p role="alert" className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">Falha ao carregar dados reais: {error || refreshError}</p>}
+        {(refreshError || error) && <div role="alert" className="mt-3 flex flex-col gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="text-xs font-semibold text-rose-800">{translateText('Dados do espelho indisponíveis')}</p><p className="mt-0.5 text-xs text-rose-700">{translateText(error || refreshError || '')}</p></div><button type="button" onClick={onNavigateToConnectors} className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-md border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-rose-800 transition hover:bg-rose-100 sm:self-auto">{translateText('Ver Conectores Protheus')} <ChevronRight className="h-3.5 w-3.5" /></button></div>}
         {stats && stats.totalProtheusBatches === 0 && !refreshError && !error && <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Ainda não há cargas recebidas. Os indicadores serão preenchidos quando existirem dados no espelho Protheus.</p>}
       </section>
 

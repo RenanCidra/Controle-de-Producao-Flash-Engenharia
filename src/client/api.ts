@@ -1,5 +1,11 @@
 const TOKEN_KEY = 'nexus_erp_jwt_token';
 const USER_KEY = 'nexus_erp_user_data';
+const CONNECTOR_ISSUE_KEY = 'nexus_protheus_connector_issue';
+
+export interface ConnectorIssue {
+  message: string;
+  occurredAt: string;
+}
 
 export interface AuthUser {
   id: number;
@@ -140,19 +146,62 @@ class ApiService {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    const response = await fetch(`/api${endpoint}`, {
-      ...options,
-      headers,
-    });
+    let response: Response;
+    try {
+      response = await fetch(`/api${endpoint}`, { ...options, headers });
+    } catch (error) {
+      if (endpoint.startsWith('/protheus/sync/')) {
+        const message = 'Não foi possível conectar ao serviço de importação. Verifique a API e tente novamente em Configurações > Conectores Protheus.';
+        this.saveConnectorIssue(message);
+        throw new Error(message);
+      }
+      throw error;
+    }
 
     const data = await response.json().catch(() => null);
 
     if (!response.ok) {
-      const errorMsg = data?.error || `Erro HTTP ${response.status}: ${response.statusText}`;
-      throw new Error(errorMsg);
+      const rawError = String(data?.error || '');
+      const isTechnicalDatabaseError = /Failed query:|DrizzleQueryError|ECONNREFUSED|ECONNRESET|ETIMEDOUT|relation .* does not exist|column .* does not exist|SQLSTATE/i.test(rawError);
+      const isProtheusImport = endpoint.startsWith('/protheus/sync/');
+      const userMessage = isTechnicalDatabaseError
+        ? 'Não foi possível consultar o espelho de produção. Verifique a conexão e as tabelas em Configurações > Conectores Protheus.'
+        : isProtheusImport
+          ? 'A importação não foi concluída. Revise o arquivo e o mapeamento em Configurações > Conectores Protheus.'
+          : rawError || `Erro HTTP ${response.status}: ${response.statusText}`;
+
+      if (isTechnicalDatabaseError || isProtheusImport) this.saveConnectorIssue(userMessage);
+      throw new Error(userMessage);
     }
 
+    if (endpoint.startsWith('/protheus/sync/')) {
+      if (Array.isArray(data?.errors) && data.errors.length > 0) {
+        this.saveConnectorIssue('A carga foi processada parcialmente. Confira os registros sinalizados em Configurações > Conectores Protheus.');
+      } else {
+        this.clearConnectorIssue();
+      }
+    }
     return data as T;
+  }
+
+  private saveConnectorIssue(message: string) {
+    try {
+      const issue: ConnectorIssue = { message, occurredAt: new Date().toISOString() };
+      localStorage.setItem(CONNECTOR_ISSUE_KEY, JSON.stringify(issue));
+    } catch { /* Storage is optional; the current request still reports the error. */ }
+  }
+
+  public getConnectorIssue(): ConnectorIssue | null {
+    try {
+      const raw = localStorage.getItem(CONNECTOR_ISSUE_KEY);
+      if (!raw) return null;
+      const issue = JSON.parse(raw) as ConnectorIssue;
+      return typeof issue.message === 'string' && typeof issue.occurredAt === 'string' ? issue : null;
+    } catch { return null; }
+  }
+
+  public clearConnectorIssue() {
+    try { localStorage.removeItem(CONNECTOR_ISSUE_KEY); } catch { /* Storage is optional. */ }
   }
 
   // System

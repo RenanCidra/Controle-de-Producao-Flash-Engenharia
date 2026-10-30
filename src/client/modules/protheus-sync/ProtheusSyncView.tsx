@@ -176,7 +176,8 @@ export const ProtheusSyncView: React.FC<ProtheusSyncViewProps> = ({
         entity
       );
       setUploadResult(res);
-      onSuccess(`Arquivo processado com sucesso. Lote: ${res.batchCode}`);
+      if (res.errors.length > 0) onError('A carga foi processada parcialmente. Confira os registros sinalizados em Conectores Protheus.');
+      else onSuccess(`Arquivo processado com sucesso. Lote: ${res.batchCode}`);
       onRefreshStats();
     } catch (err: any) {
       onError(err.message);
@@ -196,7 +197,8 @@ export const ProtheusSyncView: React.FC<ProtheusSyncViewProps> = ({
       const parsed = JSON.parse(restJsonText);
       const res = await api.syncProtheusRest(parsed);
       setUploadResult(res);
-      onSuccess(`Payload REST sincronizado com sucesso. Lote: ${res.batchCode}`);
+      if (res.errors.length > 0) onError('A carga foi processada parcialmente. Confira os registros sinalizados em Conectores Protheus.');
+      else onSuccess(`Payload REST sincronizado com sucesso. Lote: ${res.batchCode}`);
       onRefreshStats();
     } catch (err: any) {
       onError(err.message);

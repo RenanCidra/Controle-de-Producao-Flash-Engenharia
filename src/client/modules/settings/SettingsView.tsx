@@ -24,6 +24,7 @@ import {
   Menu,
   Activity,
   Link2,
+  AlertTriangle,
 } from 'lucide-react';
 import { ProtheusSyncView } from '../protheus-sync/ProtheusSyncView.tsx';
 import { ProtheusTableBrowser } from '../protheus-sync/ProtheusTableBrowser.tsx';
@@ -158,6 +159,53 @@ const ConnectionStatusPanel: React.FC = () => {
         <span>Última checagem: {lastChecked ? lastChecked.toLocaleTimeString(getIntlLocale()) : translateText('aguardando')}</span>
       </div>
     </div>
+  );
+};
+
+const ProtheusConnectorIssuePanel: React.FC = () => {
+  const [issue, setIssue] = useState(() => api.getConnectorIssue());
+  const [databaseState, setDatabaseState] = useState<ServiceState>('checking');
+  const [checking, setChecking] = useState(false);
+  const [checkedAt, setCheckedAt] = useState<Date | null>(null);
+
+  const checkDatabase = async () => {
+    setChecking(true);
+    try {
+      const health = await api.getHealth();
+      setDatabaseState(normalizeServiceState(health.databaseStatus));
+    } catch {
+      setDatabaseState('offline');
+    } finally {
+      setCheckedAt(new Date());
+      setChecking(false);
+    }
+  };
+
+  useEffect(() => {
+    setIssue(api.getConnectorIssue());
+    void checkDatabase();
+  }, []);
+
+  return (
+    <section className={`rounded-xl border p-4 ${issue ? 'border-rose-400/30 bg-rose-950/20' : 'border-[#202936] bg-[#141B24]'}`} aria-live="polite">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className={`mt-0.5 rounded-lg p-2 ${issue ? 'bg-rose-500/10 text-rose-300' : 'bg-[#1D2733] text-amber-300'}`}>
+            {issue ? <AlertTriangle className="h-4 w-4" /> : <Database className="h-4 w-4" />}
+          </span>
+          <div className="min-w-0">
+            <h4 className="text-xs font-semibold text-white">{translateText(issue ? 'Atenção ao conector Protheus' : 'Estado da conexão com o banco')}</h4>
+            <p className="mt-1 text-xs leading-relaxed text-slate-300">{translateText(issue ? issue.message : 'O teste verifica a disponibilidade do banco usado pelo espelho. A integração direta com o Protheus ainda não está configurada.')}</p>
+            {issue && <p className="mt-1 text-[10px] text-slate-500">{translateText('Registrado em')} {new Date(issue.occurredAt).toLocaleString(getIntlLocale())}</p>}
+            <p className="mt-2 text-[10px] text-slate-400">{translateText('Banco de dados')}: <span className={serviceStatePresentation[databaseState].text}>{statusLabel(databaseState)}</span>{checkedAt ? ` · ${checkedAt.toLocaleTimeString(getIntlLocale())}` : ''}</p>
+          </div>
+        </div>
+        <div className="flex shrink-0 gap-2 pl-11 sm:pl-0">
+          <button type="button" onClick={() => void checkDatabase()} disabled={checking} className="rounded-md border border-[#2D3A4B] bg-[#1D2733] px-2.5 py-1.5 text-[11px] font-semibold text-slate-200 transition hover:bg-[#253242] disabled:opacity-50">{translateText(checking ? 'Verificando…' : 'Verificar conexão')}</button>
+          {issue && <button type="button" onClick={() => { api.clearConnectorIssue(); setIssue(null); }} className="rounded-md px-2 py-1.5 text-[11px] font-medium text-slate-400 transition hover:bg-white/5 hover:text-white">{translateText('Dispensar aviso')}</button>}
+        </div>
+      </div>
+    </section>
   );
 };
 
@@ -594,6 +642,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <p className="text-xs text-slate-400 -mt-4 mb-6">
                 Mapeamento das tabelas de produção TOTVS e normalização Flash Standard.
               </p>
+              <ProtheusConnectorIssuePanel />
 
               {selectedProtheusTable ? (
                 selectedProtheusTable.source === 'simulation' ? (

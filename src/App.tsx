@@ -374,6 +374,7 @@ export default function App() {
                   statsUpdatedAt={statsUpdatedAt}
                   onRefresh={() => void loadStats()}
                   onNavigate={(tab) => setActiveTab(tab)}
+                  onNavigateToConnectors={() => handleNavigateToSettings('connectors')}
                 />
               )}
 
