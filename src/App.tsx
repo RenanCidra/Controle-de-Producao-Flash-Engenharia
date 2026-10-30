@@ -17,6 +17,7 @@ import { subscribeToLanguageChange } from './client/i18n/index.ts';
 import { AuthPage } from './client/modules/auth/AuthPage.tsx';
 import { UserProfileModal } from './client/modules/auth/UserProfileModal.tsx';
 import { FlashAssistantWidget } from './client/components/FlashAssistantWidget.tsx';
+import { WelcomeView } from './client/modules/home/WelcomeView.tsx';
 
 const DEV_PREVIEW_AUTH = import.meta.env.DEV && import.meta.env.VITE_DEV_PREVIEW_AUTH === 'true';
 const DEV_PREVIEW_USER: AuthUser = {
@@ -30,14 +31,14 @@ const DEV_PREVIEW_USER: AuthUser = {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
-    if (typeof window === 'undefined') return 'dashboard';
+    if (typeof window === 'undefined') return 'home';
     const reopenSettings = window.sessionStorage.getItem('flash-reopen-settings-after-language-change') === 'true';
     window.sessionStorage.removeItem('flash-reopen-settings-after-language-change');
-    return reopenSettings ? 'settings' : 'dashboard';
+    return reopenSettings ? 'settings' : 'home';
   });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [previousTab, setPreviousTab] = useState<ActiveTab>('dashboard');
+  const [previousTab, setPreviousTab] = useState<ActiveTab>('home');
   const [occurrencesOpFilter, setOccurrencesOpFilter] = useState<string | null>(null);
   const [traceabilityOpRequest, setTraceabilityOpRequest] = useState<string | null>(null);
   const [settingsSubTab, setSettingsSubTab] = useState<SettingsSubTab>('general');
@@ -59,11 +60,21 @@ export default function App() {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setAssistantOpen((prev) => !prev);
+        return;
+      }
+      if (e.key === 'Escape' && !authModalOpen && !profileModalOpen && !assistantOpen) {
+        const target = e.target as HTMLElement | null;
+        if (target?.matches('input, textarea, select, [contenteditable="true"]')) return;
+        if (mobileSidebarOpen) {
+          setMobileSidebarOpen(false);
+          return;
+        }
+        setActiveTab('home');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [assistantOpen, authModalOpen, mobileSidebarOpen, profileModalOpen]);
 
   const handleNavigateToSettings = (subTab: SettingsSubTab = 'general') => {
     if (activeTab !== 'settings') {
@@ -74,7 +85,7 @@ export default function App() {
   };
 
   const handleBackFromSettings = () => {
-    setActiveTab(previousTab === 'settings' ? 'dashboard' : previousTab);
+    setActiveTab(previousTab === 'settings' ? 'home' : previousTab);
   };
 
   const handleToggleSidebar = () => {
@@ -147,7 +158,7 @@ export default function App() {
   const loadTabData = async (tab: ActiveTab) => {
     setLoading(true);
     try {
-      if (tab === 'dashboard') {
+      if (tab === 'dashboard' || tab === 'home') {
         await loadStats();
       } else if (tab === 'production-orders') {
         const [ord, inv, lin] = await Promise.all([
@@ -241,7 +252,7 @@ export default function App() {
   }, [activeTab, currentUser]);
 
   useEffect(() => {
-    if (!currentUser || activeTab !== 'dashboard') return;
+    if (!currentUser || !['dashboard', 'home'].includes(activeTab)) return;
     const interval = window.setInterval(() => void loadStats(), 5 * 60 * 1000);
     return () => window.clearInterval(interval);
   }, [activeTab, currentUser, loadStats]);
@@ -356,7 +367,7 @@ export default function App() {
               currentUser={currentUser}
               loading={loading || statsLoading}
               onRefresh={() => {
-                if (activeTab === 'dashboard') void loadStats();
+                if (activeTab === 'dashboard' || activeTab === 'home') void loadStats();
                 else void loadTabData(activeTab);
               }}
               onOpenAuth={() => setAuthModalOpen(true)}
@@ -366,6 +377,8 @@ export default function App() {
             />
 
             <div className="min-w-0 flex-1 overflow-y-auto bg-transparent p-3 sm:p-4 lg:p-6">
+              {activeTab === 'home' && <WelcomeView stats={stats} loading={statsLoading} error={statsError} onNavigate={setActiveTab} onOpenConnectors={() => handleNavigateToSettings('connectors')} />}
+
               {activeTab === 'dashboard' && (
                 <DashboardView
                   stats={stats}

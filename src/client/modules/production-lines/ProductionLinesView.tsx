@@ -91,7 +91,7 @@ export const ProductionLinesView: React.FC<ProductionLinesViewProps> = ({
           {lines.map((line) => (
             <div
               key={line.id}
-              className="bg-[#151C25] border border-[#202936] rounded-xl p-5 flex flex-col justify-between space-y-3 shadow-sm hover:border-[#FFAA00]/50 transition"
+              className="bg-white border border-[#DCE3EB] rounded-xl p-5 flex flex-col justify-between space-y-3 shadow-sm hover:border-[#FFAA00]/50 transition"
             >
               <div>
                 <div className="flex items-center justify-between">
@@ -104,34 +104,34 @@ export const ProductionLinesView: React.FC<ProductionLinesViewProps> = ({
                         ? 'bg-[#132B25] text-[#159B72] border border-[#159B72]/30'
                         : line.status === 'MAINTENANCE'
                         ? 'bg-rose-950/60 text-rose-300 border border-rose-800'
-                        : 'bg-[#1C2532] text-slate-400 border border-[#263342]'
+                        : 'bg-[#F8FAFC] text-[#64748B] border border-[#CBD5E1]'
                     }`}
                   >
                     {line.status}
                   </span>
                 </div>
-                <h4 className="text-base font-bold text-white mt-2">{line.name}</h4>
+                <h4 className="text-base font-bold text-[#263548] mt-2">{line.name}</h4>
                 {line.description && (
-                  <p className="text-xs text-slate-400 mt-1">{line.description}</p>
+                  <p className="text-xs text-[#64748B] mt-1">{line.description}</p>
                 )}
-                <div className="mt-3 p-2.5 rounded bg-[#1C2532] border border-[#263342] space-y-1 text-xs text-slate-300">
+                <div className="mt-3 p-2.5 rounded bg-[#F8FAFC] border border-[#CBD5E1] space-y-1 text-xs text-[#475569]">
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Capacidade:</span>
-                    <span className="font-mono font-bold text-white">
+                    <span className="text-[#64748B]">Capacidade:</span>
+                    <span className="font-mono font-bold text-[#263548]">
                       {line.capacityPerHour} un/h
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Supervisor:</span>
-                    <span className="text-slate-200">{line.supervisorName || '—'}</span>
+                    <span className="text-[#64748B]">Supervisor:</span>
+                    <span className="text-[#475569]">{line.supervisorName || '—'}</span>
                   </div>
                 </div>
               </div>
 
-              <div className="flex justify-end pt-2 border-t border-[#202936]">
+              <div className="flex justify-end pt-2 border-t border-[#DCE3EB]">
                 <button
                   onClick={() => handleDelete(line.id)}
-                  className="text-slate-400 hover:text-rose-400 p-1 transition"
+                  className="text-[#64748B] hover:text-rose-400 p-1 transition"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -149,21 +149,21 @@ export const ProductionLinesView: React.FC<ProductionLinesViewProps> = ({
         <form onSubmit={handleCreate} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-300">Código</label>
+              <label className="text-xs text-[#475569]">Código</label>
               <input
                 type="text"
                 required
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white uppercase font-mono focus:outline-none focus:border-amber-500"
+                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] uppercase font-mono focus:outline-none focus:border-amber-500"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-300">Status</label>
+              <label className="text-xs text-[#475569]">Status</label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as any)}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] focus:outline-none focus:border-amber-500"
               >
                 <option value="OPERATIONAL">OPERATIONAL</option>
                 <option value="MAINTENANCE">MAINTENANCE</option>
@@ -173,45 +173,45 @@ export const ProductionLinesView: React.FC<ProductionLinesViewProps> = ({
           </div>
 
           <div>
-            <label className="text-xs text-slate-300">Nome</label>
+            <label className="text-xs text-[#475569]">Nome</label>
             <input
               type="text"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+              className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] focus:outline-none focus:border-amber-500"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-300">Capacidade (un/h)</label>
+              <label className="text-xs text-[#475569]">Capacidade (un/h)</label>
               <input
                 type="number"
                 min="0"
                 value={capacityPerHour}
                 onChange={(e) => setCapacityPerHour(e.target.value)}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] font-mono focus:outline-none focus:border-amber-500"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-300">Supervisor Responsável</label>
+              <label className="text-xs text-[#475569]">Supervisor Responsável</label>
               <input
                 type="text"
                 value={supervisorName}
                 onChange={(e) => setSupervisorName(e.target.value)}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] focus:outline-none focus:border-amber-500"
               />
             </div>
           </div>
 
           <div>
-            <label className="text-xs text-slate-300">Descrição</label>
+            <label className="text-xs text-[#475569]">Descrição</label>
             <textarea
               rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+              className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] focus:outline-none focus:border-amber-500"
             />
           </div>
 
@@ -219,13 +219,13 @@ export const ProductionLinesView: React.FC<ProductionLinesViewProps> = ({
             <button
               type="button"
               onClick={() => setModalOpen(false)}
-              className="px-3 py-1.5 text-xs text-slate-400 hover:text-white"
+              className="px-3 py-1.5 text-xs text-[#64748B] hover:text-[#263548]"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded text-xs font-semibold"
+              className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-[#263548] rounded text-xs font-semibold"
             >
               Salvar
             </button>

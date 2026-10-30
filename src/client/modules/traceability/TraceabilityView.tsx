@@ -279,7 +279,7 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
         {metricCards.map(({ label, value, caption, icon: Icon, color }) => (
           <div key={label} className="flex items-center rounded-lg border border-l-4 border-[#DCE3EB] bg-white p-4 text-left shadow-xs" style={{ borderLeftColor: color }}>
             <span className="flex min-w-0 items-center gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white shadow-xs" style={{ backgroundColor: color }}><Icon className="h-5 w-5" /></span>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[#263548] shadow-xs" style={{ backgroundColor: color }}><Icon className="h-5 w-5" /></span>
               <span>
                 <span className="block text-[11px] font-medium leading-tight text-[#64748B]">{label}</span>
                 <span className="mt-1 block font-mono text-xl font-bold leading-none text-[#263548]">{typeof value === 'number' ? value.toLocaleString(getIntlLocale()) : value}</span>
@@ -291,16 +291,16 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
       </div>
 
       {/* Filter Toolbar Card */}
-      <div className="p-4 rounded-xl bg-[#151C25] border border-[#202936] space-y-3 shadow-sm">
+      <div className="p-4 rounded-xl bg-white border border-[#DCE3EB] space-y-3 shadow-sm">
         <form onSubmit={handleApplyFilter} className="flex flex-col lg:flex-row gap-3">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#64748B]" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Pesquisar por OP, PV, Código ou Descrição do Produto..."
-              className="w-full pl-9 pr-4 py-2 bg-[#1C2532] border border-[#263342] rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#FFAA00]"
+              className="w-full pl-9 pr-4 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-lg text-xs text-[#263548] placeholder-slate-500 focus:outline-none focus:border-[#FFAA00]"
             />
           </div>
 
@@ -310,13 +310,13 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
               value={cliente}
               onChange={(e) => setCliente(e.target.value)}
               placeholder="Filtrar Cliente (Razão / CNPJ)"
-              className="px-3 py-2 bg-[#1C2532] border border-[#263342] rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#FFAA00] w-44"
+              className="px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-lg text-xs text-[#263548] placeholder-slate-500 focus:outline-none focus:border-[#FFAA00] w-44"
             />
 
             <select
               value={statusOp}
               onChange={(e) => setStatusOp(e.target.value)}
-              className="px-3 py-2 bg-[#1C2532] border border-[#263342] rounded-lg text-xs text-white focus:outline-none focus:border-[#FFAA00]"
+              className="px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-lg text-xs text-[#263548] focus:outline-none focus:border-[#FFAA00]"
             >
               <option value="">Status OP (Todos)</option>
               <option value="A">Aberto / Em Processo</option>
@@ -330,7 +330,7 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition ${
                 showAdvancedFilters || postoTrabalho || numeroPv || numeroOp || codigoProduto || statusPv
                   ? 'bg-[#2A2316] border-[#FFAA00] text-[#FFAA00]'
-                  : 'bg-[#1C2532] border-[#263342] text-slate-300 hover:text-white hover:bg-[#253242]'
+                  : 'bg-[#F8FAFC] border-[#CBD5E1] text-[#475569] hover:text-[#263548] hover:bg-slate-100'
               }`}
             >
               <Filter className="h-3.5 w-3.5" />
@@ -347,7 +347,7 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
             <button
               type="button"
               onClick={handleResetFilters}
-              className="p-2 rounded-lg bg-[#1C2532] hover:bg-[#253242] text-slate-400 hover:text-white border border-[#263342] text-xs transition shadow-xs"
+              className="p-2 rounded-lg bg-[#F8FAFC] hover:bg-slate-100 text-[#64748B] hover:text-[#263548] border border-[#CBD5E1] text-xs transition shadow-xs"
               title="Limpar todos os filtros"
             >
               <RotateCcw className="h-4 w-4" />
@@ -357,45 +357,45 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
 
         {/* Advanced Filters Expandable Row */}
         {showAdvancedFilters && (
-          <div className="pt-3 border-t border-[#202936] grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="pt-3 border-t border-[#DCE3EB] grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             <div>
-              <label className="text-[11px] text-slate-400 block mb-1">Número OP Específico</label>
+              <label className="text-[11px] text-[#64748B] block mb-1">Número OP Específico</label>
               <input
                 type="text"
                 value={numeroOp}
                 onChange={(e) => setNumeroOp(e.target.value)}
                 placeholder="Ex: 00010101001"
-                className="w-full px-3 py-1.5 bg-[#1C2532] border border-[#263342] rounded text-xs text-white placeholder-slate-500 font-mono"
+                className="w-full px-3 py-1.5 bg-[#F8FAFC] border border-[#CBD5E1] rounded text-xs text-[#263548] placeholder-slate-500 font-mono"
               />
             </div>
             <div>
-              <label className="text-[11px] text-slate-400 block mb-1">Número PV Específico</label>
+              <label className="text-[11px] text-[#64748B] block mb-1">Número PV Específico</label>
               <input
                 type="text"
                 value={numeroPv}
                 onChange={(e) => setNumeroPv(e.target.value)}
                 placeholder="Ex: 001234"
-                className="w-full px-3 py-1.5 bg-[#1C2532] border border-[#263342] rounded text-xs text-white placeholder-slate-500 font-mono"
+                className="w-full px-3 py-1.5 bg-[#F8FAFC] border border-[#CBD5E1] rounded text-xs text-[#263548] placeholder-slate-500 font-mono"
               />
             </div>
             <div>
-              <label className="text-[11px] text-slate-400 block mb-1">Código do Produto</label>
+              <label className="text-[11px] text-[#64748B] block mb-1">Código do Produto</label>
               <input
                 type="text"
                 value={codigoProduto}
                 onChange={(e) => setCodigoProduto(e.target.value)}
                 placeholder="Ex: PA-001"
-                className="w-full px-3 py-1.5 bg-[#1C2532] border border-[#263342] rounded text-xs text-white placeholder-slate-500 font-mono"
+                className="w-full px-3 py-1.5 bg-[#F8FAFC] border border-[#CBD5E1] rounded text-xs text-[#263548] placeholder-slate-500 font-mono"
               />
             </div>
             <div>
-              <label className="text-[11px] text-slate-400 block mb-1">Posto de Trabalho / Recurso</label>
+              <label className="text-[11px] text-[#64748B] block mb-1">Posto de Trabalho / Recurso</label>
               <input
                 type="text"
                 value={postoTrabalho}
                 onChange={(e) => setPostoTrabalho(e.target.value)}
                 placeholder="Ex: USINAGEM-01"
-                className="w-full px-3 py-1.5 bg-[#1C2532] border border-[#263342] rounded text-xs text-white placeholder-slate-500 font-mono"
+                className="w-full px-3 py-1.5 bg-[#F8FAFC] border border-[#CBD5E1] rounded text-xs text-[#263548] placeholder-slate-500 font-mono"
               />
             </div>
           </div>
@@ -403,14 +403,14 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
 
         {/* Quick boolean tag toggles */}
         <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
-          <span className="text-[11px] text-slate-400 font-medium mr-1">Filtros rápidos:</span>
+          <span className="text-[11px] text-[#64748B] font-medium mr-1">Filtros rápidos:</span>
           <button
             type="button"
             onClick={() => setApenasAtrasadas(!apenasAtrasadas)}
             className={`px-2.5 py-1 rounded-md text-xs font-medium border transition ${
               apenasAtrasadas
                 ? 'bg-rose-950/60 text-rose-300 border-rose-800'
-                : 'bg-[#1C2532] text-slate-300 border-[#263342] hover:bg-[#253242]'
+                : 'bg-[#F8FAFC] text-[#475569] border-[#CBD5E1] hover:bg-slate-100'
             }`}
           >
             Apenas OPs Atrasadas
@@ -421,7 +421,7 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
             className={`px-2.5 py-1 rounded-md text-xs font-medium border transition ${
               apenasComRefugo
                 ? 'bg-amber-950/60 text-amber-300 border-amber-800'
-                : 'bg-[#1C2532] text-slate-300 border-[#263342] hover:bg-[#253242]'
+                : 'bg-[#F8FAFC] text-[#475569] border-[#CBD5E1] hover:bg-slate-100'
             }`}
           >
             Apenas com Refugo / Sucata
@@ -432,7 +432,7 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
             className={`px-2.5 py-1 rounded-md text-xs font-medium border transition ${
               semVinculoPv
                 ? 'bg-blue-950/60 text-blue-300 border-blue-800'
-                : 'bg-[#1C2532] text-slate-300 border-[#263342] hover:bg-[#253242]'
+                : 'bg-[#F8FAFC] text-[#475569] border-[#CBD5E1] hover:bg-slate-100'
             }`}
           >
             OPs para Estoque (Sem PV)
@@ -441,29 +441,29 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
       </div>
 
       {/* Traceability Matrix Table Card Container */}
-      <div className="bg-[#151C25] border border-[#202936] rounded-xl overflow-hidden shadow-sm">
+      <div className="bg-white border border-[#DCE3EB] rounded-xl overflow-hidden shadow-sm">
         {loadError ? (
           <div role="alert" className="p-8 text-center">
             <h3 className="text-base font-bold text-rose-300">Falha ao carregar rastreabilidade</h3>
-            <p className="mt-2 text-xs text-slate-300">{loadError}</p>
-            <button onClick={() => void loadData(initialNumeroOp || undefined)} className="mt-4 rounded-lg border border-[#263342] bg-[#1C2532] px-4 py-2 text-xs font-semibold text-white">Tentar novamente</button>
+            <p className="mt-2 text-xs text-[#475569]">{loadError}</p>
+            <button onClick={() => void loadData(initialNumeroOp || undefined)} className="mt-4 rounded-lg border border-[#CBD5E1] bg-[#F8FAFC] px-4 py-2 text-xs font-semibold text-[#263548]">Tentar novamente</button>
           </div>
         ) : loading && items.length === 0 ? (
-          <div className="p-10 text-center text-sm text-slate-400">Carregando dados de produção…</div>
+          <div className="p-10 text-center text-sm text-[#64748B]">Carregando dados de produção…</div>
         ) : items.length === 0 ? (
           <div className="p-12 text-center">
-            <div className="h-12 w-12 rounded-xl bg-[#1C2532] border border-[#263342] flex items-center justify-center mx-auto mb-3 text-slate-400">
+            <div className="h-12 w-12 rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] flex items-center justify-center mx-auto mb-3 text-[#64748B]">
               <Layers className="h-6 w-6" />
             </div>
-            <h3 className="text-base font-bold text-white">Nenhum registro de produção localizado</h3>
-            <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+            <h3 className="text-base font-bold text-[#263548]">Nenhum registro de produção localizado</h3>
+            <p className="text-xs text-[#64748B] mt-1 max-w-md mx-auto">
               Não foram encontradas ordens de produção ou pedidos de venda correspondentes aos critérios de busca ativos.
             </p>
             <div className="mt-5 flex items-center justify-center gap-3">
               {(search || numeroPv || numeroOp || cliente || statusOp || apenasAtrasadas || apenasComRefugo || semVinculoPv) ? (
                 <button
                   onClick={handleResetFilters}
-                  className="px-4 py-2 rounded-lg bg-[#1C2532] hover:bg-[#253242] text-white font-semibold text-xs border border-[#263342] transition shadow-xs"
+                  className="px-4 py-2 rounded-lg bg-[#F8FAFC] hover:bg-slate-100 text-[#263548] font-semibold text-xs border border-[#CBD5E1] transition shadow-xs"
                 >
                   Limpar Filtros de Busca
                 </button>
@@ -473,7 +473,7 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#121820] text-slate-400 font-semibold uppercase tracking-wider border-b border-[#202936]">
+              <thead className="bg-[#121820] text-[#64748B] font-semibold uppercase tracking-wider border-b border-[#DCE3EB]">
                 <tr>
                   <th className="py-3 px-3.5">OP / Status</th>
                   <th className="py-3 px-3.5">Produto Fabricado</th>
@@ -490,7 +490,7 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
                 {items.map((row) => (
                   <tr
                     key={row.idOp}
-                    className="hover:bg-[#1C2532] transition group"
+                    className="hover:bg-[#F8FAFC] transition group"
                   >
                     {/* OP Number & Status */}
                     <td className="py-3 px-3.5">
@@ -498,7 +498,7 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
                         <span className="font-mono font-bold text-[#FFAA00] text-xs">
                           {row.numeroOp}
                         </span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#1C2532] text-slate-300 border border-[#263342]">
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#F8FAFC] text-[#475569] border border-[#CBD5E1]">
                           {row.statusProtheusOp}
                         </span>
                       </div>
@@ -515,10 +515,10 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
 
                     {/* Product */}
                     <td className="py-3 px-3.5 max-w-xs">
-                      <span className="font-mono font-semibold text-white block truncate">
+                      <span className="font-mono font-semibold text-[#263548] block truncate">
                         {row.codigoProduto}
                       </span>
-                      <p className="text-slate-400 text-[11px] truncate" title={row.descricaoProduto}>
+                      <p className="text-[#64748B] text-[11px] truncate" title={row.descricaoProduto}>
                         {row.descricaoProduto}
                       </p>
                     </td>
@@ -532,12 +532,12 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
                               PV {row.numeroPv}
                             </span>
                             {row.itemPv && (
-                              <span className="text-[10px] text-slate-400 font-mono">
+                              <span className="text-[10px] text-[#64748B] font-mono">
                                 (Item {row.itemPv})
                               </span>
                             )}
                           </div>
-                          <p className="text-slate-200 text-[11px] font-medium truncate" title={row.clienteNome || ''}>
+                          <p className="text-[#475569] text-[11px] font-medium truncate" title={row.clienteNome || ''}>
                             {row.clienteNome || 'Cliente cadastrado'}
                           </p>
                           <span className="text-[10px] text-slate-500 font-mono block">
@@ -555,11 +555,11 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
 
                     {/* Stage & Workstation */}
                     <td className="py-3 px-3.5">
-                      <span className="text-white font-medium block">
+                      <span className="text-[#263548] font-medium block">
                         {row.etapaAtual}
                       </span>
                       {row.postoTrabalhoAtual && (
-                        <span className="text-[10px] text-slate-400 font-mono block">
+                        <span className="text-[10px] text-[#64748B] font-mono block">
                           Recurso: {row.postoTrabalhoAtual}
                         </span>
                       )}
@@ -570,8 +570,8 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
 
                     {/* Planned vs Produced */}
                     <td className="py-3 px-3.5 text-right font-mono">
-                      <span className="text-slate-400 text-[11px] block">
-                        Planejado: <strong className="text-white">{row.quantidadePlanejada.toLocaleString(getIntlLocale())}</strong>
+                      <span className="text-[#64748B] text-[11px] block">
+                        Planejado: <strong className="text-[#263548]">{row.quantidadePlanejada.toLocaleString(getIntlLocale())}</strong>
                       </span>
                       <span className="text-[#159B72] font-bold block">
                         Produzido: {row.quantidadeProduzida.toLocaleString(getIntlLocale())}
@@ -595,9 +595,9 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
                     {/* Physical Progress */}
                     <td className="py-3 px-3.5 min-w-[130px]">
                       <div className="flex items-center justify-between text-[11px] mb-1">
-                        <span className="font-mono font-bold text-white">{row.percentualConclusao == null ? '—' : `${row.percentualConclusao}%`}</span>
+                        <span className="font-mono font-bold text-[#263548]">{row.percentualConclusao == null ? '—' : `${row.percentualConclusao}%`}</span>
                       </div>
-                      {row.percentualConclusao != null && <div className="w-full h-1.5 bg-[#1C2532] rounded-full overflow-hidden">
+                      {row.percentualConclusao != null && <div className="w-full h-1.5 bg-[#F8FAFC] rounded-full overflow-hidden">
                         <div className={`h-full rounded-full ${row.percentualConclusao === 100 ? 'bg-[#159B72]' : row.percentualConclusao > 0 ? 'bg-[#FFAA00]' : 'bg-slate-700'}`} style={{ width: `${row.percentualConclusao}%` }} />
                       </div>}
                     </td>
@@ -643,7 +643,7 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
                       <button
                         onClick={() => handleOpenOpDetail(row.numeroOp)}
                         disabled={detailLoading}
-                        className="px-2.5 py-1.5 rounded-lg bg-[#1C2532] hover:bg-[#FFAA00] hover:text-[#151C25] text-white font-semibold text-xs border border-[#263342] transition flex items-center gap-1.5 mx-auto shadow-xs"
+                        className="px-2.5 py-1.5 rounded-lg bg-[#F8FAFC] hover:bg-[#FFAA00] hover:text-[#151C25] text-[#263548] font-semibold text-xs border border-[#CBD5E1] transition flex items-center gap-1.5 mx-auto shadow-xs"
                         title="Ver Ficha de Rastreabilidade 360°"
                       >
                         <Eye className="h-3.5 w-3.5" />
@@ -659,11 +659,11 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
 
         {/* Pagination Toolbar */}
         {total > 0 && (
-          <div className="p-4 border-t border-[#202936] bg-[#121820] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
+          <div className="p-4 border-t border-[#DCE3EB] bg-[#121820] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#64748B]">
             <div>
-              Exibindo <strong className="text-white">{(page - 1) * limit + 1}</strong> a{' '}
-              <strong className="text-white">{Math.min(page * limit, total)}</strong> de{' '}
-              <strong className="text-white">{total}</strong> ordens rastreadas
+              Exibindo <strong className="text-[#263548]">{(page - 1) * limit + 1}</strong> a{' '}
+              <strong className="text-[#263548]">{Math.min(page * limit, total)}</strong> de{' '}
+              <strong className="text-[#263548]">{total}</strong> ordens rastreadas
             </div>
 
             <div className="flex items-center gap-2">
@@ -673,7 +673,7 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
                   setLimit(Number(e.target.value));
                   setPage(1);
                 }}
-                className="px-2 py-1 bg-[#1C2532] border border-[#263342] rounded text-xs text-white"
+                className="px-2 py-1 bg-[#F8FAFC] border border-[#CBD5E1] rounded text-xs text-[#263548]"
               >
                 <option value={10}>10 por página</option>
                 <option value={25}>25 por página</option>
@@ -684,17 +684,17 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
               <button
                 disabled={page <= 1}
                 onClick={() => setPage(page - 1)}
-                className="px-3 py-1 bg-[#1C2532] border border-[#263342] rounded text-slate-300 hover:text-white hover:bg-[#253242] disabled:opacity-40 transition shadow-xs"
+                className="px-3 py-1 bg-[#F8FAFC] border border-[#CBD5E1] rounded text-[#475569] hover:text-[#263548] hover:bg-slate-100 disabled:opacity-40 transition shadow-xs"
               >
                 Anterior
               </button>
-              <span className="font-mono font-medium text-white">
+              <span className="font-mono font-medium text-[#263548]">
                 {page} / {totalPages}
               </span>
               <button
                 disabled={page >= totalPages}
                 onClick={() => setPage(page + 1)}
-                className="px-3 py-1 bg-[#1C2532] border border-[#263342] rounded text-slate-300 hover:text-white hover:bg-[#253242] disabled:opacity-40 transition shadow-xs"
+                className="px-3 py-1 bg-[#F8FAFC] border border-[#CBD5E1] rounded text-[#475569] hover:text-[#263548] hover:bg-slate-100 disabled:opacity-40 transition shadow-xs"
               >
                 Próxima
               </button>

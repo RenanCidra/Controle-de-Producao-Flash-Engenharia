@@ -91,9 +91,9 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           onAction={() => setModalOpen(true)}
         />
       ) : (
-        <div className="bg-[#151C25] border border-[#202936] rounded-xl overflow-hidden shadow-sm">
+        <div className="bg-white border border-[#DCE3EB] rounded-xl overflow-hidden shadow-sm">
           <table className="w-full text-left text-xs">
-            <thead className="bg-[#121820] text-slate-400 uppercase font-semibold border-b border-[#202936]">
+            <thead className="bg-[#121820] text-[#64748B] uppercase font-semibold border-b border-[#DCE3EB]">
               <tr>
                 <th className="py-3 px-4">SKU</th>
                 <th className="py-3 px-4">Nome</th>
@@ -106,27 +106,27 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             </thead>
             <tbody className="divide-y divide-[#202936]">
               {items.map((item) => (
-                <tr key={item.id} className="hover:bg-[#1C2532] transition">
+                <tr key={item.id} className="hover:bg-[#F8FAFC] transition">
                   <td className="py-3 px-4 font-mono font-bold text-[#FFAA00]">{item.sku}</td>
-                  <td className="py-3 px-4 font-medium text-white">{item.name}</td>
+                  <td className="py-3 px-4 font-medium text-[#263548]">{item.name}</td>
                   <td className="py-3 px-4">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[#1C2532] text-slate-300 border border-[#263342]">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[#F8FAFC] text-[#475569] border border-[#CBD5E1]">
                       {item.itemType}
                     </span>
                   </td>
-                  <td className="py-3 px-4 text-center font-mono font-bold text-white">
+                  <td className="py-3 px-4 text-center font-mono font-bold text-[#263548]">
                     {item.quantityOnHand} {item.unit}
                   </td>
-                  <td className="py-3 px-4 text-center font-mono text-slate-400">
+                  <td className="py-3 px-4 text-center font-mono text-[#64748B]">
                     {item.minimumStock} {item.unit}
                   </td>
-                  <td className="py-3 px-4 text-right font-mono text-slate-300">
+                  <td className="py-3 px-4 text-right font-mono text-[#475569]">
                     R$ {parseFloat(item.costPrice).toFixed(2)}
                   </td>
                   <td className="py-3 px-4 text-right">
                     <button
                       onClick={() => handleDelete(item.id)}
-                      className="text-slate-400 hover:text-rose-400 p-1 transition"
+                      className="text-[#64748B] hover:text-rose-400 p-1 transition"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -146,21 +146,21 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         <form onSubmit={handleCreate} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-300">Código SKU</label>
+              <label className="text-xs text-[#475569]">Código SKU</label>
               <input
                 type="text"
                 required
                 value={sku}
                 onChange={(e) => setSku(e.target.value.toUpperCase())}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white uppercase font-mono focus:outline-none focus:border-amber-500"
+                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] uppercase font-mono focus:outline-none focus:border-amber-500"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-300">Tipo de Item</label>
+              <label className="text-xs text-[#475569]">Tipo de Item</label>
               <select
                 value={itemType}
                 onChange={(e) => setItemType(e.target.value)}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] focus:outline-none focus:border-amber-500"
               >
                 <option value="RAW_MATERIAL">RAW_MATERIAL</option>
                 <option value="FINISHED_GOOD">FINISHED_GOOD</option>
@@ -171,55 +171,55 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           </div>
 
           <div>
-            <label className="text-xs text-slate-300">Nome</label>
+            <label className="text-xs text-[#475569]">Nome</label>
             <input
               type="text"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+              className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] focus:outline-none focus:border-amber-500"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-300">Unidade</label>
+              <label className="text-xs text-[#475569]">Unidade</label>
               <input
                 type="text"
                 value={unit}
                 onChange={(e) => setUnit(e.target.value.toUpperCase())}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white uppercase focus:outline-none focus:border-amber-500"
+                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] uppercase focus:outline-none focus:border-amber-500"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-300">Custo Unitário (R$)</label>
+              <label className="text-xs text-[#475569]">Custo Unitário (R$)</label>
               <input
                 type="number"
                 step="0.01"
                 value={costPrice}
                 onChange={(e) => setCostPrice(e.target.value)}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] font-mono focus:outline-none focus:border-amber-500"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-300">Saldo Atual</label>
+              <label className="text-xs text-[#475569]">Saldo Atual</label>
               <input
                 type="number"
                 value={quantityOnHand}
                 onChange={(e) => setQuantityOnHand(parseInt(e.target.value || '0', 10))}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] font-mono focus:outline-none focus:border-amber-500"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-300">Estoque Mínimo</label>
+              <label className="text-xs text-[#475569]">Estoque Mínimo</label>
               <input
                 type="number"
                 value={minimumStock}
                 onChange={(e) => setMinimumStock(parseInt(e.target.value || '0', 10))}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] font-mono focus:outline-none focus:border-amber-500"
               />
             </div>
           </div>
@@ -228,13 +228,13 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             <button
               type="button"
               onClick={() => setModalOpen(false)}
-              className="px-3 py-1.5 text-xs text-slate-400 hover:text-white"
+              className="px-3 py-1.5 text-xs text-[#64748B] hover:text-[#263548]"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded text-xs font-semibold"
+              className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-[#263548] rounded text-xs font-semibold"
             >
               Salvar
             </button>

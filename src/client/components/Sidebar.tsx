@@ -17,9 +17,11 @@ import {
 } from 'lucide-react';
 import { AuthUser } from '../api.ts';
 import { readUserPreferences, subscribeToUserPreferences } from '../modules/auth/user-preferences.ts';
+import { translateText } from '../i18n/index.ts';
 
 export type ActiveTab =
   | 'dashboard'
+  | 'home'
   | 'traceability'
   | 'occurrences'
   | 'production-orders'
@@ -105,13 +107,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <aside className={`fixed inset-y-0 left-0 z-40 flex h-[100dvh] w-72 shrink-0 flex-col border-r border-[#202936] bg-[#151C25] text-slate-300 transition-[width,transform] duration-200 md:relative md:z-20 md:translate-x-0 ${collapsed ? 'md:w-[76px]' : 'md:w-64'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
       {/* Brand Header */}
       <div className={`h-16 border-b border-[#202936] flex items-center ${collapsed ? 'justify-center px-2' : 'justify-between px-5'}`}>
-        <div className={`flex items-center ${collapsed ? '' : 'gap-3'}`} title={collapsed ? 'Flash Engenharia' : undefined}>
+        <button type="button" onClick={() => { setActiveTab('home'); onCloseMobile(); }} className={`flex items-center rounded-md focus:outline-none focus:ring-2 focus:ring-[#FFAA00] ${collapsed ? '' : 'gap-3'}`} title={translateText('Início')} aria-label={translateText('Ir para a página inicial')}>
           <img
             src={collapsed ? '/assets/flash-symbol.png' : '/assets/flash-brand.svg'}
             alt="Flash Engenharia"
             className={collapsed ? 'h-9 w-8 object-contain' : 'h-10 w-[150px] object-contain'}
           />
-        </div>
+        </button>
         {collapsed ? <button type="button" onClick={onToggleCollapse} title="Expandir menu" aria-label="Expandir menu" className="absolute right-[-13px] top-5 hidden h-7 w-7 items-center justify-center rounded-full border border-[#334155] bg-[#202936] text-slate-300 shadow-md hover:text-white md:flex"><PanelLeftOpen className="h-3.5 w-3.5" /></button> : <button type="button" onClick={onToggleCollapse} title="Recolher menu" aria-label="Recolher menu" className="hidden rounded-md p-1.5 text-slate-400 hover:bg-[#1C2532] hover:text-white md:block"><PanelLeftClose className="h-4 w-4" /></button>}
         {mobileOpen && <button type="button" onClick={onCloseMobile} title="Fechar menu" aria-label="Fechar menu" className="rounded-md p-1.5 text-slate-400 hover:bg-[#1C2532] hover:text-white md:hidden"><X className="h-4 w-4" /></button>}
       </div>

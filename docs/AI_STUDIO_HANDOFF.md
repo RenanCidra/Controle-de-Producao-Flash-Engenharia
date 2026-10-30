@@ -2,6 +2,8 @@
 
 **Estado revisado em 2026-10-29.** O código do repositório inclui autenticação interna e bootstrap protegido, alteração da própria senha, preferências de perfil armazenadas no navegador, auditoria paginada, consultas operacionais sem valores demonstrativos e uma API Protheus simulada localmente. Isso não significa que a instalação ativa esteja conectada ao Protheus real ou que a migração de banco tenha sido aplicada no ambiente de destino. Consulte os documentos de arquitetura e primeiro acesso antes de operar.
 
+- A tela inicial pós-login agora apresenta o sistema sem selecionar um módulo operacional. O logotipo da sidebar retorna a essa tela; `Esc` também retorna, exceto quando um modal/assistente está aberto, o foco está em um campo de edição ou é necessário fechar a gaveta móvel. O resumo usa contagens do espelho quando disponíveis e informa quando os dados não podem ser consultados. Cards dos módulos operacionais foram alinhados a superfícies brancas; banners e navegação mantêm o contraste escuro da identidade visual.
+
 Este documento passa o contexto funcional e técnico para outra IA (incluindo Google AI Studio). Leia junto com `AGENTS.md`, `docs/ACCESS_AND_AUTH_ARCHITECTURE.md` e `docs/PRIMEIRO_ACESSO.md`. O conteúdo registra decisões humanas e estado do repositório; não é especificação de dados reais do Protheus além dos exemplos já analisados.
 
 ## Objetivo do sistema

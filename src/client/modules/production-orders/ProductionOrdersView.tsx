@@ -137,9 +137,9 @@ export const ProductionOrdersView: React.FC<ProductionOrdersViewProps> = ({
             return (
               <div
                 key={order.id}
-                className="bg-[#151C25] border border-[#202936] rounded-xl p-5 space-y-4 hover:border-[#FFAA00]/50 transition shadow-sm"
+                className="bg-white border border-[#DCE3EB] rounded-xl p-5 space-y-4 hover:border-[#FFAA00]/50 transition shadow-sm"
               >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#202936] pb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#DCE3EB] pb-3">
                   <div className="flex items-center gap-3">
                     <span className="font-mono font-bold text-[#FFAA00] text-sm">
                       {order.orderNumber}
@@ -152,12 +152,12 @@ export const ProductionOrdersView: React.FC<ProductionOrdersViewProps> = ({
                           ? 'bg-blue-950/60 text-blue-300 border border-blue-800'
                           : order.status === 'PAUSED'
                           ? 'bg-[#2A2316] text-[#FFAA00] border border-[#FFAA00]/40'
-                          : 'bg-[#1C2532] text-slate-400 border border-[#263342]'
+                          : 'bg-[#F8FAFC] text-[#64748B] border border-[#CBD5E1]'
                       }`}
                     >
                       {order.status}
                     </span>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-[#1C2532] text-slate-400 border border-[#263342]">
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-[#F8FAFC] text-[#64748B] border border-[#CBD5E1]">
                       Prioridade: {order.priority}
                     </span>
                   </div>
@@ -203,8 +203,8 @@ export const ProductionOrdersView: React.FC<ProductionOrdersViewProps> = ({
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
                   <div>
-                    <span className="text-slate-400">Produto:</span>
-                    <p className="font-semibold text-white mt-0.5">
+                    <span className="text-[#64748B]">Produto:</span>
+                    <p className="font-semibold text-[#263548] mt-0.5">
                       {order.itemName || '—'}
                     </p>
                     <span className="font-mono text-[11px] text-slate-500">
@@ -213,30 +213,30 @@ export const ProductionOrdersView: React.FC<ProductionOrdersViewProps> = ({
                   </div>
 
                   <div>
-                    <span className="text-slate-400">Posto de Trabalho:</span>
-                    <p className="font-semibold text-white mt-0.5">
+                    <span className="text-[#64748B]">Posto de Trabalho:</span>
+                    <p className="font-semibold text-[#263548] mt-0.5">
                       {order.productionLineName || 'Não definido'}
                     </p>
                   </div>
 
                   <div>
-                    <span className="text-slate-400">Datas:</span>
-                    <p className="text-slate-200 mt-0.5 font-mono">
+                    <span className="text-[#64748B]">Datas:</span>
+                    <p className="text-[#475569] mt-0.5 font-mono">
                       Início: {order.startDate || '—'}
                     </p>
-                    <p className="text-slate-400 font-mono text-[11px]">
+                    <p className="text-[#64748B] font-mono text-[11px]">
                       Término: {order.plannedEndDate}
                     </p>
                   </div>
 
                   <div>
                     <div className="flex justify-between text-xs mb-1">
-                      <span className="text-slate-400">Progresso ({percent}%):</span>
-                      <span className="font-mono font-bold text-white">
+                      <span className="text-[#64748B]">Progresso ({percent}%):</span>
+                      <span className="font-mono font-bold text-[#263548]">
                         {order.quantityProduced} / {order.quantityPlanned} {order.itemUnit || 'UN'}
                       </span>
                     </div>
-                    <div className="w-full h-2 rounded-full bg-[#1C2532] border border-[#263342] overflow-hidden">
+                    <div className="w-full h-2 rounded-full bg-[#F8FAFC] border border-[#CBD5E1] overflow-hidden">
                       <div
                         className="h-full bg-[#FFAA00] rounded-full"
                         style={{ width: `${percent}%` }}
@@ -263,18 +263,18 @@ export const ProductionOrdersView: React.FC<ProductionOrdersViewProps> = ({
       >
         <form onSubmit={handleCreate} className="space-y-3">
           <div>
-            <label className="text-xs text-slate-300">Número da OP</label>
+            <label className="text-xs text-[#475569]">Número da OP</label>
             <input
               type="text"
               required
               value={orderNumber}
               onChange={(e) => setOrderNumber(e.target.value.toUpperCase())}
-              className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white uppercase font-mono focus:outline-none focus:border-amber-500"
+              className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] uppercase font-mono focus:outline-none focus:border-amber-500"
             />
           </div>
 
           <div>
-            <label className="text-xs text-slate-300">Produto a Fabricar</label>
+            <label className="text-xs text-[#475569]">Produto a Fabricar</label>
             {items.length === 0 ? (
               <p className="text-xs text-rose-400 mt-1">
                 Cadastre itens no estoque antes de criar uma ordem de produção.
@@ -284,7 +284,7 @@ export const ProductionOrdersView: React.FC<ProductionOrdersViewProps> = ({
                 required
                 value={inventoryItemId}
                 onChange={(e) => setInventoryItemId(e.target.value)}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] focus:outline-none focus:border-amber-500"
               >
                 <option value="">Selecione...</option>
                 {items.map((item) => (
@@ -298,11 +298,11 @@ export const ProductionOrdersView: React.FC<ProductionOrdersViewProps> = ({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-300">Posto de Trabalho</label>
+              <label className="text-xs text-[#475569]">Posto de Trabalho</label>
               <select
                 value={productionLineId}
                 onChange={(e) => setProductionLineId(e.target.value)}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] focus:outline-none focus:border-amber-500"
               >
                 <option value="">Não atribuído</option>
                 {lines.map((line) => (
@@ -313,11 +313,11 @@ export const ProductionOrdersView: React.FC<ProductionOrdersViewProps> = ({
               </select>
             </div>
             <div>
-              <label className="text-xs text-slate-300">Prioridade</label>
+              <label className="text-xs text-[#475569]">Prioridade</label>
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value)}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] focus:outline-none focus:border-amber-500"
               >
                 <option value="LOW">Baixa</option>
                 <option value="NORMAL">Normal</option>
@@ -329,35 +329,35 @@ export const ProductionOrdersView: React.FC<ProductionOrdersViewProps> = ({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-300">Quantidade Planejada</label>
+              <label className="text-xs text-[#475569]">Quantidade Planejada</label>
               <input
                 type="number"
                 required
                 min="1"
                 value={quantityPlanned}
                 onChange={(e) => setQuantityPlanned(e.target.value)}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] font-mono focus:outline-none focus:border-amber-500"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-300">Data Limite</label>
+              <label className="text-xs text-[#475569]">Data Limite</label>
               <input
                 type="date"
                 required
                 value={plannedEndDate}
                 onChange={(e) => setPlannedEndDate(e.target.value)}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] focus:outline-none focus:border-amber-500"
               />
             </div>
           </div>
 
           <div>
-            <label className="text-xs text-slate-300">Observações</label>
+            <label className="text-xs text-[#475569]">Observações</label>
             <textarea
               rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+              className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] focus:outline-none focus:border-amber-500"
             />
           </div>
 
@@ -365,14 +365,14 @@ export const ProductionOrdersView: React.FC<ProductionOrdersViewProps> = ({
             <button
               type="button"
               onClick={() => setCreateModalOpen(false)}
-              className="px-3 py-1.5 text-xs text-slate-400 hover:text-white"
+              className="px-3 py-1.5 text-xs text-[#64748B] hover:text-[#263548]"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={items.length === 0}
-              className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded text-xs font-semibold"
+              className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-[#263548] rounded text-xs font-semibold"
             >
               Salvar
             </button>
@@ -388,18 +388,18 @@ export const ProductionOrdersView: React.FC<ProductionOrdersViewProps> = ({
       >
         <form onSubmit={handleSaveProgress} className="space-y-4">
           <div>
-            <label className="text-xs text-slate-300">Quantidade Produzida (Total)</label>
+            <label className="text-xs text-[#475569]">Quantidade Produzida (Total)</label>
             <input
               type="number"
               min="0"
               required
               value={quantityProduced}
               onChange={(e) => setQuantityProduced(parseInt(e.target.value || '0', 10))}
-              className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-amber-500"
+              className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-[#263548] font-mono focus:outline-none focus:border-amber-500"
             />
           </div>
           <div>
-            <label className="text-xs text-slate-300">Refugo / Perdas (Total)</label>
+            <label className="text-xs text-[#475569]">Refugo / Perdas (Total)</label>
             <input
               type="number"
               min="0"
@@ -413,13 +413,13 @@ export const ProductionOrdersView: React.FC<ProductionOrdersViewProps> = ({
             <button
               type="button"
               onClick={() => setProgressModalOpen(false)}
-              className="px-3 py-1.5 text-xs text-slate-400 hover:text-white"
+              className="px-3 py-1.5 text-xs text-[#64748B] hover:text-[#263548]"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded text-xs font-semibold"
+              className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-[#263548] rounded text-xs font-semibold"
             >
               Salvar
             </button>

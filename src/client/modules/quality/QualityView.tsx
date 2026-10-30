@@ -96,9 +96,9 @@ export const QualityView: React.FC<QualityViewProps> = ({
           onAction={() => setModalOpen(true)}
         />
       ) : (
-        <div className="bg-[#151C25] border border-[#202936] rounded-xl overflow-hidden shadow-sm">
+        <div className="bg-white border border-[#DCE3EB] rounded-xl overflow-hidden shadow-sm">
           <table className="w-full text-left text-xs">
-            <thead className="bg-[#121820] text-slate-400 uppercase font-semibold border-b border-[#202936]">
+            <thead className="bg-[#121820] text-[#64748B] uppercase font-semibold border-b border-[#DCE3EB]">
               <tr>
                 <th className="py-3 px-4">Lote / OP</th>
                 <th className="py-3 px-4">Item</th>
@@ -111,14 +111,14 @@ export const QualityView: React.FC<QualityViewProps> = ({
             </thead>
             <tbody className="divide-y divide-[#202936]">
               {inspections.map((q) => (
-                <tr key={q.id} className="hover:bg-[#1C2532] transition">
+                <tr key={q.id} className="hover:bg-[#F8FAFC] transition">
                   <td className="py-3 px-4">
                     <span className="font-mono font-bold text-[#FFAA00]">{q.batchNumber}</span>
-                    <span className="block text-[11px] text-slate-400 font-mono">{q.orderNumber}</span>
+                    <span className="block text-[11px] text-[#64748B] font-mono">{q.orderNumber}</span>
                   </td>
-                  <td className="py-3 px-4 font-medium text-white">{q.itemName || '—'}</td>
+                  <td className="py-3 px-4 font-medium text-[#263548]">{q.itemName || '—'}</td>
                   <td className="py-3 px-4 font-mono">
-                    <span className="text-slate-300">Total: {q.sampleSize}</span> |{' '}
+                    <span className="text-[#475569]">Total: {q.sampleSize}</span> |{' '}
                     <span className="text-emerald-400">Aprov: {q.approvedCount}</span> |{' '}
                     <span className="text-rose-400">Rej: {q.rejectedCount}</span>
                   </td>
@@ -135,14 +135,14 @@ export const QualityView: React.FC<QualityViewProps> = ({
                       {q.status}
                     </span>
                   </td>
-                  <td className="py-3 px-4 text-slate-300">{q.inspectorName}</td>
-                  <td className="py-3 px-4 text-slate-400 max-w-xs truncate">
+                  <td className="py-3 px-4 text-[#475569]">{q.inspectorName}</td>
+                  <td className="py-3 px-4 text-[#64748B] max-w-xs truncate">
                     {q.notes || '—'}
                   </td>
                   <td className="py-3 px-4 text-right">
                     <button
                       onClick={() => handleDelete(q.id)}
-                      className="text-slate-400 hover:text-rose-400 p-1 transition"
+                      className="text-[#64748B] hover:text-rose-400 p-1 transition"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -161,7 +161,7 @@ export const QualityView: React.FC<QualityViewProps> = ({
       >
         <form onSubmit={handleCreate} className="space-y-3">
           <div>
-            <label className="text-xs text-slate-300">Ordem de Produção</label>
+            <label className="text-xs text-[#475569]">Ordem de Produção</label>
             {orders.length === 0 ? (
               <p className="text-xs text-rose-400 mt-1">Nenhuma OP disponível para inspeção.</p>
             ) : (
@@ -169,7 +169,7 @@ export const QualityView: React.FC<QualityViewProps> = ({
                 required
                 value={productionOrderId}
                 onChange={(e) => setProductionOrderId(e.target.value)}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] focus:outline-none focus:border-amber-500"
               >
                 <option value="">Selecione...</option>
                 {orders.map((op) => (
@@ -183,21 +183,21 @@ export const QualityView: React.FC<QualityViewProps> = ({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-300">Número do Lote</label>
+              <label className="text-xs text-[#475569]">Número do Lote</label>
               <input
                 type="text"
                 required
                 value={batchNumber}
                 onChange={(e) => setBatchNumber(e.target.value.toUpperCase())}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white uppercase font-mono focus:outline-none focus:border-amber-500"
+                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] uppercase font-mono focus:outline-none focus:border-amber-500"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-300">Status</label>
+              <label className="text-xs text-[#475569]">Status</label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as any)}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] focus:outline-none focus:border-amber-500"
               >
                 <option value="PASSED">PASSED</option>
                 <option value="FAILED">FAILED</option>
@@ -208,58 +208,58 @@ export const QualityView: React.FC<QualityViewProps> = ({
 
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="text-xs text-slate-300">Amostra</label>
+              <label className="text-xs text-[#475569]">Amostra</label>
               <input
                 type="number"
                 min="1"
                 required
                 value={sampleSize}
                 onChange={(e) => setSampleSize(e.target.value)}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] font-mono focus:outline-none focus:border-amber-500"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-300">Aprovadas</label>
+              <label className="text-xs text-[#475569]">Aprovadas</label>
               <input
                 type="number"
                 min="0"
                 required
                 value={approvedCount}
                 onChange={(e) => setApprovedCount(e.target.value)}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] font-mono focus:outline-none focus:border-amber-500"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-300">Rejeitadas</label>
+              <label className="text-xs text-[#475569]">Rejeitadas</label>
               <input
                 type="number"
                 min="0"
                 required
                 value={rejectedCount}
                 onChange={(e) => setRejectedCount(e.target.value)}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] font-mono focus:outline-none focus:border-amber-500"
               />
             </div>
           </div>
 
           <div>
-            <label className="text-xs text-slate-300">Inspetor</label>
+            <label className="text-xs text-[#475569]">Inspetor</label>
             <input
               type="text"
               required
               value={inspectorName}
               onChange={(e) => setInspectorName(e.target.value)}
-              className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+              className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] focus:outline-none focus:border-amber-500"
             />
           </div>
 
           <div>
-            <label className="text-xs text-slate-300">Observações</label>
+            <label className="text-xs text-[#475569]">Observações</label>
             <textarea
               rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+              className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] focus:outline-none focus:border-amber-500"
             />
           </div>
 
@@ -267,14 +267,14 @@ export const QualityView: React.FC<QualityViewProps> = ({
             <button
               type="button"
               onClick={() => setModalOpen(false)}
-              className="px-3 py-1.5 text-xs text-slate-400 hover:text-white"
+              className="px-3 py-1.5 text-xs text-[#64748B] hover:text-[#263548]"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={orders.length === 0}
-              className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded text-xs font-semibold"
+              className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-[#263548] rounded text-xs font-semibold"
             >
               Salvar
             </button>

@@ -101,7 +101,7 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
           {integrations.map((item) => (
             <div
               key={item.id}
-              className="bg-[#151C25] border border-[#202936] rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-sm hover:border-[#FFAA00]/50 transition"
+              className="bg-white border border-[#DCE3EB] rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-sm hover:border-[#FFAA00]/50 transition"
             >
               <div>
                 <div className="flex items-center justify-between">
@@ -114,19 +114,19 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
                         ? 'bg-[#132B25] text-[#159B72] border border-[#159B72]/30'
                         : item.status === 'ERROR'
                         ? 'bg-rose-950/60 text-rose-300 border border-rose-800'
-                        : 'bg-[#1C2532] text-slate-400 border border-[#263342]'
+                        : 'bg-[#F8FAFC] text-[#64748B] border border-[#CBD5E1]'
                     }`}
                   >
                     {item.status}
                   </span>
                 </div>
-                <h4 className="text-base font-bold text-white mt-2">{item.name}</h4>
-                <p className="text-xs font-mono text-slate-400 truncate mt-1">
+                <h4 className="text-base font-bold text-[#263548] mt-2">{item.name}</h4>
+                <p className="text-xs font-mono text-[#64748B] truncate mt-1">
                   {item.baseUrl || '—'}
                 </p>
               </div>
 
-              <div className="flex items-center justify-between pt-2 border-t border-[#202936]">
+              <div className="flex items-center justify-between pt-2 border-t border-[#DCE3EB]">
                 <button
                   onClick={() => handleTest(item.id)}
                   disabled={testingId === item.id}
@@ -137,7 +137,7 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
                 </button>
                 <button
                   onClick={() => handleDelete(item.id)}
-                  className="text-slate-400 hover:text-rose-400 p-1.5 transition"
+                  className="text-[#64748B] hover:text-rose-400 p-1.5 transition"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -154,22 +154,22 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
       >
         <form onSubmit={handleCreate} className="space-y-3">
           <div>
-            <label className="text-xs text-slate-300">Nome</label>
+            <label className="text-xs text-[#475569]">Nome</label>
             <input
               type="text"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+              className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] focus:outline-none focus:border-amber-500"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-300">Tipo</label>
+              <label className="text-xs text-[#475569]">Tipo</label>
               <select
                 value={provider}
                 onChange={(e) => setProvider(e.target.value)}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] focus:outline-none focus:border-amber-500"
               >
                 <option value="IOT_SENSOR">IOT_SENSOR</option>
                 <option value="WEBHOOK">WEBHOOK</option>
@@ -178,11 +178,11 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
               </select>
             </div>
             <div>
-              <label className="text-xs text-slate-300">Autenticação</label>
+              <label className="text-xs text-[#475569]">Autenticação</label>
               <select
                 value={authType}
                 onChange={(e) => setAuthType(e.target.value)}
-                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] focus:outline-none focus:border-amber-500"
               >
                 <option value="BEARER">BEARER</option>
                 <option value="HEADER">HEADER</option>
@@ -192,35 +192,35 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
             </div>
           </div>
           <div>
-            <label className="text-xs text-slate-300">URL Base</label>
+            <label className="text-xs text-[#475569]">URL Base</label>
             <input
               type="url"
               required
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
-              className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+              className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] font-mono focus:outline-none focus:border-amber-500"
             />
           </div>
           <div>
-            <label className="text-xs text-slate-300">Chave de API / Token</label>
+            <label className="text-xs text-[#475569]">Chave de API / Token</label>
             <input
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+              className="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-[#263548] font-mono focus:outline-none focus:border-amber-500"
             />
           </div>
           <div className="flex justify-end gap-2 pt-3">
             <button
               type="button"
               onClick={() => setModalOpen(false)}
-              className="px-3 py-1.5 text-xs text-slate-400 hover:text-white"
+              className="px-3 py-1.5 text-xs text-[#64748B] hover:text-[#263548]"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded text-xs font-semibold"
+              className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-[#263548] rounded text-xs font-semibold"
             >
               Salvar
             </button>
