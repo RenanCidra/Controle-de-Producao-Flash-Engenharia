@@ -249,7 +249,7 @@ class ApiService {
   // Auth
   public async login(credentials: { loginName?: string; identifier?: string; password: string }) {
     const identifier = (credentials.identifier || credentials.loginName || '').trim();
-    return this.request<{ accessToken: string; user: AuthUser }>('/auth/login', {
+    const result = await this.request<{ accessToken: string; user: AuthUser } | null>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({
         identifier,
@@ -257,6 +257,10 @@ class ApiService {
         password: credentials.password,
       }),
     });
+    if (!result || typeof result.accessToken !== 'string' || !result.accessToken || !result.user) {
+      throw new Error('A API não retornou os dados da sessão. Verifique se o serviço e o banco de dados estão disponíveis e tente novamente.');
+    }
+    return result;
   }
 
   public changeOwnPassword(payload: { currentPassword: string; newPassword: string }) {
@@ -271,9 +275,14 @@ class ApiService {
   }
 
   public bootstrapAdmin(payload: { setupSecret: string; loginName: string; name: string; password: string }) {
-    return this.request<{ accessToken: string; user: AuthUser }>('/auth/bootstrap-admin', {
+    return this.request<{ accessToken: string; user: AuthUser } | null>('/auth/bootstrap-admin', {
       method: 'POST',
       body: JSON.stringify(payload),
+    }).then((result) => {
+      if (!result || typeof result.accessToken !== 'string' || !result.accessToken || !result.user) {
+        throw new Error('A API não retornou os dados da sessão inicial. Verifique se o serviço e o banco de dados estão disponíveis e tente novamente.');
+      }
+      return result;
     });
   }
 
