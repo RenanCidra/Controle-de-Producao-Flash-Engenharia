@@ -39,9 +39,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setupRequired, bootstrapEnab
   };
 
   return (
-    <main className="min-h-[100dvh] bg-[#0C1420] text-white selection:bg-amber-400/30">
-      <div className="grid min-h-[100dvh] w-full lg:grid-cols-[1.08fr_0.92fr]">
-        <section className="relative order-2 flex flex-col justify-between overflow-hidden bg-[#0C1420] px-4 py-6 sm:px-8 sm:py-9 lg:order-1 lg:px-16 lg:py-12">
+    <main className="relative min-h-[100svh] overflow-x-hidden bg-[#0C1420] text-white selection:bg-amber-400/30">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-cover bg-[position:68%_center] opacity-40 lg:hidden" style={{ backgroundImage: "url('/assets/login-production.webp')" }} />
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#0C1420]/65 via-[#0C1420]/75 to-[#0C1420]/95 lg:hidden" />
+      <div className="relative grid min-h-[100svh] w-full lg:grid-cols-[1.08fr_0.92fr]">
+        <section className="relative hidden flex-col justify-between overflow-hidden bg-[#0C1420] px-4 py-6 sm:px-8 sm:py-9 lg:order-1 lg:flex lg:px-16 lg:py-12">
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-cover opacity-60 saturate-[0.8]" style={{ backgroundImage: "url('/assets/login-production.webp')", backgroundPosition: '62% center' }} />
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0C1420]/40 via-[#0C1420]/35 to-[#0C1420]/70" />
           <div className="pointer-events-none absolute -left-28 top-1/4 h-96 w-96 rounded-full bg-amber-500/10 blur-3xl" />
@@ -74,12 +76,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setupRequired, bootstrapEnab
           <div className="relative flex items-center gap-2 text-xs text-slate-500"><LockKeyhole size={14} /> {t('Acesso interno protegido por autenticação')}</div>
         </section>
 
-        <section className="relative isolate order-1 flex items-start justify-center overflow-hidden border-b border-slate-800 bg-[#111C2A] px-4 py-6 sm:px-8 sm:py-8 lg:order-2 lg:items-center lg:border-b-0 lg:border-l lg:px-12 lg:py-10 xl:px-20">
-          <div className="relative w-full max-w-md rounded-2xl border border-slate-700/80 bg-[#0B1420] px-4 py-5 shadow-2xl shadow-black/30 sm:rounded-3xl sm:px-7 sm:py-8">
-            <div className="mb-6 sm:mb-8">
+        <section className="relative isolate order-1 flex min-h-[100svh] items-center justify-center overflow-y-auto px-4 py-5 sm:px-8 sm:py-8 lg:order-2 lg:border-l lg:border-slate-800 lg:bg-[#111C2A] lg:px-12 lg:py-10 xl:px-20">
+          <div className="relative w-full max-w-md rounded-2xl border border-slate-700/80 bg-[#0B1420] px-5 py-5 shadow-2xl shadow-black/50 sm:rounded-3xl sm:px-7 sm:py-8">
+            <div className="mb-5 sm:mb-8">
+              <img src="/assets/flash-brand.svg" alt="Flash Engenharia" className="mb-5 h-8 w-32 object-contain object-left sm:hidden" />
               <div className="text-xs font-bold uppercase tracking-[0.18em] text-amber-400">{setupRequired ? t('Primeiro acesso') : t('Acesso ao sistema')}</div>
-              <h2 className="mt-2 text-2xl font-bold sm:mt-3 sm:text-3xl">{setupRequired ? t('Configure a conta administradora') : t('Boas-vindas')}</h2>
-              <p className="mt-2 text-sm leading-5 text-slate-400 sm:leading-6">
+              <h2 className="mt-1.5 text-2xl font-bold sm:mt-3 sm:text-3xl">{setupRequired ? t('Configure a conta administradora') : t('Boas-vindas')}</h2>
+              <p className="mt-1.5 text-sm leading-5 text-slate-400 sm:mt-2 sm:leading-6">
                 {setupRequired
                   ? t('Ainda não existe um administrador ativo com senha configurada. Configure o acesso inicial seguro da equipe.')
                   : t('Entre com seu usuário e senha internos para acompanhar a operação.')}
@@ -127,14 +130,15 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setupRequired, bootstrapEnab
 
               {error && <div role="alert" className="rounded-lg border border-rose-800 bg-rose-950/40 px-4 py-3 text-sm text-rose-200">{error}</div>}
 
-              {setupStatusChecked && !setupStatusError && <button type="submit" disabled={loading || (setupRequired && !bootstrapEnabled)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-3.5 text-sm font-bold text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50">
+              {setupStatusChecked && !setupStatusError && <button type="submit" disabled={loading || (setupRequired && !bootstrapEnabled)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-3 text-sm font-bold text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50 sm:py-3.5">
                 {loading ? <RefreshCw size={17} className="animate-spin" /> : <>{setupRequired ? t('Criar administrador e entrar') : t('Entrar')} <ArrowRight size={17} /></>}
               </button>}
             </form>
 
-            <div className="mt-5 flex items-start gap-2 border-t border-slate-800 pt-4 text-[11px] leading-5 text-slate-500 sm:mt-6 sm:pt-5 sm:text-xs">
-              <ShieldCheck size={15} className="mt-0.5 shrink-0 text-emerald-500" />
-              {t('As contas são administradas internamente. Não há cadastro público nem necessidade de e-mail para entrar.')}
+            <div className="mt-4 flex items-center gap-2 border-t border-slate-800 pt-3 text-[10px] leading-4 text-slate-500 sm:mt-6 sm:items-start sm:pt-5 sm:text-xs sm:leading-5">
+              <ShieldCheck size={14} className="shrink-0 text-emerald-500" />
+              <span className="sm:hidden">{t('Acesso interno protegido.')}</span>
+              <span className="hidden sm:inline">{t('As contas são administradas internamente. Não há cadastro público nem necessidade de e-mail para entrar.')}</span>
             </div>
           </div>
         </section>
