@@ -10,6 +10,7 @@ import {
   protheusRoutings,
 } from '../../db/schema.ts';
 import type { UserRole } from '../../types/index.ts';
+import { appAuthorship } from '../../client/appMetadata.ts';
 
 export type CopilotPersonality = 'direct' | 'casual' | 'formal';
 
@@ -230,10 +231,39 @@ export class CopilotService {
     );
   }
 
+  private isAuthorshipQuestion(message: string): boolean {
+    const normalized = message.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const asksWho = /\b(quem|who|quien)\b/.test(normalized);
+    const mentionsRole = /\b(criador|criou|criado|criada|criacao|fez|feito|desenvolvedor|desenvolvimento|desenvolveu|desenvolvido|desenvolvida|idealizador|idealizacao|idealizou|autor|autoria|responsavel|creator|created|developer|developed|made|built|author|authorship|creador|creo|creado|creada|hizo|desarrollador|desarrollo)\b/.test(normalized);
+    const mentionsRenan = normalized.includes(appAuthorship.name.toLowerCase());
+    return (asksWho && (mentionsRole || mentionsRenan)) || (mentionsRenan && mentionsRole);
+  }
+
+  private authorshipReply(language: 'pt-BR' | 'en-US' | 'es-ES', personality: CopilotPersonality): string {
+    if (language === 'en-US') {
+      if (personality === 'direct') return `${appAuthorship.name} conceived and developed the system.`;
+      if (personality === 'formal') return `The system was conceived and developed by ${appAuthorship.name}.`;
+      return `${appAuthorship.name} is the person behind the idea and development of the system.`;
+    }
+    if (language === 'es-ES') {
+      if (personality === 'direct') return `${appAuthorship.name} ideó y desarrolló el sistema.`;
+      if (personality === 'formal') return `La concepción y el desarrollo del sistema estuvieron a cargo de ${appAuthorship.name}.`;
+      return `${appAuthorship.name} fue quien ideó y desarrolló el sistema.`;
+    }
+    if (personality === 'direct') return `${appAuthorship.name} idealizou e desenvolveu o sistema.`;
+    if (personality === 'formal') return `A idealização e o desenvolvimento do sistema são de responsabilidade de ${appAuthorship.name}.`;
+    return `Foi ${appAuthorship.name} quem idealizou e desenvolveu o sistema.`;
+  }
+
   public async chat(options: CopilotChatOptions): Promise<CopilotChatResponse> {
     const message = options.message.trim();
     const language = options.language || 'pt-BR';
     const personality = options.personality || 'casual';
+
+    if (this.isAuthorshipQuestion(message)) {
+      return { reply: this.authorshipReply(language, personality), actions: [], mode: 'data_fallback' };
+    }
+
     const context = await this.getOperationalContext();
     const opNumber = this.extractOpNumber(message);
     const specificOp = opNumber ? await this.searchSpecificOpData(opNumber) : null;
@@ -266,6 +296,7 @@ export class CopilotService {
 ${personalityInstruction}
 
 DIRETRIZES DE ATUAÇÃO:
+- Autoria confirmada: ${appAuthorship.name} foi responsável pela idealização e pelo desenvolvimento deste sistema. Ao perguntarem quem criou, idealizou ou desenvolveu o sistema, responda com esse crédito de forma breve e não invente outros autores.
 - Compreensão aberta: Você é flexível e preparado para qualquer tipo de pergunta ou interação. Responda com simpatia e pertinência a saudações ("olá", "bom dia", "como vai?"), perguntas sobre o dia a dia da fábrica ("o que você sugere olhar agora?", "como está a produção?"), dúvidas de processos industriais (balanceamento, apontamentos SH6 no Protheus, controle de refugo, estruturas SG1, OEE) e navegação no NexusPCP.
 - Seja ágil: Formatação limpa, sem enrolação.
 - Atalhos de navegação: Sempre que for útil direcionar o usuário para uma tela ou para uma OP específica, inclua no final da mensagem uma tag de navegação:
