@@ -35,6 +35,7 @@ import { UsersView } from '../users/UsersView.tsx';
 import { AuditView } from '../audit/AuditView.tsx';
 import { api } from '../../api.ts';
 import { getAppLanguage, getIntlLocale, setAppLanguage, translateText } from '../../i18n/index.ts';
+import { appAuthorship } from '../../appMetadata.ts';
 
 export type SettingsSubTab =
   | 'data-sync'
@@ -509,6 +510,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </p>
                 </div>
                 <span className="rounded-lg border border-[#2D3A4B] bg-[#1D2733] px-3 py-1.5 text-xs font-semibold text-[#FFAA00]">A cada 5 minutos</span>
+              </div>
+
+              <div className="border-t border-[#202936] pt-4 text-[11px] text-slate-500">
+                <span>{translateText(appAuthorship.role)} · </span>
+                <span className="font-medium text-slate-400">{appAuthorship.name}</span>
+                <span> · </span>
+                <a href={`mailto:${appAuthorship.email}`} className="transition hover:text-amber-300">{appAuthorship.email}</a>
               </div>
             </div>
           )}
