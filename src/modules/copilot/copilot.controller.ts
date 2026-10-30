@@ -19,12 +19,15 @@ export async function handleCopilotChat(req: AuthenticatedRequest, res: Response
     });
     const language = req.body?.language;
     const safeLanguage = language === 'en-US' || language === 'es-ES' ? language : 'pt-BR';
+    const personality = req.body?.personality;
+    const safePersonality = personality === 'direct' || personality === 'formal' ? personality : 'casual';
 
     const user = req.user!;
     const response = await copilotService.chat({
       message: message.trim(),
       history: safeHistory,
       language: safeLanguage,
+      personality: safePersonality,
       user: {
         uid: user.uid,
         name: user.name,

@@ -677,10 +677,11 @@ class ApiService {
     message: string,
     history?: Array<{ role: 'user' | 'model'; text: string }>,
     language: 'pt-BR' | 'en-US' | 'es-ES' = 'pt-BR',
+    personality: 'direct' | 'casual' | 'formal' = 'casual',
   ): Promise<{ reply: string; mode: 'gemini' | 'data_fallback'; actions?: Array<{ type: string; target: string; label: string }> }> {
     return this.request('/copilot/chat', {
       method: 'POST',
-      body: JSON.stringify({ message, history, language }),
+      body: JSON.stringify({ message, history, language, personality }),
     });
   }
 

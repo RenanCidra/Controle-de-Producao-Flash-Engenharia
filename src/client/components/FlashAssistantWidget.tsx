@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowRight, LoaderCircle, Mic, MicOff, Send, Sparkles, Trash2, X } from 'lucide-react';
+import { ArrowRight, Briefcase, Coffee, LoaderCircle, Mic, MicOff, Send, Sparkles, Trash2, X, Zap } from 'lucide-react';
 import { api } from '../api.ts';
 import type { AuthUser } from '../api.ts';
 import { getAppLanguage, getIntlLocale, translateText } from '../i18n/index.ts';
+
+export type PersonalityMode = 'direct' | 'casual' | 'formal';
 
 interface Message {
   id: string;
@@ -24,11 +26,19 @@ interface FlashAssistantWidgetProps {
 const t = (text: string) => translateText(text);
 const currentTime = () => new Date().toLocaleTimeString(getIntlLocale(), { hour: '2-digit', minute: '2-digit' });
 
-function makeWelcome(name?: string): Message {
+function makeWelcome(name?: string, mode: PersonalityMode = 'casual'): Message {
+  let text = '';
+  if (mode === 'direct') {
+    text = `${name ? `${t('Olá')}, ${name}.` : `${t('Olá')}.`} ${t('Assistente Flash conectado no modo Direto. Pergunte sobre OPs, ocorrências ou estoques para respostas imediatas.')}`;
+  } else if (mode === 'formal') {
+    text = `${name ? `${t('Prezado(a)')} ${name},` : `${t('Prezado(a)')},`} ${t('Prezado(a), sou o Assistente Flash, copiloto de planejamento e controle da produção industrial. Como posso auxiliá-lo(a) nesta sessão?')}`;
+  } else {
+    text = `${name ? `${t('Olá')}, ${name}!` : `${t('Olá')}!`} ${t('Sou o Assistente Flash, seu copiloto no PCP e chão de fábrica.')}\n\n${t('Posso tirar dúvidas sobre a produção, analisar o andamento do turno, checar qualquer OP ou te guiar pelo sistema. Como posso te ajudar hoje?')}`;
+  }
   return {
     id: 'welcome',
     sender: 'assistant',
-    text: `${name ? `${t('Olá')}, ${name}!` : `${t('Olá')}!`} ${t('Sou o Assistente Flash, seu copiloto no PCP e chão de fábrica.')}\n\n${t('Posso tirar dúvidas sobre a produção, analisar o andamento do turno, checar qualquer OP ou te guiar pelo sistema. Como posso te ajudar hoje?')}`,
+    text,
     timestamp: currentTime(),
   };
 }
@@ -72,7 +82,22 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
   onToggle,
   onNavigate,
 }) => {
-  const [messages, setMessages] = useState<Message[]>(() => [makeWelcome(currentUser?.name)]);
+  const [personality, setPersonality] = useState<PersonalityMode>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nexus_copilot_personality');
+      if (saved === 'direct' || saved === 'formal' || saved === 'casual') return saved;
+    }
+    return 'casual';
+  });
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const initialMode: PersonalityMode =
+      typeof window !== 'undefined' &&
+      (localStorage.getItem('nexus_copilot_personality') === 'direct' ||
+        localStorage.getItem('nexus_copilot_personality') === 'formal')
+        ? (localStorage.getItem('nexus_copilot_personality') as PersonalityMode)
+        : 'casual';
+    return [makeWelcome(currentUser?.name, initialMode)];
+  });
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -80,6 +105,23 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const speechRecognitionRef = useRef<any>(null);
+
+  const handlePersonalityChange = (newMode: PersonalityMode) => {
+    setPersonality(newMode);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('nexus_copilot_personality', newMode);
+      } catch {
+        // Storage unavailable
+      }
+    }
+    setMessages((previous) => {
+      if (previous.length === 1 && previous[0].id === 'welcome') {
+        return [makeWelcome(currentUser?.name, newMode)];
+      }
+      return previous;
+    });
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -136,7 +178,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
     setLoading(true);
 
     try {
-      const response = await api.sendCopilotMessage(text, history, getAppLanguage());
+      const response = await api.sendCopilotMessage(text, history, getAppLanguage(), personality);
       setMessages((previous) => [...previous, {
         id: `assistant-${Date.now()}`,
         sender: 'assistant',
@@ -167,7 +209,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
   };
 
   const clearHistory = () => {
-    setMessages([makeWelcome(currentUser?.name)]);
+    setMessages([makeWelcome(currentUser?.name, personality)]);
     setInputValue('');
   };
 
@@ -287,9 +329,12 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
             )}
 
             {loading && (
-              <div className="flex items-center gap-2.5 pl-10 text-xs text-slate-500">
-                <LoaderCircle className="h-4 w-4 animate-spin text-amber-600" />
-                <span>{t('Consultando dados do sistema…')}</span>
+              <div className="flex items-center gap-2 pl-10 text-xs text-slate-500">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500"></span>
+                </span>
+                <span className="text-[12px] font-medium text-slate-600">{t('Assistente Flash digitando…')}</span>
               </div>
             )}
             <div ref={messagesEndRef} />
