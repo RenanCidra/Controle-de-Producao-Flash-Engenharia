@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { AuthService } from './auth.service.ts';
 import { AuthenticatedRequest } from '../../middleware/auth.middleware.ts';
 import { AuditService } from '../../services/audit.service.ts';
+import { AuthSessionsRepository } from './auth-sessions.repository.ts';
 
 export class AuthController {
   public static async setupStatus(_req: Request, res: Response) {
@@ -71,6 +72,14 @@ export class AuthController {
 
   public static async logout(req: AuthenticatedRequest, res: Response) {
     if (req.user) {
+      try {
+        if (req.user.userId > 0 && req.user.jti) {
+          await AuthSessionsRepository.revoke(req.user.userId, req.user.jti);
+        }
+      } catch (error) {
+        console.error('Failed to revoke authenticated session:', error);
+        return res.status(503).json({ error: 'Não foi possível encerrar a sessão no servidor. Tente novamente.' });
+      }
       await AuditService.record({
         userId: req.user.uid,
         userEmail: req.user.email,
@@ -96,8 +105,9 @@ export class AuthController {
       if (Buffer.byteLength(newPassword, 'utf8') > 72) {
         return res.status(400).json({ error: 'A nova senha deve ter no máximo 72 bytes.' });
       }
+      if (!req.user?.jti) return res.status(401).json({ error: 'Sessão inválida. Entre novamente.' });
       const ipAddress = req.ip || req.socket.remoteAddress;
-      const result = await AuthService.changeOwnPassword(uid, currentPassword, newPassword, ipAddress);
+      const result = await AuthService.changeOwnPassword(uid, currentPassword, newPassword, req.user.jti, ipAddress);
       return res.json(result);
     } catch (error: any) {
       const message = error?.message || 'Não foi possível alterar a senha.';

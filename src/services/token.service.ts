@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { randomUUID } from 'node:crypto';
 import { JWT_CONFIG } from '../config/jwt.ts';
 import { JwtUserPayload } from '../types/index.ts';
 
@@ -14,13 +15,16 @@ export class TokenService {
     this.getSecret();
   }
 
-  public static generateAccessToken(payload: JwtUserPayload): string {
+  public static generateAccessToken(payload: Omit<JwtUserPayload, 'jti'>): { token: string; jti: string; expiresAt: Date } {
+    const jti = randomUUID();
+    const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000);
     const options: jwt.SignOptions = {
       expiresIn: JWT_CONFIG.expiresIn as any,
       issuer: JWT_CONFIG.issuer,
       audience: JWT_CONFIG.audience,
+      algorithm: 'HS256',
     };
-    return jwt.sign({ ...payload }, this.getSecret(), options);
+    return { token: jwt.sign({ ...payload, jti }, this.getSecret(), options), jti, expiresAt };
   }
 
   public static generateRefreshToken(payload: Pick<JwtUserPayload, 'userId' | 'uid' | 'email'>): string {
@@ -37,6 +41,7 @@ export class TokenService {
       const decoded = jwt.verify(token, this.getSecret(), {
         issuer: JWT_CONFIG.issuer,
         audience: JWT_CONFIG.audience,
+        algorithms: ['HS256'],
       }) as JwtUserPayload;
       return decoded;
     } catch (error) {

@@ -14,15 +14,16 @@ O sistema não possui usuário ou senha padrão. A primeira conta `ADMIN` é cri
 
 2. Confira também os segredos de conexão do servidor: `SQL_HOST`, `SQL_DB_NAME`, `SQL_USER` e `SQL_PASSWORD`. Para aplicar a migração, o executor precisa ainda de `SQL_ADMIN_USER` e `SQL_ADMIN_PASSWORD` com permissão para alterar o schema.
 
-3. A partir de um terminal confiável com acesso ao banco e às variáveis administrativas disponíveis, aplique a migração:
+3. A partir de um terminal confiável com acesso ao banco e às variáveis administrativas disponíveis, aplique as migrações incrementais na ordem abaixo:
 
    ```powershell
    npm run db:migrate:access
+   npm run db:migrate:auth-sessions
    ```
 
-   Ela preserva as contas legadas, preenche os identificadores internos e cria as tabelas necessárias para contas e colaboradores. O comando usa uma transação; não é necessário apagar dados.
+   A primeira preserva as contas legadas, preenche os identificadores internos e cria as tabelas necessárias para contas e colaboradores. A segunda cria a tabela de sessões revogáveis sem alterar contas ou dados operacionais. Ambos usam transações; não é necessário apagar dados.
 
-4. Reinicie/reimplante o servidor para que ele leia `JWT_SECRET` e `BOOTSTRAP_SECRET`. Em desenvolvimento, `npm run dev` inicia o servidor sem modo watch; reinicie o processo após alterações no backend.
+4. Reinicie/reimplante o servidor para que ele leia `JWT_SECRET` e `BOOTSTRAP_SECRET`. A versão com sessões revogáveis exige a segunda migração antes de subir o novo código. Os usuários precisarão entrar novamente, pois tokens emitidos por versões anteriores não possuem identificador de sessão. Em desenvolvimento, `npm run dev` inicia o servidor sem modo watch; reinicie o processo após alterações no backend.
 
 ## Criar a conta
 
@@ -48,7 +49,7 @@ DEV_PREVIEW_AUTH=true
 VITE_DEV_PREVIEW_AUTH=true
 ```
 
-Reinicie `npm run dev`. A aplicação mostrará uma conta sintética `ADMIN` e uma faixa de aviso; o middleware só aceita esse modo quando `NODE_ENV` não é `production`. As rotas de negócio ficam em **somente leitura** durante a prévia: `POST`, `PUT`, `PATCH` e `DELETE` recebem `403`, então nenhum apontamento, cadastro ou sincronização é gravado.
+Reinicie `npm run dev`. A aplicação mostrará uma conta sintética `ADMIN` e uma faixa de aviso; o middleware só aceita esse modo quando `NODE_ENV` não é `production`, e o servidor passa a escutar somente em `127.0.0.1`. Se `NODE_ENV=production`, o servidor falha ao iniciar com o preview habilitado. As rotas de negócio ficam em **somente leitura** durante a prévia: `POST`, `PUT`, `PATCH` e `DELETE` recebem `403`, então nenhum apontamento, cadastro ou sincronização é gravado.
 
 Para voltar à autenticação normal, remova as duas linhas do `.env` ou altere ambos os valores para `false` e reinicie `npm run dev`. O código da autenticação e a página de login permanecem no projeto; não é necessário removê-los ou reescrevê-los. O build de produção não ativa a identidade sintética porque a interface também exige `import.meta.env.DEV`.
 

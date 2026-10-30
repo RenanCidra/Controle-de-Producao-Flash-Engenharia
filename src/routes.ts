@@ -14,14 +14,6 @@ import occurrencesRouter from './modules/occurrences/occurrences.routes.ts';
 import copilotRouter from './modules/copilot/copilot.routes.ts';
 import { db } from './db/index.ts';
 import {
-  users,
-  inventoryItems,
-  productionLines,
-  productionOrders,
-  qualityInspections,
-  integrations,
-  auditLogs,
-  organizations,
   protheusSalesOrders,
   protheusProductionOrders,
   protheusProducts,
@@ -29,15 +21,16 @@ import {
   protheusRoutings,
   protheusProductionAppointments,
   protheusImportBatches,
+  organizations,
 } from './db/schema.ts';
 import { desc, sql } from 'drizzle-orm';
 import { auditHttpMiddleware } from './middleware/audit.middleware.ts';
 import { authenticateToken } from './middleware/auth.middleware.ts';
-import { apiRateLimit, mutationRateLimit, validateRequestBody } from './middleware/request-protection.ts';
+import { mutationRateLimit, validateRequestBody } from './middleware/request-protection.ts';
+import { requirePermission } from './middleware/access-control.ts';
 
 const apiRouter = Router();
 
-apiRouter.use(apiRateLimit);
 apiRouter.use(validateRequestBody);
 apiRouter.use(auditHttpMiddleware);
 
@@ -88,17 +81,9 @@ apiRouter.use('/traceability', traceabilityRouter);
 apiRouter.use('/occurrences', occurrencesRouter);
 apiRouter.use('/copilot', copilotRouter);
 
-apiRouter.get('/stats', async (req: Request, res: Response) => {
+apiRouter.get('/stats', requirePermission('production-orders:read'), async (_req: Request, res: Response) => {
   try {
     const [
-      usersCount,
-      inventoryCount,
-      linesCount,
-      ordersCount,
-      qualityCount,
-      integrationsCount,
-      auditCount,
-      orgData,
       protheusPvCount,
       protheusOpCount,
       protheusProdCount,
@@ -107,15 +92,8 @@ apiRouter.get('/stats', async (req: Request, res: Response) => {
       protheusRoutingsCount,
       protheusAppointmentsCount,
       latestImport,
+      organizationProfile,
     ] = await Promise.all([
-      db.select({ count: sql<number>`count(*)` }).from(users),
-      db.select({ count: sql<number>`count(*)` }).from(inventoryItems),
-      db.select({ count: sql<number>`count(*)` }).from(productionLines),
-      db.select({ count: sql<number>`count(*)` }).from(productionOrders),
-      db.select({ count: sql<number>`count(*)` }).from(qualityInspections),
-      db.select({ count: sql<number>`count(*)` }).from(integrations),
-      db.select({ count: sql<number>`count(*)` }).from(auditLogs),
-      db.select().from(organizations).limit(1),
       db.select({ count: sql<number>`count(distinct ${protheusSalesOrders.numeroPv})` }).from(protheusSalesOrders),
       db.select({ count: sql<number>`count(*)` }).from(protheusProductionOrders),
       db.select({ count: sql<number>`count(*)` }).from(protheusProducts),
@@ -131,16 +109,16 @@ apiRouter.get('/stats', async (req: Request, res: Response) => {
         status: protheusImportBatches.status,
         createdAt: protheusImportBatches.createdAt,
       }).from(protheusImportBatches).orderBy(desc(protheusImportBatches.createdAt)).limit(1),
+      db.select({
+        id: organizations.id,
+        name: organizations.name,
+        tradeName: organizations.tradeName,
+        plantCode: organizations.plantCode,
+        timezone: organizations.timezone,
+      }).from(organizations).limit(1),
     ]);
 
     res.json({
-      totalUsers: Number(usersCount[0]?.count || 0),
-      totalInventoryItems: Number(inventoryCount[0]?.count || 0),
-      totalProductionLines: Number(linesCount[0]?.count || 0),
-      totalProductionOrders: Number(ordersCount[0]?.count || 0),
-      totalQualityInspections: Number(qualityCount[0]?.count || 0),
-      totalIntegrations: Number(integrationsCount[0]?.count || 0),
-      totalAuditLogs: Number(auditCount[0]?.count || 0),
       totalProtheusPv: Number(protheusPvCount[0]?.count || 0),
       totalProtheusOp: Number(protheusOpCount[0]?.count || 0),
       totalProtheusProducts: Number(protheusProdCount[0]?.count || 0),
@@ -149,7 +127,7 @@ apiRouter.get('/stats', async (req: Request, res: Response) => {
       totalProtheusRoutings: Number(protheusRoutingsCount[0]?.count || 0),
       totalProtheusAppointments: Number(protheusAppointmentsCount[0]?.count || 0),
       latestProtheusImport: latestImport[0] || null,
-      organization: orgData[0] || null,
+      organization: organizationProfile[0] || null,
     });
   } catch (error: any) {
     console.error('Failed to query system stats:', error);

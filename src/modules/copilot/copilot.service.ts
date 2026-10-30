@@ -83,7 +83,9 @@ export class CopilotService {
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
-    if (apiKey) this.ai = new GoogleGenAI({ apiKey });
+    const approvedForProduction = process.env.NODE_ENV !== 'production'
+      || process.env.COPILOT_EXTERNAL_DATA_ENABLED === 'true';
+    if (apiKey && approvedForProduction) this.ai = new GoogleGenAI({ apiKey });
   }
 
   private async safeSelect<T>(source: SourceName, query: PromiseLike<T[]>): Promise<QueryResult<T>> {

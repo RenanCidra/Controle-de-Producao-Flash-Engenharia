@@ -23,6 +23,7 @@ export function normalizeUserRole(role: string | null | undefined): UserRole {
 export interface JwtUserPayload {
   userId: number;
   uid: string;
+  jti: string;
   loginName: string;
   email?: string | null;
   name: string;

@@ -227,13 +227,6 @@ class ApiService {
 
   public getStats() {
     return this.request<{
-      totalUsers: number;
-      totalInventoryItems: number;
-      totalProductionLines: number;
-      totalProductionOrders: number;
-      totalQualityInspections: number;
-      totalIntegrations: number;
-      totalAuditLogs: number;
       totalProtheusPv: number;
       totalProtheusOp: number;
       totalProtheusProducts: number;
@@ -249,7 +242,7 @@ class ApiService {
         status: string;
         createdAt: string | null;
       } | null;
-      organization: any;
+      organization: { id: number; name: string; tradeName: string | null; plantCode: string | null; timezone: string } | null;
     }>('/stats');
   }
 

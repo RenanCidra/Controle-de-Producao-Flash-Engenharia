@@ -10,22 +10,31 @@ export interface TestConnectionResult {
   statusCode: number;
   message: string;
   latencyMs: number;
-  responseData?: unknown;
 }
 
 export class IntegrationClientService {
   public static async testEndpoint(params: TestConnectionParams): Promise<TestConnectionResult> {
     const startTime = Date.now();
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     try {
       const target = new URL(params.baseUrl);
       if (!['http:', 'https:'].includes(target.protocol) || target.username || target.password) {
         throw new Error('A URL deve usar HTTP/HTTPS e não pode conter credenciais embutidas.');
       }
-      if (process.env.NODE_ENV === 'production') {
-        const allowedHosts = (process.env.INTEGRATION_ALLOWED_HOSTS || '').split(',').map((host) => host.trim().toLowerCase()).filter(Boolean);
-        if (!allowedHosts.length || !allowedHosts.includes(target.hostname.toLowerCase())) {
-          throw new Error('O host da integração não está na lista permitida do servidor.');
-        }
+      const hostname = target.hostname.toLowerCase().replace(/\.$/, '');
+      const loopbackHosts = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+      const allowedHosts = (process.env.INTEGRATION_ALLOWED_HOSTS || '').split(',')
+        .map((host) => host.trim().toLowerCase().replace(/\.$/, ''))
+        .filter(Boolean);
+      const isProduction = process.env.NODE_ENV === 'production';
+      if (isProduction && target.protocol !== 'https:') {
+        throw new Error('Integrações publicadas devem usar HTTPS.');
+      }
+      if (isProduction && target.port && target.port !== '443') {
+        throw new Error('Integrações publicadas devem usar a porta HTTPS padrão (443).');
+      }
+      if ((!loopbackHosts.has(hostname) || isProduction) && !allowedHosts.includes(hostname)) {
+        throw new Error('O host da integração não está na lista permitida do servidor.');
       }
 
       const headers: Record<string, string> = {
@@ -39,12 +48,16 @@ export class IntegrationClientService {
         } else if (params.authType === 'BASIC') {
           headers['Authorization'] = `Basic ${Buffer.from(params.apiKey).toString('base64')}`;
         } else if (params.authType === 'HEADER' && params.headerName) {
+          if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(params.headerName)
+            || ['host', 'connection', 'content-length', 'cookie', 'proxy-authorization', 'transfer-encoding'].includes(params.headerName.toLowerCase())) {
+            throw new Error('O nome do cabeçalho de autenticação não é permitido.');
+          }
           headers[params.headerName] = params.apiKey;
         }
       }
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      timeoutId = setTimeout(() => controller.abort(), 8000);
 
       const response = await fetch(params.baseUrl, {
         method: 'GET',
@@ -53,11 +66,9 @@ export class IntegrationClientService {
         redirect: 'error',
       });
 
-      clearTimeout(timeoutId);
       const latencyMs = Date.now() - startTime;
-
-      const responseText = await response.text();
-      const responseData = responseText.slice(0, 4_000);
+      // The test only needs the status and headers. Never buffer or return arbitrary remote bodies.
+      if (response.body) void response.body.cancel().catch(() => undefined);
 
       return {
         success: response.ok,
@@ -66,7 +77,6 @@ export class IntegrationClientService {
           ? `Conexão estabelecida com sucesso (${response.status})`
           : `Resposta de erro do servidor remoto: ${response.status} ${response.statusText}`,
         latencyMs,
-        responseData: responseData || null,
       };
     } catch (error: any) {
       const latencyMs = Date.now() - startTime;
@@ -78,6 +88,8 @@ export class IntegrationClientService {
           : `Falha de rede ou URL inválida: ${error.message}`,
         latencyMs,
       };
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
     }
   }
 

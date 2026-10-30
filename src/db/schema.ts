@@ -46,6 +46,19 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Access tokens are revocable per browser/device. Only a hash of the random JWT jti is stored.
+export const authSessions = pgTable("auth_sessions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  sessionHash: text("session_hash").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  revokedAt: timestamp("revoked_at"),
+}, (table) => [
+  uniqueIndex("auth_sessions_hash_unique").on(table.sessionHash),
+  index("auth_sessions_user_expiry_idx").on(table.userId, table.expiresAt),
+]);
+
 // 3. Raw Materials & Finished Goods Inventory (Insumos e Produtos Acabados)
 export const inventoryItems = pgTable("inventory_items", {
   id: serial("id").primaryKey(),

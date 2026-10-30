@@ -70,7 +70,10 @@ export class TraceabilityService {
 
     const escapeCsv = (val: any): string => {
       if (val === null || val === undefined) return '';
-      const str = String(val).replace(/"/g, '""');
+      let raw = String(val);
+      // Prevent spreadsheet formula execution for untrusted text exported from Protheus.
+      if (typeof val === 'string' && /^[\u0000-\u0020]*[=+@-]/.test(raw)) raw = `'${raw}`;
+      const str = raw.replace(/"/g, '""');
       if (str.includes(';') || str.includes('\n') || str.includes('\r') || str.includes('"')) {
         return `"${str}"`;
       }

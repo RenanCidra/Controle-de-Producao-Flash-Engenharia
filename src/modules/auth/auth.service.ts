@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import { AuthRepository } from './auth.repository.ts';
+import { AuthSessionsRepository } from './auth-sessions.repository.ts';
 import { UsersRepository } from '../users/users.repository.ts';
 import { normalizeLoginName, validateLoginName, validatePassword } from './credentials.ts';
 import { TokenService } from '../../services/token.service.ts';
@@ -21,8 +22,8 @@ function publicUser(user: any) {
   };
 }
 
-function issueAccessToken(user: any): string {
-  return TokenService.generateAccessToken({
+async function issueAccessToken(user: any): Promise<string> {
+  const session = TokenService.generateAccessToken({
     userId: user.id,
     uid: user.uid,
     loginName: user.loginName,
@@ -32,10 +33,12 @@ function issueAccessToken(user: any): string {
     status: user.status as 'ACTIVE' | 'INACTIVE',
     department: user.department,
   });
+  await AuthSessionsRepository.create(user.id, session.jti, session.expiresAt);
+  return session.token;
 }
 
 export class AuthService {
-  public static async changeOwnPassword(uid: string, currentPassword: string, newPassword: string, ipAddress?: string) {
+  public static async changeOwnPassword(uid: string, currentPassword: string, newPassword: string, currentTokenId: string, ipAddress?: string) {
     const user = await AuthRepository.findByUid(uid);
     if (!user || user.status !== 'ACTIVE') throw new Error('CONTA_INATIVA');
     if (!user.passwordHash || !await bcrypt.compare(currentPassword, user.passwordHash)) {
@@ -47,6 +50,7 @@ export class AuthService {
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 12);
+    await AuthSessionsRepository.revokeOtherSessions(user.id, currentTokenId);
     await UsersRepository.updatePassword(user.id, passwordHash);
     await AuditService.record({
       userId: user.uid,
@@ -98,6 +102,7 @@ export class AuthService {
       passwordHash: await bcrypt.hash(data.password, 12),
     });
     await AuthRepository.updateLastLogin(user.id);
+    const accessToken = await issueAccessToken(user);
     await AuditService.record({
       userId: user.uid,
       userEmail: user.email,
@@ -109,7 +114,7 @@ export class AuthService {
       status: 'SUCCESS',
     });
 
-    return { user: publicUser(user), accessToken: issueAccessToken(user) };
+    return { user: publicUser(user), accessToken };
   }
 
   public static async login(data: { loginName?: string; identifier?: string; password?: string; ipAddress?: string }) {
@@ -148,6 +153,7 @@ export class AuthService {
       throw new Error(INVALID_CREDENTIALS);
     }
 
+    const accessToken = await issueAccessToken(matchedUser);
     await AuthRepository.updateLastLogin(matchedUser.id);
     await AuditService.record({
       userId: matchedUser.uid,
@@ -160,7 +166,7 @@ export class AuthService {
       status: 'SUCCESS',
     });
 
-    return { user: publicUser(matchedUser), accessToken: issueAccessToken(matchedUser) };
+    return { user: publicUser(matchedUser), accessToken };
   }
 }
 

@@ -1,5 +1,6 @@
 import { UsersRepository } from './users.repository.ts';
 import { AuthRepository } from '../auth/auth.repository.ts';
+import { AuthSessionsRepository } from '../auth/auth-sessions.repository.ts';
 import { AuditService } from '../../services/audit.service.ts';
 import { USER_ROLES, USER_STATUSES, UserRole, UserStatus } from '../../types/index.ts';
 import bcrypt from 'bcryptjs';
@@ -188,6 +189,7 @@ export class UsersService {
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 12);
+    await AuthSessionsRepository.revokeAll(targetId);
     await UsersRepository.updatePassword(targetId, passwordHash);
 
     await AuditService.record({

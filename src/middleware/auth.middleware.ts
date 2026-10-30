@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { TokenService } from '../services/token.service.ts';
 import { AuthRepository } from '../modules/auth/auth.repository.ts';
+import { AuthSessionsRepository } from '../modules/auth/auth-sessions.repository.ts';
 import { JwtUserPayload, normalizeUserRole, UserRole } from '../types/index.ts';
 
 export interface AuthenticatedRequest extends Request {
@@ -16,6 +17,7 @@ export const authenticateToken = async (
     req.user = {
       userId: 0,
       uid: 'dev-preview-admin',
+      jti: 'dev-preview',
       loginName: 'preview-admin',
       name: 'Prévia local',
       role: 'ADMIN',
@@ -46,10 +48,15 @@ export const authenticateToken = async (
     if (!user || user.status !== 'ACTIVE') {
       return res.status(401).json({ error: 'Conta inativa ou sessão inválida. Faça login novamente.' });
     }
+    if (typeof tokenPayload.jti !== 'string' || tokenPayload.jti.length < 16
+      || !await AuthSessionsRepository.isActive(user.id, tokenPayload.jti)) {
+      return res.status(401).json({ error: 'Sessão encerrada ou inválida. Entre novamente.' });
+    }
 
     req.user = {
       userId: user.id,
       uid: user.uid,
+      jti: tokenPayload.jti,
       loginName: user.loginName,
       email: user.email,
       name: user.name,

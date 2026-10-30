@@ -97,13 +97,6 @@ export default function App() {
   };
 
   const [stats, setStats] = useState<{
-    totalUsers: number;
-    totalInventoryItems: number;
-    totalProductionLines: number;
-    totalProductionOrders: number;
-    totalQualityInspections: number;
-    totalIntegrations: number;
-    totalAuditLogs: number;
     totalProtheusPv: number;
     totalProtheusOp: number;
     totalProtheusProducts: number;
@@ -119,7 +112,7 @@ export default function App() {
       status: string;
       createdAt: string | null;
     } | null;
-    organization: any;
+    organization: { id: number; name: string; tradeName: string | null; plantCode: string | null; timezone: string } | null;
   } | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsError, setStatsError] = useState<string | null>(null);

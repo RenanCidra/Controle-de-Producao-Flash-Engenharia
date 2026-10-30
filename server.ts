@@ -4,12 +4,17 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import apiRouter from './src/routes.ts';
+import { apiRateLimit } from './src/middleware/request-protection.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
+  const localPreviewAuth = process.env.DEV_PREVIEW_AUTH === 'true';
+  if (localPreviewAuth && process.env.NODE_ENV === 'production') {
+    throw new Error('DEV_PREVIEW_AUTH não pode ser habilitado em produção.');
+  }
   const PORT = process.env.NODE_ENV === 'production' && process.env.PORT
     ? parseInt(process.env.PORT, 10)
     : 3000;
@@ -42,12 +47,26 @@ async function startServer() {
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(self), geolocation=()');
     res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
-    res.setHeader('Content-Security-Policy', `base-uri 'self'; object-src 'none'; frame-ancestors ${[...frameAncestors].join(' ')}; form-action 'self'`);
+    res.setHeader('Content-Security-Policy', [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "img-src 'self' data: blob:",
+      "font-src 'self' data: https://fonts.gstatic.com",
+      "connect-src 'self'",
+      "worker-src 'self' blob:",
+      "base-uri 'self'",
+      "object-src 'none'",
+      `frame-ancestors ${[...frameAncestors].join(' ')}`,
+      "form-action 'self'",
+    ].join('; '));
     if (process.env.NODE_ENV === 'production') {
       res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     }
     next();
   });
+  // Apply the IP limit before JSON/form parsing to reduce unauthenticated resource pressure.
+  app.use('/api', apiRateLimit);
   app.use(express.json({ limit: '10mb', strict: true }));
   app.use(express.urlencoded({ extended: false, limit: '64kb', parameterLimit: 100 }));
 
@@ -79,8 +98,9 @@ async function startServer() {
     res.status(500).json({ error: 'Erro interno no servidor. Consulte os logs do sistema.' });
   });
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 NexusERP Fullstack Server running at http://0.0.0.0:${PORT}`);
+  const bindAddress = localPreviewAuth ? '127.0.0.1' : '0.0.0.0';
+  app.listen(PORT, bindAddress, () => {
+    console.log(`🚀 NexusERP Fullstack Server running at http://${bindAddress}:${PORT}`);
     console.log(`📦 Database: PostgreSQL Cloud SQL connected`);
   });
 }

@@ -65,18 +65,6 @@ export const auditHttpMiddleware = (
       const userAgent = (req.headers['user-agent'] as string) || 'Unknown';
       const isSuccess = res.statusCode >= 200 && res.statusCode < 400;
 
-      const sensitiveFields = new Set(['password', 'currentpassword', 'confirmpassword', 'passwordconfirm', 'setuppassword', 'setupsecret', 'token', 'accesstoken', 'refreshtoken', 'bearertoken', 'apikey', 'clientsecret', 'secretkey', 'privatekey', 'credential', 'credentials', 'secret', 'newpassword', 'authorization']);
-      const redact = (value: unknown, depth = 0): unknown => {
-        if (depth > 12) return '[OMITTED]';
-        if (Array.isArray(value)) return value.map((item) => redact(item, depth + 1));
-        if (!value || typeof value !== 'object') return value;
-        return Object.fromEntries(Object.entries(value).map(([key, item]) => [
-          key,
-          sensitiveFields.has(key.toLowerCase().replace(/[_-]/g, '')) ? '***REDACTED***' : redact(item, depth + 1),
-        ]));
-      };
-      const sanitizedBody = redact(req.body && typeof req.body === 'object' ? req.body : {}) as Record<string, unknown>;
-
       AuditService.record({
         userId: req.user?.uid || (req.user?.userId ? String(req.user.userId) : null),
         userEmail: req.user?.email || req.user?.loginName || null,
@@ -86,7 +74,6 @@ export const auditHttpMiddleware = (
         details: {
           path: req.path,
           statusCode: res.statusCode,
-          payload: sanitizedBody,
         },
         ipAddress,
         userAgent,
