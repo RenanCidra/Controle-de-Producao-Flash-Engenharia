@@ -385,6 +385,7 @@ export const communicationGroupMembers = pgTable("communication_group_members", 
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   addedByUid: text("added_by_uid").notNull(),
   addedAt: timestamp("added_at").defaultNow().notNull(),
+  lastReadAt: timestamp("last_read_at").defaultNow().notNull(),
 }, (table) => [
   uniqueIndex("communication_group_members_unique").on(table.groupId, table.userId),
   index("communication_group_members_user_idx").on(table.userId, table.groupId),
@@ -411,6 +412,7 @@ export const communicationDirectMembers = pgTable("communication_direct_members"
   conversationId: integer("conversation_id").notNull().references(() => communicationDirectConversations.id, { onDelete: "cascade" }),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   addedAt: timestamp("added_at").defaultNow().notNull(),
+  lastReadAt: timestamp("last_read_at").defaultNow().notNull(),
 }, (table) => [
   uniqueIndex("communication_direct_members_unique").on(table.conversationId, table.userId),
   index("communication_direct_members_user_idx").on(table.userId, table.conversationId),

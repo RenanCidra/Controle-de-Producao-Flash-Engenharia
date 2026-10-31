@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, MessageCircle, MessageSquarePlus, Plus, Search, Send, Users } from 'lucide-react';
 import { api, type AuthUser } from '../../api.ts';
 import { UserAccountMenu } from '../../components/UserAccountMenu.tsx';
 
-type Group = { id: number; name: string; sector: string; createdAt: string };
+type Group = { id: number; name: string; sector: string; createdAt: string; unreadCount: number; lastMessage: Pick<Message, 'body' | 'authorUid' | 'authorName' | 'createdAt'> | null };
 type Message = { id: number; body: string; authorUid: string; authorName: string; createdAt: string };
 type DirectoryUser = { id: number; name: string; department: string | null };
 type DirectConversation = {
@@ -12,7 +12,8 @@ type DirectConversation = {
   name: string;
   department: string | null;
   createdAt: string;
-  lastMessage: Pick<Message, 'body' | 'authorUid' | 'createdAt'> | null;
+  lastMessage: Pick<Message, 'body' | 'authorUid' | 'authorName' | 'createdAt'> | null;
+  unreadCount: number;
 };
 
 const formatMessageTime = (date: string) => new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -35,6 +36,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
   const [search, setSearch] = useState('');
   const [userSearch, setUserSearch] = useState('');
   const [section, setSection] = useState<'conversations' | 'groups'>('conversations');
+  const lastSeenMessageRef = useRef<{ conversationKey: string; messageId: number } | null>(null);
   const canCreateGroups = ['ADMIN', 'SUPERVISOR'].includes(api.getUser()?.role || '');
   const selectedConversation = selectedGroupId !== null || selectedDirectId !== null || draftRecipient !== null;
 
@@ -69,10 +71,24 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
     try {
       if (selectedGroupId !== null) {
         const data = await api.getCommunicationMessages(selectedGroupId);
-        setMessages(Array.isArray(data) ? data : []);
+        const loaded = Array.isArray(data) ? data : [];
+        setMessages(loaded);
+        const latest = loaded.at(-1);
+        const key = `group:${selectedGroupId}`;
+        if (latest && lastSeenMessageRef.current?.conversationKey === key && latest.id !== lastSeenMessageRef.current.messageId && latest.authorUid !== api.getUser()?.uid && document.visibilityState === 'visible') {
+          void api.markCommunicationGroupRead(selectedGroupId).then(loadGroups).catch(() => undefined);
+        }
+        if (latest) lastSeenMessageRef.current = { conversationKey: key, messageId: latest.id };
       } else if (selectedDirectId !== null) {
         const data = await api.getCommunicationDirectMessages(selectedDirectId);
-        setMessages(Array.isArray(data) ? data : []);
+        const loaded = Array.isArray(data) ? data : [];
+        setMessages(loaded);
+        const latest = loaded.at(-1);
+        const key = `direct:${selectedDirectId}`;
+        if (latest && lastSeenMessageRef.current?.conversationKey === key && latest.id !== lastSeenMessageRef.current.messageId && latest.authorUid !== api.getUser()?.uid && document.visibilityState === 'visible') {
+          void api.markCommunicationDirectRead(selectedDirectId).then(loadDirects).catch(() => undefined);
+        }
+        if (latest) lastSeenMessageRef.current = { conversationKey: key, messageId: latest.id };
       } else {
         setMessages([]);
       }
@@ -80,12 +96,12 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
       setMessages([]);
       setError(e.message);
     }
-  }, [selectedGroupId, selectedDirectId]);
+  }, [selectedGroupId, selectedDirectId, loadGroups, loadDirects]);
 
   useEffect(() => {
     void loadGroups();
     void loadDirects();
-    const timer = window.setInterval(() => void loadDirects(), 10000);
+    const timer = window.setInterval(() => { void loadGroups(); void loadDirects(); }, 10000);
     return () => window.clearInterval(timer);
   }, [loadGroups, loadDirects]);
   useEffect(() => {
@@ -95,11 +111,11 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
   }, [loadMessages]);
 
   const visibleGroups = useMemo(
-    () => (Array.isArray(groups) ? groups : []).filter(group => group && `${group.name || ''} ${group.sector || ''}`.toLowerCase().includes((search || '').toLowerCase())),
+    () => (Array.isArray(groups) ? groups : []).filter(group => group && `${group.name || ''} ${group.sector || ''} ${group.lastMessage?.body || ''}`.toLowerCase().includes((search || '').toLowerCase())),
     [groups, search],
   );
   const visibleDirects = useMemo(
-    () => (Array.isArray(directs) ? directs : []).filter(conversation => conversation && `${conversation.name || ''} ${conversation.department || ''}`.toLowerCase().includes((search || '').toLowerCase())),
+    () => (Array.isArray(directs) ? directs : []).filter(conversation => conversation && `${conversation.name || ''} ${conversation.department || ''} ${conversation.lastMessage?.body || ''}`.toLowerCase().includes((search || '').toLowerCase())),
     [directs, search],
   );
   const visibleUsers = useMemo(
@@ -147,6 +163,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
     setSection('conversations');
     setSelectedGroupId(null);
     setSelectedDirectId(existingId);
+    if (existingId) void api.markCommunicationDirectRead(existingId).then(loadDirects).catch(() => undefined);
     setDraftRecipient(existing ? null : user);
     setMessages([]);
     setBody('');
@@ -182,6 +199,8 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
   const selectedDirect = directs.find(conversation => (conversation.conversationId || (conversation as any).id) === selectedDirectId);
   const directTitle = selectedDirect?.name || draftRecipient?.name;
   const directDepartment = selectedDirect?.department || draftRecipient?.department;
+  const unreadGroupTotal = groups.reduce((total, group) => total + (group.unreadCount || 0), 0);
+  const unreadDirectTotal = directs.reduce((total, conversation) => total + (conversation.unreadCount || 0), 0);
 
   return <section className="flex h-[100dvh] w-full min-w-0 flex-col overflow-hidden bg-white text-[#263548]">
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#263548] bg-[#151C25] px-3 text-white sm:px-6">
@@ -221,7 +240,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
                 <button
                   key={`group-${group.id || index}`}
                   type="button"
-                  onClick={() => { setSelectedGroupId(group.id); setSelectedDirectId(null); setDraftRecipient(null); setMessages([]); }}
+                  onClick={() => { setSelectedGroupId(group.id); setSelectedDirectId(null); setDraftRecipient(null); setMessages([]); lastSeenMessageRef.current = null; void api.markCommunicationGroupRead(group.id).then(loadGroups).catch(() => undefined); }}
                   className={`flex w-full items-center gap-3 border-b border-[#F1F4F7] px-4 py-3.5 text-left ${selectedGroupId === group.id ? 'bg-[#F1F4F7]' : 'hover:bg-slate-50'}`}
                 >
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]">
@@ -229,8 +248,9 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
                   </span>
                   <span className="min-w-0 flex-1">
                     <b className="block truncate text-sm text-[#263548]">{group.name}</b>
-                    <small className="mt-1 block truncate text-xs text-slate-500">{group.sector}</small>
+                    <small className="mt-1 block truncate text-xs text-slate-500">{group.lastMessage ? `${group.lastMessage.authorName}: ${group.lastMessage.body}` : group.sector}</small>
                   </span>
+                  <span className="flex shrink-0 flex-col items-end gap-1">{group.lastMessage && <time className="text-[10px] text-slate-400">{formatMessageTime(group.lastMessage.createdAt)}</time>}{group.unreadCount > 0 && <b className="min-w-5 rounded-full bg-[#FFAA00] px-1.5 py-0.5 text-center text-[10px] text-[#151C25]">{group.unreadCount}</b>}</span>
                 </button>
               ))
             ) : (
@@ -244,7 +264,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
                   <button
                     key={`direct-${directId}`}
                     type="button"
-                    onClick={() => { setSelectedGroupId(null); setSelectedDirectId(directId); setDraftRecipient(null); setMessages([]); }}
+                    onClick={() => { setSelectedGroupId(null); setSelectedDirectId(directId); setDraftRecipient(null); setMessages([]); lastSeenMessageRef.current = null; void api.markCommunicationDirectRead(directId).then(loadDirects).catch(() => undefined); }}
                     className={`flex w-full items-center gap-3 border-b border-[#F1F4F7] px-4 py-3.5 text-left ${selectedDirectId === directId ? 'bg-[#F1F4F7]' : 'hover:bg-slate-50'}`}
                   >
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]">
@@ -254,7 +274,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
                       <b className="block truncate text-sm text-[#263548]">{conversation.name}</b>
                       <small className="mt-1 block truncate text-xs text-slate-500">{conversation.lastMessage?.body || conversation.department || 'Conversa direta'}</small>
                     </span>
-                    {conversation.lastMessage && <time className="self-start text-[10px] text-slate-400">{formatMessageTime(conversation.lastMessage.createdAt)}</time>}
+                    <span className="flex shrink-0 flex-col items-end gap-1">{conversation.lastMessage && <time className="text-[10px] text-slate-400">{formatMessageTime(conversation.lastMessage.createdAt)}</time>}{conversation.unreadCount > 0 && <b className="min-w-5 rounded-full bg-[#FFAA00] px-1.5 py-0.5 text-center text-[10px] text-[#151C25]">{conversation.unreadCount}</b>}</span>
                   </button>
                 );
               })
@@ -267,8 +287,8 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
           <UserAccountMenu currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onLogout={onLogout}/>
         </div>
         <nav aria-label="Seções da comunicação" className="flex shrink-0 items-stretch border-t border-[#263548] bg-[#151C25] pb-[env(safe-area-inset-bottom)] md:hidden">
-          <button type="button" onClick={() => { setSection('conversations'); clearSelection(); }} aria-current={section === 'conversations' ? 'page' : undefined} className={`flex min-h-16 flex-1 flex-col items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold transition ${section === 'conversations' ? 'text-[#FFAA00]' : 'text-slate-300'}`}><MessageCircle size={19}/><span>Conversas</span></button>
-          <button type="button" onClick={() => { setSection('groups'); clearSelection(); }} aria-current={section === 'groups' ? 'page' : undefined} className={`flex min-h-16 flex-1 flex-col items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold transition ${section === 'groups' ? 'text-[#FFAA00]' : 'text-slate-300'}`}><Users size={19}/><span>Grupos</span></button>
+          <button type="button" onClick={() => { setSection('conversations'); clearSelection(); }} aria-current={section === 'conversations' ? 'page' : undefined} className={`relative flex min-h-16 flex-1 flex-col items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold transition ${section === 'conversations' ? 'text-[#FFAA00]' : 'text-slate-300'}`}><MessageCircle size={19}/><span>Conversas</span>{unreadDirectTotal > 0 && <b className="absolute right-[calc(50%-25px)] top-1 min-w-4 rounded-full bg-[#FFAA00] px-1 text-center text-[9px] leading-4 text-[#151C25]">{unreadDirectTotal}</b>}</button>
+          <button type="button" onClick={() => { setSection('groups'); clearSelection(); }} aria-current={section === 'groups' ? 'page' : undefined} className={`relative flex min-h-16 flex-1 flex-col items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold transition ${section === 'groups' ? 'text-[#FFAA00]' : 'text-slate-300'}`}><Users size={19}/><span>Grupos</span>{unreadGroupTotal > 0 && <b className="absolute right-[calc(50%-25px)] top-1 min-w-4 rounded-full bg-[#FFAA00] px-1 text-center text-[9px] leading-4 text-[#151C25]">{unreadGroupTotal}</b>}</button>
         </nav>
       </aside>
 

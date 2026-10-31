@@ -1,5 +1,5 @@
 import { Router, type Request, type RequestHandler, type Response, type NextFunction } from 'express';
-import { and, asc, desc, eq, inArray, ne } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, inArray, ne } from 'drizzle-orm';
 import { db } from '../../db/index.ts';
 import { communicationDirectConversations, communicationDirectMembers, communicationDirectMessages, communicationGroupMembers, communicationGroups, communicationMessages, users } from '../../db/schema.ts';
 import { requirePermission } from '../../middleware/access-control.ts';
@@ -28,12 +28,12 @@ router.get('/directory', asyncHandler(async (req, res) => {
 }));
 
 router.get('/direct', asyncHandler(async (req, res) => {
-  const mine = await db.select({ id: communicationDirectConversations.id, createdAt: communicationDirectConversations.createdAt })
+  const mine = await db.select({ id: communicationDirectConversations.id, createdAt: communicationDirectConversations.createdAt, lastReadAt: communicationDirectMembers.lastReadAt })
     .from(communicationDirectConversations).innerJoin(communicationDirectMembers, eq(communicationDirectMembers.conversationId, communicationDirectConversations.id))
     .where(eq(communicationDirectMembers.userId, req.user!.userId)).orderBy(desc(communicationDirectConversations.createdAt)).limit(100);
   if (!mine.length) return res.json([]);
   const ids = mine.map((conversation) => conversation.id);
-  const [others, latestMessages] = await Promise.all([
+  const [others, latestMessages, unreadRows] = await Promise.all([
     db.select({ conversationId: communicationDirectMembers.conversationId, userId: users.id, name: users.name, department: users.department })
       .from(communicationDirectMembers).innerJoin(users, eq(users.id, communicationDirectMembers.userId))
       .where(and(inArray(communicationDirectMembers.conversationId, ids), ne(communicationDirectMembers.userId, req.user!.userId))),
@@ -41,12 +41,26 @@ router.get('/direct', asyncHandler(async (req, res) => {
       conversationId: communicationDirectMessages.conversationId,
       body: communicationDirectMessages.body,
       authorUid: communicationDirectMessages.authorUid,
+      authorName: communicationDirectMessages.authorName,
       createdAt: communicationDirectMessages.createdAt,
     }).from(communicationDirectMessages).where(inArray(communicationDirectMessages.conversationId, ids))
       .orderBy(communicationDirectMessages.conversationId, desc(communicationDirectMessages.createdAt)),
+    db.select({ conversationId: communicationDirectMembers.conversationId, unreadCount: count() })
+      .from(communicationDirectMessages)
+      .innerJoin(communicationDirectMembers, and(
+        eq(communicationDirectMembers.conversationId, communicationDirectMessages.conversationId),
+        eq(communicationDirectMembers.userId, req.user!.userId),
+      ))
+      .where(and(
+        inArray(communicationDirectMessages.conversationId, ids),
+        gt(communicationDirectMessages.createdAt, communicationDirectMembers.lastReadAt),
+        ne(communicationDirectMessages.authorUid, req.user!.uid),
+      ))
+      .groupBy(communicationDirectMembers.conversationId),
   ]);
   const otherByConversation = new Map(others.map((user) => [user.conversationId, user]));
   const latestByConversation = new Map(latestMessages.map((message) => [message.conversationId, message]));
+  const unreadByConversation = new Map(unreadRows.map((row) => [row.conversationId, row.unreadCount]));
   return res.json(mine.flatMap((conversation) => {
     const other = otherByConversation.get(conversation.id);
     return other ? [{
@@ -57,6 +71,7 @@ router.get('/direct', asyncHandler(async (req, res) => {
       name: other.name,
       department: other.department,
       lastMessage: latestByConversation.get(conversation.id) || null,
+      unreadCount: unreadByConversation.get(conversation.id) || 0,
     }] : [];
   }));
 
@@ -68,6 +83,17 @@ router.get('/direct/:id/messages', asyncHandler(async (req, res) => {
   if (!await isDirectMember(id, req.user!.userId)) return res.status(404).json({ error: 'Conversa não encontrada.' });
   return res.json(await db.select().from(communicationDirectMessages).where(eq(communicationDirectMessages.conversationId, id))
     .orderBy(desc(communicationDirectMessages.createdAt)).limit(100).then(rows => rows.reverse()));
+}));
+
+router.patch('/direct/:id/read', requirePermission('communications:write'), asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Conversa inválida.' });
+  if (!await isDirectMember(id, req.user!.userId)) return res.status(404).json({ error: 'Conversa não encontrada.' });
+  await db.update(communicationDirectMembers).set({ lastReadAt: new Date() }).where(and(
+    eq(communicationDirectMembers.conversationId, id),
+    eq(communicationDirectMembers.userId, req.user!.userId),
+  ));
+  return res.json({ success: true });
 }));
 
 router.post('/direct/messages', requirePermission('communications:write'), allowBodyFields('recipientId', 'body'), asyncHandler(async (req, res) => {
@@ -111,11 +137,41 @@ router.post('/direct/:id/messages', requirePermission('communications:write'), a
 }));
 
 router.get('/groups', asyncHandler(async (req, res) => {
-  const groups = await db.select({ id: communicationGroups.id, name: communicationGroups.name, sector: communicationGroups.sector, createdAt: communicationGroups.createdAt })
+  const groups = await db.select({ id: communicationGroups.id, name: communicationGroups.name, sector: communicationGroups.sector, createdAt: communicationGroups.createdAt, lastReadAt: communicationGroupMembers.lastReadAt })
     .from(communicationGroups).innerJoin(communicationGroupMembers, eq(communicationGroupMembers.groupId, communicationGroups.id))
     .where(eq(communicationGroupMembers.userId, req.user!.userId))
     .orderBy(asc(communicationGroups.sector), asc(communicationGroups.name));
-  return res.json(groups);
+  if (!groups.length) return res.json([]);
+  const groupIds = groups.map((group) => group.id);
+  const [latestMessages, unreadRows] = await Promise.all([
+    db.selectDistinctOn([communicationMessages.groupId], {
+      groupId: communicationMessages.groupId,
+      body: communicationMessages.body,
+      authorUid: communicationMessages.authorUid,
+      authorName: communicationMessages.authorName,
+      createdAt: communicationMessages.createdAt,
+    }).from(communicationMessages).where(inArray(communicationMessages.groupId, groupIds))
+      .orderBy(communicationMessages.groupId, desc(communicationMessages.createdAt)),
+    db.select({ groupId: communicationGroupMembers.groupId, unreadCount: count() })
+      .from(communicationMessages)
+      .innerJoin(communicationGroupMembers, and(
+        eq(communicationGroupMembers.groupId, communicationMessages.groupId),
+        eq(communicationGroupMembers.userId, req.user!.userId),
+      ))
+      .where(and(
+        inArray(communicationMessages.groupId, groupIds),
+        gt(communicationMessages.createdAt, communicationGroupMembers.lastReadAt),
+        ne(communicationMessages.authorUid, req.user!.uid),
+      ))
+      .groupBy(communicationGroupMembers.groupId),
+  ]);
+  const latestByGroup = new Map(latestMessages.map((message) => [message.groupId, message]));
+  const unreadByGroup = new Map(unreadRows.map((row) => [row.groupId, row.unreadCount]));
+  return res.json(groups.map(({ lastReadAt: _lastReadAt, ...group }) => ({
+    ...group,
+    lastMessage: latestByGroup.get(group.id) || null,
+    unreadCount: unreadByGroup.get(group.id) || 0,
+  })));
 }));
 
 router.get('/groups/:id/messages', asyncHandler(async (req, res) => {
@@ -123,6 +179,16 @@ router.get('/groups/:id/messages', asyncHandler(async (req, res) => {
   if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Grupo inválido.' });
   if (!await isGroupMember(id, req.user!.userId)) return res.status(404).json({ error: 'Grupo não encontrado.' });
   return res.json(await db.select().from(communicationMessages).where(eq(communicationMessages.groupId, id)).orderBy(desc(communicationMessages.createdAt)).limit(100).then(rows => rows.reverse()));
+}));
+router.patch('/groups/:id/read', requirePermission('communications:write'), asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Grupo inválido.' });
+  if (!await isGroupMember(id, req.user!.userId)) return res.status(404).json({ error: 'Grupo não encontrado.' });
+  await db.update(communicationGroupMembers).set({ lastReadAt: new Date() }).where(and(
+    eq(communicationGroupMembers.groupId, id),
+    eq(communicationGroupMembers.userId, req.user!.userId),
+  ));
+  return res.json({ success: true });
 }));
 router.post('/groups', requirePermission('communications:manage'), allowBodyFields('name', 'sector', 'memberIds'), asyncHandler(async (req, res) => {
   const name = typeof req.body.name === 'string' ? req.body.name.trim().slice(0, 80) : '';
