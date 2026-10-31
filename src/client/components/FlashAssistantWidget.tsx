@@ -486,11 +486,11 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
               : undefined
           }
           className={fullScreen
-            ? 'fixed inset-0 z-50 flex min-h-0 flex-col overflow-hidden bg-[#090b10] text-slate-100 md:flex-row'
+            ? 'fixed inset-0 z-50 flex min-h-0 flex-col overflow-hidden bg-[#F1F4F7] text-[#263548] md:flex-row'
             : 'fixed inset-x-2 bottom-2 top-2 z-50 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[#DCE3EB] bg-white text-[#263548] shadow-2xl shadow-slate-950/25 transition-[bottom,max-height] duration-150 ease-out sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-auto sm:h-[min(680px,calc(100dvh-32px))] sm:w-[420px]'}
         >
           {fullScreen && (
-            <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-700 bg-slate-900 text-white md:flex lg:w-72">
+            <aside className="hidden w-64 shrink-0 flex-col border-r border-[#263548] bg-[#151C25] text-white md:flex lg:w-72">
               <div className="flex items-center gap-3 border-b border-white/10 px-5 py-5">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 ring-1 ring-amber-400/70">
                   <img src="/assets/flash-symbol.png" alt="" aria-hidden="true" className="h-5 w-5 object-contain" />
@@ -523,14 +523,14 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
             </aside>
           )}
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <header className={`flex shrink-0 items-center justify-between border-b px-4 py-3 ${fullScreen ? 'border-white/10 bg-[#0d1119]' : 'border-[#E7ECF1] bg-white'}`}>
+          <header className={`flex shrink-0 items-center justify-between border-b px-4 py-3 ${fullScreen ? 'border-[#DCE3EB] bg-white' : 'border-[#E7ECF1] bg-white'}`}>
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 ring-1 ring-amber-300">
                 <img src="/assets/flash-symbol.png" alt="" aria-hidden="true" className="h-5 w-5 object-contain" />
               </div>
               <div className="min-w-0">
-                <h2 className={`truncate text-sm font-bold ${fullScreen ? 'text-white' : 'text-[#263548]'}`}>{t('Assistente Flash')}</h2>
-                <p className={`truncate text-[11px] ${fullScreen ? 'text-slate-400' : 'text-slate-500'}`}>{t('Dados disponíveis no sistema')}</p>
+                <h2 className="truncate text-sm font-bold text-[#263548]">{t('Assistente Flash')}</h2>
+                <p className="truncate text-[11px] text-slate-500">{t('Dados disponíveis no sistema')}</p>
               </div>
             </div>
             <div className="ml-3 flex shrink-0 items-center gap-1">
@@ -552,7 +552,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
             </div>
           </header>
 
-          <div className={`flex shrink-0 items-center justify-between gap-3 border-b px-4 py-2 ${fullScreen ? 'border-white/10 bg-[#0d1119]' : 'border-[#E7ECF1] bg-[#F8FAFC]'}`}>
+          <div className={`flex shrink-0 items-center justify-between gap-3 border-b px-4 py-2 ${fullScreen ? 'border-[#DCE3EB] bg-[#F8FAFC]' : 'border-[#E7ECF1] bg-[#F8FAFC]'}`}>
             <div className="flex min-w-0 items-center gap-2 text-xs font-medium text-slate-600">
               <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-600" />
               <span className={`truncate ${fullScreen ? 'text-slate-200' : ''}`}>{t('Consulta operacional')}</span>
@@ -654,7 +654,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
               )}
             </div>
           ) : (
-          <div className={`flex-1 space-y-4 overflow-y-auto p-4 ${fullScreen ? 'bg-[#090b10]' : 'bg-white'}`} aria-live="polite">
+          <div className={`flex-1 space-y-4 overflow-y-auto p-4 ${fullScreen ? 'bg-[#F1F4F7]' : 'bg-white'}`} aria-live="polite">
             {messages.map((message) => (
               <article key={message.id} className={`flex gap-2.5 ${fullScreen ? 'mx-auto w-full max-w-4xl' : ''} ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {message.sender === 'assistant' && (
@@ -667,7 +667,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
                     ? 'rounded-tr-sm bg-amber-400 text-slate-950'
                     : message.error
                       ? 'rounded-tl-sm border border-rose-200 bg-rose-50 text-rose-900'
-                      : fullScreen ? 'rounded-tl-sm border border-white/10 bg-[#151a23] text-slate-100' : 'rounded-tl-sm border border-[#E7ECF1] bg-[#F8FAFC] text-[#263548]'}`}>
+                      : 'rounded-tl-sm border border-[#E7ECF1] bg-white text-[#263548]'}`}>
                     <div className="space-y-1">
                       {renderMessageText(message.text)}
                       {streamingMessageId === message.id && (
@@ -720,7 +720,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
           </div>
           )}
 
-          {!historyOpen && !settingsOpen && <footer className={`shrink-0 border-t p-3 ${fullScreen ? 'border-white/10 bg-[#0d1119] px-4 py-4' : 'border-[#E7ECF1] bg-[#F8FAFC]'}`}>
+          {!historyOpen && !settingsOpen && <footer className={`shrink-0 border-t p-3 ${fullScreen ? 'border-[#DCE3EB] bg-white px-4 py-4' : 'border-[#E7ECF1] bg-[#F8FAFC]'}`}>
             {speechSupported && (
               <div className="mb-2 text-[10px] text-slate-500" aria-live="polite">{isListening ? t('Ouvindo... Fale agora') : ''}</div>
             )}
@@ -744,7 +744,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
                 placeholder={t('Pergunte sobre OPs, ocorrências, insumos...')}
                 disabled={loading}
                 aria-label={t('Pergunte sobre OPs, ocorrências, insumos...')}
-                className={`h-10 min-w-0 flex-1 rounded-xl border px-3 text-[13px] focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 ${fullScreen ? 'border-white/15 bg-[#171c25] text-white placeholder:text-slate-500 disabled:bg-[#11151d]' : 'border-[#DCE3EB] bg-white text-[#263548] placeholder:text-slate-400 disabled:bg-slate-100'}`}
+                className="h-10 min-w-0 flex-1 rounded-xl border border-[#DCE3EB] bg-white px-3 text-[13px] text-[#263548] placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 disabled:bg-slate-100"
               />
               <button type="submit" disabled={!inputValue.trim() || loading} title={t('Enviar mensagem')} aria-label={t('Enviar mensagem')} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-400 text-slate-950 transition hover:bg-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
                 <Send className="h-4 w-4" />
