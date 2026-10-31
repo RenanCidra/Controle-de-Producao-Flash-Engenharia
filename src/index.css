@@ -1,15 +1,78 @@
 @import "tailwindcss";
 
+/* Flash Assistant - Mago do PCP micro-animations */
 @keyframes flash-assistant-float {
   0%,
   100% {
     transform: translate3d(0, 0, 0);
-    box-shadow: 0 10px 24px rgb(15 23 42 / 22%), 0 0 0 0 rgb(245 158 11 / 0%);
+    box-shadow: 0 8px 20px -3px rgb(15 23 42 / 28%), 0 0 0 1px rgb(251 191 36 / 35%);
   }
 
   50% {
     transform: translate3d(0, -4px, 0);
-    box-shadow: 0 14px 28px rgb(15 23 42 / 25%), 0 0 0 6px rgb(245 158 11 / 10%);
+    box-shadow: 0 14px 26px -3px rgb(15 23 42 / 30%), 0 0 14px 2px rgb(245 158 11 / 25%);
+  }
+}
+
+@keyframes magic-aura-pulse {
+  0%,
+  100% {
+    transform: scale(0.98);
+    opacity: 0.3;
+  }
+
+  50% {
+    transform: scale(1.12);
+    opacity: 0.65;
+  }
+}
+
+@keyframes magic-sparkle-twinkle {
+  0%,
+  100% {
+    transform: scale(0.88) rotate(0deg);
+    opacity: 0.65;
+    filter: drop-shadow(0 0 1px rgb(251 191 36 / 60%));
+  }
+
+  50% {
+    transform: scale(1.15) rotate(16deg);
+    opacity: 1;
+    filter: drop-shadow(0 0 4px rgb(251 191 36 / 90%));
+  }
+}
+
+@keyframes magic-micro-dust {
+  0%,
+  100% {
+    transform: scale(0.7) translateY(0);
+    opacity: 0.25;
+  }
+
+  50% {
+    transform: scale(1.2) translateY(-2px);
+    opacity: 0.85;
+  }
+}
+
+@keyframes magic-shimmer-sweep {
+  0% {
+    transform: translateX(-140%) rotate(25deg);
+    opacity: 0;
+  }
+
+  12% {
+    opacity: 0.45;
+  }
+
+  26% {
+    transform: translateX(220%) rotate(25deg);
+    opacity: 0;
+  }
+
+  100% {
+    transform: translateX(220%) rotate(25deg);
+    opacity: 0;
   }
 }
 
@@ -22,8 +85,30 @@
   animation-play-state: paused;
 }
 
+.magic-aura {
+  animation: magic-aura-pulse 3.8s ease-in-out infinite;
+}
+
+.magic-sparkle {
+  animation: magic-sparkle-twinkle 2.8s ease-in-out infinite;
+}
+
+.magic-micro-dust {
+  animation: magic-micro-dust 2.4s ease-in-out infinite;
+}
+
+.magic-shimmer {
+  animation: magic-shimmer-sweep 6s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .flash-assistant-float {
-    animation: none;
+  .flash-assistant-float,
+  .magic-aura,
+  .magic-sparkle,
+  .magic-micro-dust,
+  .magic-shimmer {
+    animation: none !important;
+    transform: none !important;
   }
 }
+

@@ -349,12 +349,12 @@ DIRETRIZES DE ATUAÇÃO:
 
         const modelName = process.env.GEMINI_MODEL?.trim() || 'gemini-3.5-flash-lite';
         const callGemini = async (): Promise<string | null> => {
-          const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500));
+          const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 7500));
           const generatePromise = (async () => {
             const res = await this.ai!.models.generateContent({
               model: modelName,
               contents: [...history, { role: 'user', parts: [{ text: currentTurn }] }],
-              config: { systemInstruction, maxOutputTokens: 350 },
+              config: { systemInstruction, maxOutputTokens: 700 },
             });
             return res.text?.trim() || null;
           })();

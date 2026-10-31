@@ -5,6 +5,7 @@ import type { AuthUser } from '../api.ts';
 import { getAppLanguage, getIntlLocale, translateText } from '../i18n/index.ts';
 
 export type PersonalityMode = 'direct' | 'casual' | 'formal';
+export type TypingDisplayMode = 'realtime' | 'instant';
 
 interface Message {
   id: string;
@@ -33,6 +34,7 @@ interface FlashAssistantWidgetProps {
 const t = (text: string) => translateText(text);
 const currentTime = () => new Date().toLocaleTimeString(getIntlLocale(), { hour: '2-digit', minute: '2-digit' });
 const personalityStorageKey = (uid?: string) => `nexus_copilot_personality_${uid || 'guest'}`;
+const displayModeStorageKey = (uid?: string) => `nexus_copilot_display_mode_${uid || 'guest'}`;
 const conversationStorageKey = (uid?: string) => `nexus_copilot_conversations_${uid || 'guest'}`;
 const MAX_SAVED_CONVERSATIONS = 25;
 const MAX_SAVED_MESSAGES = 80;
@@ -144,6 +146,15 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
     }
     return 'casual';
   });
+  const [displayMode, setDisplayMode] = useState<TypingDisplayMode>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(displayModeStorageKey(currentUser?.uid));
+      if (saved === 'realtime' || saved === 'instant') return saved;
+    }
+    return 'realtime';
+  });
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+  const streamingAbortRef = useRef<(() => void) | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>(() =>
     loadConversations(currentUser?.uid, currentUser?.name, personality),
   );
@@ -159,6 +170,50 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const speechRecognitionRef = useRef<any>(null);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+
+  // Monitor visualViewport so mobile virtual keyboard resizes the container and scrolls text
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const onViewportChange = () => {
+      const offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      setKeyboardOffset(offset);
+      setViewportHeight(vv.height);
+      if (isOpen) {
+        requestAnimationFrame(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        });
+      }
+    };
+
+    vv.addEventListener('resize', onViewportChange);
+    vv.addEventListener('scroll', onViewportChange);
+    return () => {
+      vv.removeEventListener('resize', onViewportChange);
+      vv.removeEventListener('scroll', onViewportChange);
+    };
+  }, [isOpen]);
+
+  const handleDisplayModeChange = (mode: TypingDisplayMode) => {
+    setDisplayMode(mode);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(displayModeStorageKey(currentUser?.uid), mode);
+      } catch {
+        // Storage unavailable
+      }
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      streamingAbortRef.current?.();
+    };
+  }, []);
 
   useEffect(() => {
     setConversations((previous) => {
@@ -202,11 +257,25 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
     });
   };
 
+  // Only focus input on desktop upon initial opening (prevent virtual keyboard pop-ups on mobile)
   useEffect(() => {
     if (!isOpen) return;
-    inputRef.current?.focus();
+    const isTouch = typeof window !== 'undefined' && (
+      'ontouchstart' in window ||
+      navigator.maxTouchPoints > 0 ||
+      window.matchMedia('(pointer: coarse)').matches
+    );
+    if (!isTouch) {
+      inputRef.current?.focus();
+    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+  }, [isOpen]);
+
+  // Keep latest message smoothly scrolled into view without stealing mobile focus
+  useEffect(() => {
+    if (!isOpen) return;
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [isOpen, messages, loading]);
+  }, [messages, loading]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -250,6 +319,11 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
     const text = (suggestedText ?? inputValue).trim();
     if (!text || loading) return;
 
+    if (streamingAbortRef.current) {
+      streamingAbortRef.current();
+      streamingAbortRef.current = null;
+    }
+
     const history = messages
       .filter((item) => item.id !== 'welcome' && !item.error)
       .slice(-10)
@@ -261,14 +335,60 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
 
     try {
       const response = await api.sendCopilotMessage(text, history, getAppLanguage(), personality);
-      setMessages((previous) => [...previous, {
-        id: `assistant-${Date.now()}`,
-        sender: 'assistant',
-        text: response.reply,
-        timestamp: currentTime(),
-        mode: response.mode,
-        actions: response.actions,
-      }]);
+      const assistantMessageId = `assistant-${Date.now()}`;
+      const fullText = response.reply;
+
+      if (displayMode === 'realtime') {
+        setMessages((previous) => [...previous, {
+          id: assistantMessageId,
+          sender: 'assistant',
+          text: '',
+          timestamp: currentTime(),
+          mode: response.mode,
+          actions: response.actions,
+        }]);
+        setLoading(false);
+        setStreamingMessageId(assistantMessageId);
+
+        await new Promise<void>((resolve) => {
+          let currentIndex = 0;
+          const totalLength = fullText.length;
+          const stepSize = Math.max(3, Math.ceil(totalLength / 60));
+          const interval = setInterval(() => {
+            currentIndex = Math.min(totalLength, currentIndex + stepSize);
+            const currentSlice = fullText.slice(0, currentIndex);
+            setMessages((previous) =>
+              previous.map((m) => (m.id === assistantMessageId ? { ...m, text: currentSlice } : m))
+            );
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+
+            if (currentIndex >= totalLength) {
+              clearInterval(interval);
+              streamingAbortRef.current = null;
+              setStreamingMessageId(null);
+              resolve();
+            }
+          }, 16);
+
+          streamingAbortRef.current = () => {
+            clearInterval(interval);
+            setMessages((previous) =>
+              previous.map((m) => (m.id === assistantMessageId ? { ...m, text: fullText } : m))
+            );
+            setStreamingMessageId(null);
+            resolve();
+          };
+        });
+      } else {
+        setMessages((previous) => [...previous, {
+          id: assistantMessageId,
+          sender: 'assistant',
+          text: fullText,
+          timestamp: currentTime(),
+          mode: response.mode,
+          actions: response.actions,
+        }]);
+      }
     } catch (error: any) {
       setMessages((previous) => [...previous, {
         id: `assistant-error-${Date.now()}`,
@@ -279,6 +399,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
       }]);
     } finally {
       setLoading(false);
+      setStreamingMessageId(null);
     }
   };
 
@@ -356,9 +477,17 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
           role="dialog"
           aria-modal="true"
           aria-label={t('Assistente Flash')}
+          style={
+            !fullScreen && typeof window !== 'undefined' && window.innerWidth < 640
+              ? {
+                  bottom: keyboardOffset > 0 ? `${keyboardOffset + 6}px` : undefined,
+                  maxHeight: viewportHeight ? `${viewportHeight - 12}px` : undefined,
+                }
+              : undefined
+          }
           className={fullScreen
             ? 'fixed inset-0 z-50 flex min-h-0 flex-col overflow-hidden bg-[#090b10] text-slate-100 md:flex-row'
-            : 'fixed inset-x-3 bottom-3 top-3 z-50 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[#DCE3EB] bg-white text-[#263548] shadow-2xl shadow-slate-950/25 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-auto sm:h-[min(680px,calc(100dvh-32px))] sm:w-[420px]'}
+            : 'fixed inset-x-2 bottom-2 top-2 z-50 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[#DCE3EB] bg-white text-[#263548] shadow-2xl shadow-slate-950/25 transition-[bottom,max-height] duration-150 ease-out sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-auto sm:h-[min(680px,calc(100dvh-32px))] sm:w-[420px]'}
         >
           {fullScreen && (
             <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-700 bg-slate-900 text-white md:flex lg:w-72">
@@ -463,6 +592,36 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
                   })}
                 </div>
               </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="mb-2">
+                  <p className="text-xs font-semibold text-slate-800">{t('Exibição das respostas')}</p>
+                  <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
+                    {displayMode === 'realtime'
+                      ? t('Ver o assistente escrevendo em tempo real (digitação dinâmica).')
+                      : t('Exibir a resposta completa inteira de uma só vez.')}
+                  </p>
+                </div>
+                <div role="group" aria-label={t('Exibição das respostas')} className="grid grid-cols-2 gap-1 rounded-xl bg-slate-200/70 p-1">
+                  <button
+                    type="button"
+                    onClick={() => handleDisplayModeChange('realtime')}
+                    aria-pressed={displayMode === 'realtime'}
+                    className={`inline-flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[11px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${displayMode === 'realtime' ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:bg-white/70 hover:text-slate-800'}`}
+                  >
+                    <Sparkles className={`h-3.5 w-3.5 shrink-0 ${displayMode === 'realtime' ? 'text-amber-600' : ''}`} aria-hidden="true" />
+                    <span className="truncate">{t('Em tempo real')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDisplayModeChange('instant')}
+                    aria-pressed={displayMode === 'instant'}
+                    className={`inline-flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[11px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${displayMode === 'instant' ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:bg-white/70 hover:text-slate-800'}`}
+                  >
+                    <Zap className={`h-3.5 w-3.5 shrink-0 ${displayMode === 'instant' ? 'text-amber-600' : ''}`} aria-hidden="true" />
+                    <span className="truncate">{t('Resposta completa')}</span>
+                  </button>
+                </div>
+              </div>
               <p className="rounded-lg border border-[#E7ECF1] px-3 py-2 text-[11px] leading-4 text-slate-500">{t('A preferência é salva para seu usuário neste navegador.')}</p>
             </section>
           ) : historyOpen ? (
@@ -509,7 +668,12 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
                     : message.error
                       ? 'rounded-tl-sm border border-rose-200 bg-rose-50 text-rose-900'
                       : fullScreen ? 'rounded-tl-sm border border-white/10 bg-[#151a23] text-slate-100' : 'rounded-tl-sm border border-[#E7ECF1] bg-[#F8FAFC] text-[#263548]'}`}>
-                    <div className="space-y-1">{renderMessageText(message.text)}</div>
+                    <div className="space-y-1">
+                      {renderMessageText(message.text)}
+                      {streamingMessageId === message.id && (
+                        <span className="inline-block h-3.5 w-1.5 ml-0.5 rounded-[1px] bg-amber-500 animate-pulse align-middle" aria-hidden="true" />
+                      )}
+                    </div>
                   </div>
                   {message.mode === 'gemini' && (
                     <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
@@ -571,6 +735,11 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
                 type="text"
                 value={inputValue}
                 onChange={(event) => setInputValue(event.target.value.slice(0, 2000))}
+                onFocus={() => {
+                  setTimeout(() => {
+                    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                  }, 180);
+                }}
                 maxLength={2000}
                 placeholder={t('Pergunte sobre OPs, ocorrências, insumos...')}
                 disabled={loading}

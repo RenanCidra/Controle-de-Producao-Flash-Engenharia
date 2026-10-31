@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { TokenService } from '../services/token.service.ts';
 import { AuthRepository } from '../modules/auth/auth.repository.ts';
 import { AuthSessionsRepository } from '../modules/auth/auth-sessions.repository.ts';
-import { JwtUserPayload, normalizeUserRole, UserRole } from '../types/index.ts';
+import { type JwtUserPayload, normalizeUserRole, type UserRole } from '../types/index.ts';
 
 export interface AuthenticatedRequest extends Request {
   user?: JwtUserPayload;

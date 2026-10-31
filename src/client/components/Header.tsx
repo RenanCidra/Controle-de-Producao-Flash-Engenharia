@@ -9,6 +9,7 @@ import {
   Lock,
   PanelLeftClose,
   PanelLeftOpen,
+  Sparkles,
   Zap,
 } from 'lucide-react';
 import { AuthUser } from '../api.ts';
@@ -106,9 +107,17 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onOpenAssistant}
             title="Assistente Flash • Mago do PCP (Ctrl + K)"
-            className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50/80 px-2.5 py-1 text-xs font-semibold text-amber-900 transition hover:bg-amber-100 hover:border-amber-400 shadow-xs"
+            className="group relative flex items-center gap-1.5 overflow-hidden rounded-lg border border-amber-300/90 bg-gradient-to-r from-amber-50 via-amber-100/60 to-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900 shadow-xs transition hover:border-amber-400 hover:bg-amber-100 hover:shadow-xs active:scale-[0.98]"
           >
-            <Zap className="h-3.5 w-3.5 fill-amber-500 text-amber-600" />
+            {/* Subtle magic shimmer sheen on hover */}
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/50 to-transparent transition-transform duration-700 ease-out group-hover:translate-x-full"
+            />
+            <span className="relative flex items-center justify-center">
+              <Zap className="h-3.5 w-3.5 fill-amber-500 text-amber-600 transition-transform duration-200 group-hover:scale-110" />
+              <Sparkles className="magic-sparkle absolute -top-1 -right-1 h-2 w-2 text-amber-600" />
+            </span>
             <span className="hidden sm:inline">Assistente Flash</span>
             <kbd className="hidden md:inline-block rounded border border-amber-300 bg-white/80 px-1 text-[9px] text-amber-800 font-mono">
               Ctrl+K

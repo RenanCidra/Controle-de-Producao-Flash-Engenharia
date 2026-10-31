@@ -1,6 +1,6 @@
 # Arquitetura de acesso, autenticação e colaboradores
 
-**Estado atual:** identidade interna, schema de colaboradores, permissões iniciais na API, sessões de acesso revogáveis por navegador, página dedicada de autenticação e preferências pessoais implementados no código. A migração de sessões precisa ser aplicada no banco de destino antes da implantação desta versão. Refresh tokens rotativos, permissões configuráveis e escopo por organização/planta continuam pendentes.
+**Estado atual:** identidade interna, schema de colaboradores, permissões iniciais na API, sessões de acesso revogáveis por navegador, página dedicada de autenticação e preferências pessoais implementados no código. A migração incremental de sessões (`auth_sessions`) e dos espelhos Protheus (`protheus_resources`, `protheus_commitments`) foi aplicada e validada no banco de dados operacional. Refresh tokens rotativos, permissões configuráveis e escopo por organização/planta continuam pendentes.
 
 As contas autenticadas podem trocar a própria senha pela tela de perfil informando a senha atual. O servidor confere o hash existente, exige nova senha com pelo menos 12 caracteres e no máximo 72 bytes e registra a alteração na auditoria sem armazenar senhas nos detalhes. O caminho autenticado é `POST /api/auth/change-password`. A credencial de prévia local não representa uma conta persistida e não habilita essa ação.
 

@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { randomUUID } from 'node:crypto';
 import { JWT_CONFIG } from '../config/jwt.ts';
-import { JwtUserPayload } from '../types/index.ts';
+import type { JwtUserPayload } from '../types/index.ts';
 
 export class TokenService {
   private static getSecret(): string {

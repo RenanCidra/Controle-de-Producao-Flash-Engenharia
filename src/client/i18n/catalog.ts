@@ -1863,6 +1863,14 @@ Object.assign(en, {
   'A preferência é salva para seu usuário neste navegador.': 'This preference is saved for your user in this browser.',
   'Expandir para tela cheia': 'Expand to full screen',
   'Sair da tela cheia': 'Exit full screen',
+  'A API não retornou os dados da sessão. Verifique se o serviço e o banco de dados estão disponíveis e tente novamente.': 'The API did not return session data. Verify that the service and database are available and try again.',
+  'A API não retornou os dados da sessão inicial. Verifique se o serviço e o banco de dados estão disponíveis e tente novamente.': 'The API did not return initial session data. Verify that the service and database are available and try again.',
+  'Não foi possível concluir a autenticação. Tente novamente.': 'Unable to complete authentication. Please try again.',
+  'Exibição das respostas': 'Response display',
+  'Ver o assistente escrevendo em tempo real (digitação dinâmica).': 'See the assistant writing in real time (dynamic typing).',
+  'Exibir a resposta completa inteira de uma só vez.': 'Display the complete response all at once.',
+  'Em tempo real': 'In real time',
+  'Resposta completa': 'Full response',
 });
 
 Object.assign(es, {
@@ -1877,6 +1885,14 @@ Object.assign(es, {
   'A preferência é salva para seu usuário neste navegador.': 'Esta preferencia se guarda para su usuario en este navegador.',
   'Expandir para tela cheia': 'Expandir a pantalla completa',
   'Sair da tela cheia': 'Salir de pantalla completa',
+  'A API não retornou os dados da sessão. Verifique se o serviço e o banco de dados estão disponíveis e tente novamente.': 'La API no devolvió los datos de la sesión. Verifique que el servicio y la base de datos estén disponibles e intente nuevamente.',
+  'A API não retornou os dados da sessão inicial. Verifique se o serviço e o banco de dados estão disponíveis e tente novamente.': 'La API no devolvió los datos de la sesión inicial. Verifique que el servicio y la base de datos estén disponíveis e intente nuevamente.',
+  'Não foi possível concluir a autenticação. Tente novamente.': 'No se pudo completar la autenticación. Intente nuevamente.',
+  'Exibição das respostas': 'Visualización de respuestas',
+  'Ver o assistente escrevendo em tempo real (digitação dinâmica).': 'Ver al asistente escribiendo en tiempo real (escritura dinámica).',
+  'Exibir a resposta completa inteira de uma só vez.': 'Mostrar la respuesta completa toda de una vez.',
+  'Em tempo real': 'En tiempo real',
+  'Resposta completa': 'Respuesta completa',
 });
 
 export const catalogs: Record<Exclude<AppLanguage, 'pt-BR'>, Record<string, string>> = { 'en-US': en, 'es-ES': es };
