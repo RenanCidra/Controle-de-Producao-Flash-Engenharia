@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Briefcase, Coffee, History, LoaderCircle, Maximize2, MessageSquarePlus, Mic, MicOff, Minimize2, Phone, Send, Settings, Settings2, Sparkles, Trash2, UserRound, X, Zap } from 'lucide-react';
+import { ArrowRight, Briefcase, Coffee, History, LoaderCircle, Maximize2, MessageSquarePlus, Mic, MicOff, Minimize2, Phone, Send, Settings2, Sparkles, Trash2, X, Zap } from 'lucide-react';
 import { api } from '../api.ts';
 import type { AuthUser } from '../api.ts';
 import { getAppLanguage, getIntlLocale, translateText } from '../i18n/index.ts';
+import { UserAccountMenu } from './UserAccountMenu.tsx';
 
 export type PersonalityMode = 'direct' | 'casual' | 'formal';
 export type TypingDisplayMode = 'realtime' | 'instant';
@@ -29,6 +30,9 @@ interface FlashAssistantWidgetProps {
   isOpen: boolean;
   onToggle: () => void;
   onOpenProfile: () => void;
+  onOpenSettings: () => void;
+  onLogout: () => void;
+  showFloatingActions?: boolean;
   onNavigate: (tab: string, options?: { op?: string; subTab?: string }) => void;
 }
 
@@ -139,6 +143,9 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
   isOpen,
   onToggle,
   onOpenProfile,
+  onOpenSettings,
+  onLogout,
+  showFloatingActions = true,
   onNavigate,
 }) => {
   const [personality, setPersonality] = useState<PersonalityMode>(() => {
@@ -174,6 +181,20 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
   const speechRecognitionRef = useRef<any>(null);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+  const [editingText, setEditingText] = useState(false);
+
+  useEffect(() => {
+    const isTextControl = (target: EventTarget | null) => target instanceof HTMLElement
+      && Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
+    const handleFocusIn = (event: FocusEvent) => setEditingText(isTextControl(event.target));
+    const handleFocusOut = () => window.setTimeout(() => setEditingText(isTextControl(document.activeElement)), 0);
+    document.addEventListener('focusin', handleFocusIn);
+    document.addEventListener('focusout', handleFocusOut);
+    return () => {
+      document.removeEventListener('focusin', handleFocusIn);
+      document.removeEventListener('focusout', handleFocusOut);
+    };
+  }, []);
 
   // Monitor visualViewport so mobile virtual keyboard resizes the container and scrolls text
   useEffect(() => {
@@ -462,7 +483,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
 
   return (
     <>
-      {!isOpen && (
+      {!isOpen && showFloatingActions && !editingText && (
         <>
           {['ADMIN', 'SUPERVISOR', 'OPERATOR'].includes(currentUser?.role || '') && <button type="button" onClick={() => onNavigate('communications')} title="Central de comunicação" aria-label="Abrir central de comunicação" className="fixed bottom-[5.25rem] right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full border border-[#DCE3EB] bg-white text-[#263548] shadow-lg shadow-slate-950/20 ring-2 ring-white transition hover:border-[#FFAA00] hover:bg-[#F8FAFC] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#FFAA00] sm:bottom-[5.75rem] sm:right-5">
             <Phone className="h-5 w-5" />
@@ -478,6 +499,8 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
           </button>
         </>
       )}
+
+      {isOpen && !fullScreen && <button type="button" aria-label={t('Fechar Assistente Flash')} onClick={onToggle} className="fixed inset-0 z-40 cursor-default bg-slate-950/10" />}
 
       {isOpen && (
         <section
@@ -527,13 +550,8 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
                   ))}
                 </div>
               </div>
-              <div className="border-t border-white/10 p-3">
-                <button type="button" onClick={onOpenProfile} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-medium text-slate-300 transition hover:bg-white/10 hover:text-white">
-                  <UserRound className="h-4 w-4 text-slate-400" />{t('Meu perfil')}
-                </button>
-                <button type="button" onClick={() => { setFullScreen(false); onNavigate('settings', { subTab: 'general' }); }} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-medium text-slate-300 transition hover:bg-white/10 hover:text-white">
-                  <Settings className="h-4 w-4 text-amber-400" />{t('Configurações')}
-                </button>
+              <div className="border-t border-white/10 bg-[#151C25] p-3">
+                <UserAccountMenu currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={() => { setFullScreen(false); onOpenSettings(); }} onLogout={onLogout}/>
               </div>
             </aside>
           )}
@@ -549,10 +567,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
               </div>
             </div>
             <div className="ml-3 flex shrink-0 items-center gap-1">
-              {fullScreen && <div className="flex items-center gap-1 md:hidden">
-                <button type="button" onClick={onOpenProfile} title={t('Meu perfil')} aria-label={t('Meu perfil')} className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"><UserRound className="h-4 w-4" /></button>
-                <button type="button" onClick={() => { setFullScreen(false); onNavigate('settings', { subTab: 'general' }); }} title={t('Configurações')} aria-label={t('Configurações')} className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"><Settings className="h-4 w-4" /></button>
-              </div>}
+              {fullScreen && <div className="md:hidden"><UserAccountMenu compact currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={() => { setFullScreen(false); onOpenSettings(); }} onLogout={onLogout}/></div>}
               <button type="button" onClick={startNewConversation} disabled={loading} title={t('Nova conversa')} aria-label={t('Nova conversa')} className={`rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 ${fullScreen ? 'md:hidden' : ''}`}>
                 <MessageSquarePlus className="h-4 w-4" />
               </button>

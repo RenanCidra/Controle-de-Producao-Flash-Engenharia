@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, MessageCircle, MessageSquarePlus, Plus, Search, Send, Settings, UserRound, Users } from 'lucide-react';
-import { api } from '../../api.ts';
+import { ArrowLeft, MessageCircle, MessageSquarePlus, Plus, Search, Send, Users } from 'lucide-react';
+import { api, type AuthUser } from '../../api.ts';
+import { UserAccountMenu } from '../../components/UserAccountMenu.tsx';
 
 type Group = { id: number; name: string; sector: string; createdAt: string };
 type Message = { id: number; body: string; authorUid: string; authorName: string; createdAt: string };
@@ -16,7 +17,7 @@ type DirectConversation = {
 
 const formatMessageTime = (date: string) => new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-export const CommunicationsView: React.FC<{ onBack: () => void; onOpenProfile: () => void; onOpenSettings: () => void }> = ({ onBack, onOpenProfile, onOpenSettings }) => {
+export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack: () => void; onOpenProfile: () => void; onOpenSettings: () => void; onLogout: () => void }> = ({ currentUser, onBack, onOpenProfile, onOpenSettings, onLogout }) => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [directs, setDirects] = useState<DirectConversation[]>([]);
   const [directory, setDirectory] = useState<DirectoryUser[]>([]);
@@ -158,14 +159,11 @@ export const CommunicationsView: React.FC<{ onBack: () => void; onOpenProfile: (
   const directDepartment = selectedDirect?.department || draftRecipient?.department;
 
   return <section className="flex h-[100dvh] w-full min-w-0 flex-col overflow-hidden bg-white text-[#263548]">
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#263548] bg-[#151C25] px-4 text-white sm:px-6">
+    <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#263548] bg-[#151C25] px-3 text-white sm:px-6">
       <div className="flex min-w-0 items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]"><MessageCircle size={18}/></span><div className="min-w-0"><h1 className="truncate text-sm font-semibold">Central de comunicação</h1><p className="text-[11px] text-slate-300">Flash Connect</p></div></div>
       <div className="flex shrink-0 items-center gap-1">
-        <div className="flex items-center gap-1 md:hidden">
-        <button type="button" onClick={onOpenProfile} title="Meu perfil" aria-label="Meu perfil" className="rounded-lg p-2 text-slate-200 transition hover:bg-[#263548] hover:text-white"><UserRound size={17}/></button>
-        <button type="button" onClick={onOpenSettings} title="Configurações" aria-label="Configurações" className="rounded-lg p-2 text-slate-200 transition hover:bg-[#263548] hover:text-white"><Settings size={17}/></button>
-        </div>
-        <button type="button" onClick={onBack} className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-[#263548] hover:text-white"><ArrowLeft size={15}/><span className="hidden sm:inline">Voltar ao sistema</span><span className="sm:hidden">Voltar</span></button>
+        <div className="md:hidden"><UserAccountMenu compact currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onLogout={onLogout}/></div>
+        <button type="button" onClick={onBack} className="inline-flex items-center gap-2 rounded-lg px-2 py-2 text-xs font-semibold text-slate-200 transition hover:bg-[#263548] hover:text-white sm:px-3"><ArrowLeft size={15}/><span className="hidden sm:inline">Voltar ao sistema</span><span className="sm:hidden">Voltar</span></button>
       </div>
     </header>
 
@@ -192,9 +190,8 @@ export const CommunicationsView: React.FC<{ onBack: () => void; onOpenProfile: (
             {!visibleDirects.length && <div className="p-6 text-center text-xs leading-5 text-slate-500">Suas conversas individuais aparecerão aqui. Use o botão <b>+</b> para iniciar uma conversa.</div>}
           </>}
         </div>
-        <div className="shrink-0 border-t border-[#E7ECF1] bg-white p-3">
-          <button type="button" onClick={onOpenProfile} className="hidden w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-medium text-[#263548] transition hover:bg-[#F1F4F7] md:flex"><UserRound size={16} className="text-slate-500"/>Meu perfil</button>
-          <button type="button" onClick={onOpenSettings} className="hidden w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-medium text-[#263548] transition hover:bg-[#F1F4F7] md:flex"><Settings size={16} className="text-[#916B19]"/>Configurações</button>
+        <div className="hidden shrink-0 border-t border-[#202936] bg-[#151C25] p-3 md:block">
+          <UserAccountMenu currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onLogout={onLogout}/>
         </div>
       </aside>
 
@@ -226,6 +223,6 @@ export const CommunicationsView: React.FC<{ onBack: () => void; onOpenProfile: (
   </section>;
 };
 
-const MessageList: React.FC<{ messages: Message[] }> = ({ messages }) => <div className="flex-1 space-y-3 overflow-y-auto p-4 sm:p-6">{messages.map(message => <article key={message.id} className={`max-w-[82%] rounded-xl border px-3.5 py-2.5 shadow-sm ${message.authorUid === api.getUser()?.uid ? 'ml-auto border-[#E4D2A2] bg-[#FFF9E9]' : 'border-[#E7ECF1] bg-white'}`}><p className="mb-1 text-[10px] font-semibold text-[#916B19]">{message.authorName}</p><p className="whitespace-pre-wrap break-words text-sm text-[#263548]">{message.body}</p><time className="mt-1 block text-right text-[10px] text-slate-400">{formatMessageTime(message.createdAt)}</time></article>)}</div>;
+const MessageList: React.FC<{ messages: Message[] }> = ({ messages }) => <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 pb-5 sm:p-6">{messages.map(message => <article key={message.id} className={`max-w-[90%] rounded-xl border px-3.5 py-2.5 shadow-sm sm:max-w-[82%] ${message.authorUid === api.getUser()?.uid ? 'ml-auto border-[#E4D2A2] bg-[#FFF9E9]' : 'border-[#E7ECF1] bg-white'}`}><p className="mb-1 text-[10px] font-semibold text-[#916B19]">{message.authorName}</p><p className="whitespace-pre-wrap break-words text-sm text-[#263548]">{message.body}</p><time className="mt-1 block text-right text-[10px] text-slate-400">{formatMessageTime(message.createdAt)}</time></article>)}</div>;
 
-const MessageComposer: React.FC<{ body: string; setBody: (value: string) => void; send: (event: React.FormEvent) => void }> = ({ body, setBody, send }) => <form onSubmit={send} className="flex items-end gap-2 border-t border-[#DCE3EB] bg-white p-3 sm:p-4"><textarea value={body} onChange={event => setBody(event.target.value)} maxLength={4000} rows={1} placeholder="Escreva uma mensagem" className="max-h-28 min-h-11 min-w-0 flex-1 resize-y rounded-2xl border border-[#DCE3EB] px-4 py-3 text-sm text-[#263548] outline-none focus:border-[#FFAA00]"/><button type="submit" disabled={!body.trim()} title="Enviar mensagem" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FFAA00] text-[#151C25] hover:bg-amber-300 disabled:opacity-40"><Send size={17}/></button></form>;
+const MessageComposer: React.FC<{ body: string; setBody: (value: string) => void; send: (event: React.FormEvent) => void }> = ({ body, setBody, send }) => <form onSubmit={send} className="sticky bottom-0 z-10 flex shrink-0 items-end gap-2 border-t border-[#DCE3EB] bg-white p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-4"><textarea value={body} onChange={event => setBody(event.target.value)} maxLength={4000} rows={1} placeholder="Escreva uma mensagem" className="max-h-28 min-h-11 min-w-0 flex-1 resize-y rounded-2xl border border-[#DCE3EB] px-4 py-3 text-sm text-[#263548] outline-none focus:border-[#FFAA00]"/><button type="submit" disabled={!body.trim()} title="Enviar mensagem" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FFAA00] text-[#151C25] hover:bg-amber-300 disabled:opacity-40"><Send size={17}/></button></form>;

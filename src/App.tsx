@@ -302,12 +302,14 @@ export default function App() {
 
       {activeTab === 'communications' ? (
         <CommunicationsView
+          currentUser={currentUser}
           onBack={() => setActiveTab('dashboard')}
           onOpenProfile={() => setProfileModalOpen(true)}
           onOpenSettings={() => {
             setAssistantOpen(false);
             handleNavigateToSettings('general');
           }}
+          onLogout={handleLogout}
         />
       ) : activeTab === 'settings' ? (
         <SettingsView
@@ -507,6 +509,12 @@ export default function App() {
           isOpen={assistantOpen}
           onToggle={() => setAssistantOpen((prev) => !prev)}
           onOpenProfile={() => setProfileModalOpen(true)}
+          onOpenSettings={() => {
+            setAssistantOpen(false);
+            handleNavigateToSettings('general');
+          }}
+          onLogout={handleLogout}
+          showFloatingActions={activeTab !== 'communications'}
           onNavigate={(targetTab, options) => {
             if (targetTab === 'traceability') {
               if (options?.op) {

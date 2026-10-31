@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Home,
   GitBranch,
@@ -167,7 +167,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {userMenuOpen && (
         <div
           ref={menuRef}
-          className={`absolute bottom-18 z-50 w-64 bg-[#1A222D] border border-[#2B3747] rounded-2xl shadow-2xl overflow-hidden p-2 text-xs text-slate-200 animate-in fade-in zoom-in-95 duration-150 select-none backdrop-blur-md ${collapsed && !mobileOpen ? 'left-[calc(100%+8px)]' : 'left-2'}`}
+          className={`absolute bottom-18 z-50 w-64 bg-[#151C25] border border-[#2B3747] rounded-2xl shadow-2xl overflow-hidden p-2 text-xs text-slate-200 animate-in fade-in zoom-in-95 duration-150 select-none backdrop-blur-md ${collapsed && !mobileOpen ? 'left-[calc(100%+8px)]' : 'left-2'}`}
           style={{ boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05)' }}
         >
           {/* Top User Info Row with chevron */}
@@ -251,7 +251,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       {/* User Profile Footer Card (triggers popover on click) */}
-      <div className={`border-t border-[#202936] mt-2 bg-[#121820] ${collapsed ? 'p-2' : 'p-3'}`}>
+      <div className={`border-t border-[#202936] mt-2 bg-[#151C25] ${collapsed ? 'p-2' : 'p-3'}`}>
         <div
           ref={cardRef}
           onClick={() => setUserMenuOpen((prev) => !prev)}
