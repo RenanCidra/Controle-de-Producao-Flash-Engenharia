@@ -49,8 +49,17 @@ router.get('/direct', asyncHandler(async (req, res) => {
   const latestByConversation = new Map(latestMessages.map((message) => [message.conversationId, message]));
   return res.json(mine.flatMap((conversation) => {
     const other = otherByConversation.get(conversation.id);
-    return other ? [{ ...conversation, userId: other.userId, name: other.name, department: other.department, lastMessage: latestByConversation.get(conversation.id) || null }] : [];
+    return other ? [{
+      conversationId: conversation.id,
+      id: conversation.id,
+      createdAt: conversation.createdAt,
+      userId: other.userId,
+      name: other.name,
+      department: other.department,
+      lastMessage: latestByConversation.get(conversation.id) || null,
+    }] : [];
   }));
+
 }));
 
 router.get('/direct/:id/messages', asyncHandler(async (req, res) => {

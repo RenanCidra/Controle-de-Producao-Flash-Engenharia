@@ -22,7 +22,7 @@ import { CommunicationsView } from './client/modules/communications/Communicatio
 
 const DEV_PREVIEW_AUTH = import.meta.env.DEV && import.meta.env.VITE_DEV_PREVIEW_AUTH === 'true';
 const DEV_PREVIEW_USER: AuthUser = {
-  id: 0,
+  id: 1,
   uid: 'dev-preview-admin',
   loginName: 'preview-admin',
   name: 'Prévia local',

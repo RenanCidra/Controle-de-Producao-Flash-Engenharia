@@ -1871,6 +1871,15 @@ Object.assign(en, {
   'Exibir a resposta completa inteira de uma só vez.': 'Display the complete response all at once.',
   'Em tempo real': 'In real time',
   'Resposta completa': 'Full response',
+  'Comunicação': 'Communication',
+  'Conversas por setor': 'Conversations by sector',
+  'Criar grupo': 'Create group',
+  'Nenhum grupo criado ainda.': 'No groups created yet.',
+  'Novo grupo': 'New group',
+  'Nome do grupo': 'Group name',
+  'Setor': 'Sector',
+  'Escreva uma mensagem...': 'Write a message...',
+  'Selecione uma conversa': 'Select a conversation',
 });
 
 Object.assign(es, {
@@ -1893,6 +1902,15 @@ Object.assign(es, {
   'Exibir a resposta completa inteira de uma só vez.': 'Mostrar la respuesta completa toda de una vez.',
   'Em tempo real': 'En tiempo real',
   'Resposta completa': 'Respuesta completa',
+  'Comunicação': 'Comunicación',
+  'Conversas por setor': 'Conversaciones por sector',
+  'Criar grupo': 'Crear grupo',
+  'Nenhum grupo criado ainda.': 'Aún no se ha creado ningún grupo.',
+  'Novo grupo': 'Nuevo grupo',
+  'Nome do grupo': 'Nombre del grupo',
+  'Setor': 'Sector',
+  'Escreva uma mensagem...': 'Escriba un mensaje...',
+  'Selecione uma conversa': 'Seleccione una conversación',
 });
 
 export const catalogs: Record<Exclude<AppLanguage, 'pt-BR'>, Record<string, string>> = { 'en-US': en, 'es-ES': es };
