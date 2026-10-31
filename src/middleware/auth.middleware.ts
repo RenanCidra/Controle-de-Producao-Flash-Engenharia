@@ -15,7 +15,7 @@ export const authenticateToken = async (
 ) => {
   if (process.env.DEV_PREVIEW_AUTH === 'true' && process.env.NODE_ENV !== 'production') {
     req.user = {
-      userId: 0,
+      userId: 1,
       uid: 'dev-preview-admin',
       jti: 'dev-preview',
       loginName: 'preview-admin',

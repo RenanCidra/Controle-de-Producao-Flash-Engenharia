@@ -39,23 +39,47 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
   const selectedConversation = selectedGroupId !== null || selectedDirectId !== null || draftRecipient !== null;
 
   const loadGroups = useCallback(async () => {
-    try { setGroups(await api.getCommunicationGroups()); }
-    catch (e: any) { setError(e.message); }
+    try {
+      const data = await api.getCommunicationGroups();
+      setGroups(Array.isArray(data) ? data : []);
+    } catch (e: any) {
+      setGroups([]);
+      setError(e.message);
+    }
   }, []);
   const loadDirects = useCallback(async () => {
-    try { setDirects(await api.getCommunicationDirectConversations()); }
-    catch (e: any) { setError(e.message); }
+    try {
+      const data = await api.getCommunicationDirectConversations();
+      setDirects(Array.isArray(data) ? data : []);
+    } catch (e: any) {
+      setDirects([]);
+      setError(e.message);
+    }
   }, []);
   const loadDirectory = async () => {
-    try { setDirectory(await api.getCommunicationDirectory()); }
-    catch (e: any) { setError(e.message); }
+    try {
+      const data = await api.getCommunicationDirectory();
+      setDirectory(Array.isArray(data) ? data : []);
+    } catch (e: any) {
+      setDirectory([]);
+      setError(e.message);
+    }
   };
   const loadMessages = useCallback(async () => {
     try {
-      if (selectedGroupId !== null) setMessages(await api.getCommunicationMessages(selectedGroupId));
-      else if (selectedDirectId !== null) setMessages(await api.getCommunicationDirectMessages(selectedDirectId));
-      else setMessages([]);
-    } catch (e: any) { setMessages([]); setError(e.message); }
+      if (selectedGroupId !== null) {
+        const data = await api.getCommunicationMessages(selectedGroupId);
+        setMessages(Array.isArray(data) ? data : []);
+      } else if (selectedDirectId !== null) {
+        const data = await api.getCommunicationDirectMessages(selectedDirectId);
+        setMessages(Array.isArray(data) ? data : []);
+      } else {
+        setMessages([]);
+      }
+    } catch (e: any) {
+      setMessages([]);
+      setError(e.message);
+    }
   }, [selectedGroupId, selectedDirectId]);
 
   useEffect(() => {
@@ -71,15 +95,15 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
   }, [loadMessages]);
 
   const visibleGroups = useMemo(
-    () => groups.filter(group => `${group.name} ${group.sector}`.toLowerCase().includes(search.toLowerCase())),
+    () => (Array.isArray(groups) ? groups : []).filter(group => group && `${group.name || ''} ${group.sector || ''}`.toLowerCase().includes((search || '').toLowerCase())),
     [groups, search],
   );
   const visibleDirects = useMemo(
-    () => directs.filter(conversation => `${conversation.name} ${conversation.department || ''}`.toLowerCase().includes(search.toLowerCase())),
+    () => (Array.isArray(directs) ? directs : []).filter(conversation => conversation && `${conversation.name || ''} ${conversation.department || ''}`.toLowerCase().includes((search || '').toLowerCase())),
     [directs, search],
   );
   const visibleUsers = useMemo(
-    () => directory.filter(user => `${user.name} ${user.department || ''}`.toLowerCase().includes(userSearch.toLowerCase())),
+    () => (Array.isArray(directory) ? directory : []).filter(user => user && `${user.name || ''} ${user.department || ''}`.toLowerCase().includes((userSearch || '').toLowerCase())),
     [directory, userSearch],
   );
 
@@ -119,9 +143,10 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
   };
   const startConversation = (user: DirectoryUser) => {
     const existing = directs.find(conversation => conversation.userId === user.id);
+    const existingId = existing ? (existing.conversationId || (existing as any).id) : null;
     setSection('conversations');
     setSelectedGroupId(null);
-    setSelectedDirectId(existing?.conversationId ?? null);
+    setSelectedDirectId(existingId);
     setDraftRecipient(existing ? null : user);
     setMessages([]);
     setBody('');
@@ -154,7 +179,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
   };
 
   const selectedGroup = groups.find(group => group.id === selectedGroupId);
-  const selectedDirect = directs.find(conversation => conversation.conversationId === selectedDirectId);
+  const selectedDirect = directs.find(conversation => (conversation.conversationId || (conversation as any).id) === selectedDirectId);
   const directTitle = selectedDirect?.name || draftRecipient?.name;
   const directDepartment = selectedDirect?.department || draftRecipient?.department;
 
@@ -182,13 +207,53 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {section === 'groups' ? <>
-            {visibleGroups.map(group => <button key={group.id} type="button" onClick={() => { setSelectedGroupId(group.id); setSelectedDirectId(null); setDraftRecipient(null); setMessages([]); }} className={`flex w-full items-center gap-3 border-b border-[#F1F4F7] px-4 py-3.5 text-left ${selectedGroupId === group.id ? 'bg-[#F1F4F7]' : 'hover:bg-slate-50'}`}><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]"><Users size={19}/></span><span className="min-w-0 flex-1"><b className="block truncate text-sm text-[#263548]">{group.name}</b><small className="mt-1 block truncate text-xs text-slate-500">{group.sector}</small></span></button>)}
-            {!visibleGroups.length && <p className="p-5 text-xs text-slate-500">Nenhum grupo disponível para sua conta.</p>}
-          </> : <>
-            {visibleDirects.map(conversation => <button key={conversation.conversationId} type="button" onClick={() => { setSelectedGroupId(null); setSelectedDirectId(conversation.conversationId); setDraftRecipient(null); setMessages([]); }} className={`flex w-full items-center gap-3 border-b border-[#F1F4F7] px-4 py-3.5 text-left ${selectedDirectId === conversation.conversationId ? 'bg-[#F1F4F7]' : 'hover:bg-slate-50'}`}><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]"><MessageCircle size={19}/></span><span className="min-w-0 flex-1"><b className="block truncate text-sm text-[#263548]">{conversation.name}</b><small className="mt-1 block truncate text-xs text-slate-500">{conversation.lastMessage?.body || conversation.department || 'Conversa direta'}</small></span>{conversation.lastMessage && <time className="self-start text-[10px] text-slate-400">{formatMessageTime(conversation.lastMessage.createdAt)}</time>}</button>)}
-            {!visibleDirects.length && <div className="p-6 text-center text-xs leading-5 text-slate-500">Suas conversas individuais aparecerão aqui. Use o botão <b>+</b> para iniciar uma conversa.</div>}
-          </>}
+          {section === 'groups' ? (
+            visibleGroups.length ? (
+              visibleGroups.map((group, index) => (
+                <button
+                  key={`group-${group.id || index}`}
+                  type="button"
+                  onClick={() => { setSelectedGroupId(group.id); setSelectedDirectId(null); setDraftRecipient(null); setMessages([]); }}
+                  className={`flex w-full items-center gap-3 border-b border-[#F1F4F7] px-4 py-3.5 text-left ${selectedGroupId === group.id ? 'bg-[#F1F4F7]' : 'hover:bg-slate-50'}`}
+                >
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]">
+                    <Users size={19}/>
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <b className="block truncate text-sm text-[#263548]">{group.name}</b>
+                    <small className="mt-1 block truncate text-xs text-slate-500">{group.sector}</small>
+                  </span>
+                </button>
+              ))
+            ) : (
+              <p className="p-5 text-xs text-slate-500">Nenhum grupo disponível para sua conta.</p>
+            )
+          ) : (
+            visibleDirects.length ? (
+              visibleDirects.map((conversation, index) => {
+                const directId = conversation.conversationId || (conversation as any).id || (index + 1);
+                return (
+                  <button
+                    key={`direct-${directId}`}
+                    type="button"
+                    onClick={() => { setSelectedGroupId(null); setSelectedDirectId(directId); setDraftRecipient(null); setMessages([]); }}
+                    className={`flex w-full items-center gap-3 border-b border-[#F1F4F7] px-4 py-3.5 text-left ${selectedDirectId === directId ? 'bg-[#F1F4F7]' : 'hover:bg-slate-50'}`}
+                  >
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]">
+                      <MessageCircle size={19}/>
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <b className="block truncate text-sm text-[#263548]">{conversation.name}</b>
+                      <small className="mt-1 block truncate text-xs text-slate-500">{conversation.lastMessage?.body || conversation.department || 'Conversa direta'}</small>
+                    </span>
+                    {conversation.lastMessage && <time className="self-start text-[10px] text-slate-400">{formatMessageTime(conversation.lastMessage.createdAt)}</time>}
+                  </button>
+                );
+              })
+            ) : (
+              <div className="p-6 text-center text-xs leading-5 text-slate-500">Suas conversas individuais aparecerão aqui. Use o botão <b>+</b> para iniciar uma conversa.</div>
+            )
+          )}
         </div>
         <div className="hidden shrink-0 border-t border-[#202936] bg-[#151C25] p-3 md:block">
           <UserAccountMenu currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onLogout={onLogout}/>
@@ -214,15 +279,15 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
         <div><h3 className="font-semibold text-[#263548]">Nova conversa</h3><p className="mt-1 text-xs text-slate-500">Escolha um usuário ativo do sistema. A conversa só será criada quando a primeira mensagem for enviada.</p></div>
         <label className="flex items-center gap-2 rounded-lg border border-[#DCE3EB] px-3 py-2 text-slate-500"><Search size={15}/><input autoFocus value={userSearch} onChange={event => setUserSearch(event.target.value)} placeholder="Buscar por nome ou setor" className="min-w-0 flex-1 text-sm text-[#263548] outline-none"/></label>
         {error && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p>}
-        <div className="max-h-64 overflow-y-auto rounded-lg border border-[#E7ECF1]">{visibleUsers.map(user => <button key={user.id} type="button" onClick={() => startConversation(user)} className="flex w-full items-center gap-3 border-b border-[#F1F4F7] px-3 py-3 text-left last:border-0 hover:bg-[#F8FAFC]"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#263548] text-sm font-semibold text-[#FFAA00]">{user.name.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase()}</span><span className="min-w-0"><b className="block truncate text-sm text-[#263548]">{user.name}</b><small className="text-xs text-slate-500">{user.department || 'Setor não informado'}</small></span></button>)}{!visibleUsers.length && !error && <p className="p-4 text-center text-xs text-slate-500">Nenhum usuário encontrado.</p>}</div>
+        <div className="max-h-64 overflow-y-auto rounded-lg border border-[#E7ECF1]">{visibleUsers.map((user, index) => <button key={`user-${user.id || index}`} type="button" onClick={() => startConversation(user)} className="flex w-full items-center gap-3 border-b border-[#F1F4F7] px-3 py-3 text-left last:border-0 hover:bg-[#F8FAFC]"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#263548] text-sm font-semibold text-[#FFAA00]">{user.name.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase()}</span><span className="min-w-0"><b className="block truncate text-sm text-[#263548]">{user.name}</b><small className="text-xs text-slate-500">{user.department || 'Setor não informado'}</small></span></button>)}{!visibleUsers.length && !error && <p className="p-4 text-center text-xs text-slate-500">Nenhum usuário encontrado.</p>}</div>
         <div className="flex justify-end"><button type="button" onClick={() => setNewConversation(false)} className="rounded-lg border border-[#DCE3EB] px-3 py-2 text-sm">Cancelar</button></div>
       </div> : <form onSubmit={createGroup} className="w-full max-w-md space-y-3 rounded-2xl bg-white p-5 shadow-xl">
-        <h3 className="font-semibold text-[#263548]">Criar grupo</h3><input required minLength={2} maxLength={80} value={name} onChange={event => setName(event.target.value)} placeholder="Nome do grupo" className="w-full rounded-lg border border-[#DCE3EB] p-2.5 text-sm"/><input required minLength={2} maxLength={80} value={sector} onChange={event => setSector(event.target.value)} placeholder="Setor" className="w-full rounded-lg border border-[#DCE3EB] p-2.5 text-sm"/><label className="block text-xs font-semibold text-[#263548]">Participantes</label><input value={userSearch} onChange={event => setUserSearch(event.target.value)} placeholder="Pesquisar usuários" className="w-full rounded-lg border border-[#DCE3EB] p-2.5 text-sm"/>{error && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p>}<div className="max-h-44 overflow-y-auto rounded-lg border border-[#E7ECF1]">{visibleUsers.map(user => <label key={user.id} className="flex cursor-pointer items-center gap-2 border-b border-[#F1F4F7] px-3 py-2 last:border-0"><input type="checkbox" checked={memberIds.includes(user.id)} onChange={event => setMemberIds(ids => event.target.checked ? [...ids, user.id] : ids.filter(id => id !== user.id))}/><span className="text-sm text-[#263548]">{user.name}<small className="ml-2 text-xs text-slate-500">{user.department || 'Sem setor informado'}</small></span></label>)}</div><div className="flex justify-end gap-2 pt-1"><button type="button" onClick={() => setNewGroup(false)} className="rounded-lg border border-[#DCE3EB] px-3 py-2 text-sm">Cancelar</button><button className="rounded-lg bg-[#FFAA00] px-3 py-2 text-sm font-semibold text-[#151C25]">Criar grupo</button></div>
+        <h3 className="font-semibold text-[#263548]">Criar grupo</h3><input required minLength={2} maxLength={80} value={name} onChange={event => setName(event.target.value)} placeholder="Nome do grupo" className="w-full rounded-lg border border-[#DCE3EB] p-2.5 text-sm"/><input required minLength={2} maxLength={80} value={sector} onChange={event => setSector(event.target.value)} placeholder="Setor" className="w-full rounded-lg border border-[#DCE3EB] p-2.5 text-sm"/><label className="block text-xs font-semibold text-[#263548]">Participantes</label><input value={userSearch} onChange={event => setUserSearch(event.target.value)} placeholder="Pesquisar usuários" className="w-full rounded-lg border border-[#DCE3EB] p-2.5 text-sm"/>{error && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p>}<div className="max-h-44 overflow-y-auto rounded-lg border border-[#E7ECF1]">{visibleUsers.map((user, index) => <label key={`member-${user.id || index}`} className="flex cursor-pointer items-center gap-2 border-b border-[#F1F4F7] px-3 py-2 last:border-0"><input type="checkbox" checked={memberIds.includes(user.id)} onChange={event => setMemberIds(ids => event.target.checked ? [...ids, user.id] : ids.filter(id => id !== user.id))}/><span className="text-sm text-[#263548]">{user.name}<small className="ml-2 text-xs text-slate-500">{user.department || 'Sem setor informado'}</small></span></label>)}</div><div className="flex justify-end gap-2 pt-1"><button type="button" onClick={() => setNewGroup(false)} className="rounded-lg border border-[#DCE3EB] px-3 py-2 text-sm">Cancelar</button><button className="rounded-lg bg-[#FFAA00] px-3 py-2 text-sm font-semibold text-[#151C25]">Criar grupo</button></div>
       </form>}
     </div>}
   </section>;
 };
 
-const MessageList: React.FC<{ messages: Message[] }> = ({ messages }) => <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 pb-5 sm:p-6">{messages.map(message => <article key={message.id} className={`max-w-[90%] rounded-xl border px-3.5 py-2.5 shadow-sm sm:max-w-[82%] ${message.authorUid === api.getUser()?.uid ? 'ml-auto border-[#E4D2A2] bg-[#FFF9E9]' : 'border-[#E7ECF1] bg-white'}`}><p className="mb-1 text-[10px] font-semibold text-[#916B19]">{message.authorName}</p><p className="whitespace-pre-wrap break-words text-sm text-[#263548]">{message.body}</p><time className="mt-1 block text-right text-[10px] text-slate-400">{formatMessageTime(message.createdAt)}</time></article>)}</div>;
+const MessageList: React.FC<{ messages: Message[] }> = ({ messages }) => <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 pb-5 sm:p-6">{(Array.isArray(messages) ? messages : []).map((message, index) => <article key={`msg-${message.id || index}-${message.createdAt || ''}`} className={`max-w-[90%] rounded-xl border px-3.5 py-2.5 shadow-sm sm:max-w-[82%] ${message.authorUid === api.getUser()?.uid ? 'ml-auto border-[#E4D2A2] bg-[#FFF9E9]' : 'border-[#E7ECF1] bg-white'}`}><p className="mb-1 text-[10px] font-semibold text-[#916B19]">{message.authorName}</p><p className="whitespace-pre-wrap break-words text-sm text-[#263548]">{message.body}</p><time className="mt-1 block text-right text-[10px] text-slate-400">{formatMessageTime(message.createdAt)}</time></article>)}</div>;
 
 const MessageComposer: React.FC<{ body: string; setBody: (value: string) => void; send: (event: React.FormEvent) => void }> = ({ body, setBody, send }) => <form onSubmit={send} className="sticky bottom-0 z-10 flex shrink-0 items-end gap-2 border-t border-[#DCE3EB] bg-white p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-4"><textarea value={body} onChange={event => setBody(event.target.value)} maxLength={4000} rows={1} placeholder="Escreva uma mensagem" className="max-h-28 min-h-11 min-w-0 flex-1 resize-y rounded-2xl border border-[#DCE3EB] px-4 py-3 text-sm text-[#263548] outline-none focus:border-[#FFAA00]"/><button type="submit" disabled={!body.trim()} title="Enviar mensagem" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FFAA00] text-[#151C25] hover:bg-amber-300 disabled:opacity-40"><Send size={17}/></button></form>;
