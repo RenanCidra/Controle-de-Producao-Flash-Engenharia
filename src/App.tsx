@@ -18,6 +18,7 @@ import { AuthPage } from './client/modules/auth/AuthPage.tsx';
 import { UserProfileModal } from './client/modules/auth/UserProfileModal.tsx';
 import { FlashAssistantWidget } from './client/components/FlashAssistantWidget.tsx';
 import { WelcomeView } from './client/modules/home/WelcomeView.tsx';
+import { CommunicationsView } from './client/modules/communications/CommunicationsView.tsx';
 
 const DEV_PREVIEW_AUTH = import.meta.env.DEV && import.meta.env.VITE_DEV_PREVIEW_AUTH === 'true';
 const DEV_PREVIEW_USER: AuthUser = {
@@ -406,6 +407,8 @@ export default function App() {
                   }}
                 />
               )}
+
+              {activeTab === 'communications' && <CommunicationsView />}
 
               {activeTab === 'production-orders' && (
                 <ProductionOrdersView

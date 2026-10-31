@@ -370,6 +370,24 @@ export const productionOccurrenceEvents = pgTable("production_occurrence_events"
   check("production_occurrence_events_type_check", sql`${table.eventType} IN ('CREATED', 'NOTE', 'STATUS_CHANGED')`),
 ]);
 
+// Internal communication conversations and messages, independent from occurrences.
+export const communicationGroups = pgTable("communication_groups", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  sector: text("sector").notNull(),
+  createdByUid: text("created_by_uid").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [index("communication_groups_sector_idx").on(table.sector)]);
+
+export const communicationMessages = pgTable("communication_messages", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id").notNull().references(() => communicationGroups.id, { onDelete: "cascade" }),
+  authorUid: text("author_uid").notNull(),
+  authorName: text("author_name").notNull(),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [index("communication_messages_group_idx").on(table.groupId, table.createdAt)]);
+
 // Relations
 export const productionOrdersRelations = relations(productionOrders, ({ one, many }) => ({
   item: one(inventoryItems, {
