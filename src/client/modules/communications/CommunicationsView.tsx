@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, MessageCircle, MessageSquarePlus, Plus, Search, Send, Users } from 'lucide-react';
+import { ArrowLeft, MessageCircle, MessageSquarePlus, Plus, Search, Send, Settings, UserRound, Users } from 'lucide-react';
 import { api } from '../../api.ts';
 
 type Group = { id: number; name: string; sector: string; createdAt: string };
@@ -16,7 +16,7 @@ type DirectConversation = {
 
 const formatMessageTime = (date: string) => new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-export const CommunicationsView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+export const CommunicationsView: React.FC<{ onBack: () => void; onOpenProfile: () => void; onOpenSettings: () => void }> = ({ onBack, onOpenProfile, onOpenSettings }) => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [directs, setDirects] = useState<DirectConversation[]>([]);
   const [directory, setDirectory] = useState<DirectoryUser[]>([]);
@@ -160,7 +160,11 @@ export const CommunicationsView: React.FC<{ onBack: () => void }> = ({ onBack })
   return <section className="flex h-[100dvh] w-full min-w-0 flex-col overflow-hidden bg-white text-[#263548]">
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#263548] bg-[#151C25] px-4 text-white sm:px-6">
       <div className="flex min-w-0 items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]"><MessageCircle size={18}/></span><div className="min-w-0"><h1 className="truncate text-sm font-semibold">Central de comunicação</h1><p className="text-[11px] text-slate-300">Flash Connect</p></div></div>
-      <button type="button" onClick={onBack} className="inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-[#263548] hover:text-white"><ArrowLeft size={15}/><span className="hidden sm:inline">Voltar ao sistema</span><span className="sm:hidden">Voltar</span></button>
+      <div className="flex shrink-0 items-center gap-1">
+        <button type="button" onClick={onOpenProfile} title="Meu perfil" aria-label="Meu perfil" className="rounded-lg p-2 text-slate-200 transition hover:bg-[#263548] hover:text-white"><UserRound size={17}/></button>
+        <button type="button" onClick={onOpenSettings} title="Configurações" aria-label="Configurações" className="rounded-lg p-2 text-slate-200 transition hover:bg-[#263548] hover:text-white"><Settings size={17}/></button>
+        <button type="button" onClick={onBack} className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-[#263548] hover:text-white"><ArrowLeft size={15}/><span className="hidden sm:inline">Voltar ao sistema</span><span className="sm:hidden">Voltar</span></button>
+      </div>
     </header>
 
     <div className="flex min-h-0 flex-1 overflow-hidden">

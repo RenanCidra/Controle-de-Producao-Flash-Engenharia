@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Briefcase, Coffee, History, LoaderCircle, Maximize2, MessageSquarePlus, Mic, MicOff, Minimize2, Phone, Send, Settings2, Sparkles, Trash2, X, Zap } from 'lucide-react';
+import { ArrowRight, Briefcase, Coffee, History, LoaderCircle, Maximize2, MessageSquarePlus, Mic, MicOff, Minimize2, Phone, Send, Settings, Settings2, Sparkles, Trash2, UserRound, X, Zap } from 'lucide-react';
 import { api } from '../api.ts';
 import type { AuthUser } from '../api.ts';
 import { getAppLanguage, getIntlLocale, translateText } from '../i18n/index.ts';
@@ -28,6 +28,7 @@ interface FlashAssistantWidgetProps {
   currentUser: AuthUser | null;
   isOpen: boolean;
   onToggle: () => void;
+  onOpenProfile: () => void;
   onNavigate: (tab: string, options?: { op?: string; subTab?: string }) => void;
 }
 
@@ -137,6 +138,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
   currentUser,
   isOpen,
   onToggle,
+  onOpenProfile,
   onNavigate,
 }) => {
   const [personality, setPersonality] = useState<PersonalityMode>(() => {
@@ -539,6 +541,10 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
               </div>
             </div>
             <div className="ml-3 flex shrink-0 items-center gap-1">
+              {fullScreen && <>
+                <button type="button" onClick={onOpenProfile} title={t('Meu perfil')} aria-label={t('Meu perfil')} className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"><UserRound className="h-4 w-4" /></button>
+                <button type="button" onClick={() => { setFullScreen(false); onNavigate('settings', { subTab: 'general' }); }} title={t('Configurações')} aria-label={t('Configurações')} className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"><Settings className="h-4 w-4" /></button>
+              </>}
               <button type="button" onClick={startNewConversation} disabled={loading} title={t('Nova conversa')} aria-label={t('Nova conversa')} className={`rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 ${fullScreen ? 'md:hidden' : ''}`}>
                 <MessageSquarePlus className="h-4 w-4" />
               </button>

@@ -301,7 +301,14 @@ export default function App() {
       )}
 
       {activeTab === 'communications' ? (
-        <CommunicationsView onBack={() => setActiveTab('dashboard')} />
+        <CommunicationsView
+          onBack={() => setActiveTab('dashboard')}
+          onOpenProfile={() => setProfileModalOpen(true)}
+          onOpenSettings={() => {
+            setAssistantOpen(false);
+            handleNavigateToSettings('general');
+          }}
+        />
       ) : activeTab === 'settings' ? (
         <SettingsView
           initialSubTab={settingsSubTab}
@@ -494,13 +501,12 @@ export default function App() {
         }}
         onError={(err) => showToast(err, 'error')}
       />
-      <UserProfileModal isOpen={profileModalOpen} user={currentUser} onClose={() => setProfileModalOpen(false)} />
-
       {currentUser && (
         <FlashAssistantWidget
           currentUser={currentUser}
           isOpen={assistantOpen}
           onToggle={() => setAssistantOpen((prev) => !prev)}
+          onOpenProfile={() => setProfileModalOpen(true)}
           onNavigate={(targetTab, options) => {
             if (targetTab === 'traceability') {
               if (options?.op) {
@@ -513,6 +519,7 @@ export default function App() {
               }
               setActiveTab('occurrences');
             } else if (targetTab === 'settings') {
+              setAssistantOpen(false);
               handleNavigateToSettings((options?.subTab as SettingsSubTab) || 'general');
             } else if (targetTab === 'communications') {
               setActiveTab('communications');
@@ -531,6 +538,7 @@ export default function App() {
           }}
         />
       )}
+      <UserProfileModal isOpen={profileModalOpen} user={currentUser} onClose={() => setProfileModalOpen(false)} />
     </div>
   );
 }
