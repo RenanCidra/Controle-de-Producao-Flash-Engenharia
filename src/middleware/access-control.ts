@@ -11,6 +11,7 @@ export const PERMISSIONS = [
   'production-orders:read', 'production-orders:create', 'production-orders:update', 'production-orders:delete',
   'quality:read', 'quality:create', 'quality:delete',
   'occurrences:read', 'occurrences:create', 'occurrences:comment', 'occurrences:manage',
+  'communications:read', 'communications:write', 'communications:manage',
 ] as const;
 
 export type Permission = typeof PERMISSIONS[number];
@@ -23,6 +24,7 @@ const ROLE_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>> = {
     'integrations:read', 'organization:read',
     'inventory:read', 'inventory:update', 'production-orders:read', 'production-orders:update', 'quality:read',
     'occurrences:read', 'occurrences:create', 'occurrences:comment',
+    'communications:read', 'communications:write',
   ]),
   AUDITOR: new Set([
     'audit:read', 'integrations:read', 'organization:read', 'production-lines:read',

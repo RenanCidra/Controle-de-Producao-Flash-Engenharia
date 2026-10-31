@@ -12,6 +12,7 @@ import protheusRouter from './modules/protheus-sync/protheus-sync.routes.ts';
 import traceabilityRouter from './modules/traceability/traceability.routes.ts';
 import occurrencesRouter from './modules/occurrences/occurrences.routes.ts';
 import copilotRouter from './modules/copilot/copilot.routes.ts';
+import communicationsRouter from './modules/communications/communications.routes.ts';
 import { db } from './db/index.ts';
 import {
   protheusSalesOrders,
@@ -80,6 +81,7 @@ apiRouter.use('/protheus', protheusRouter);
 apiRouter.use('/traceability', traceabilityRouter);
 apiRouter.use('/occurrences', occurrencesRouter);
 apiRouter.use('/copilot', copilotRouter);
+apiRouter.use('/communications', communicationsRouter);
 
 apiRouter.get('/stats', requirePermission('production-orders:read'), async (_req: Request, res: Response) => {
   try {

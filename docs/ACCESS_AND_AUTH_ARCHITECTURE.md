@@ -137,6 +137,13 @@ A migração `src/db/migrations/20261029_access_accounts.sql` cria `organization
 
 O procedimento operacional completo para criar a primeira conta `ADMIN` está em [`docs/PRIMEIRO_ACESSO.md`](./PRIMEIRO_ACESSO.md). Não existe usuário/senha padrão; o bootstrap protegido é o caminho de primeiro acesso.
 
+## Central de comunicação
+
+- **Primeira etapa implementada:** página dedicada com lista de grupos por setor, histórico de mensagens e envio de texto, usando atualização periódica de 10 segundos e a paleta Nexus/Flash.
+- **Persistência:** grupos e mensagens usam tabelas próprias (`communication_groups`, `communication_messages`), separadas dos registros de ocorrências. A migração incremental é `src/db/migrations/20261031_communications.sql`; aplique com `npm run db:migrate:communications` antes de usar a central.
+- **Permissões na API:** `ADMIN`, `SUPERVISOR` e `OPERATOR` podem consultar e enviar mensagens. `ADMIN` e `SUPERVISOR` podem criar grupos. Auditor não recebe as permissões de comunicação.
+- **Limites atuais:** grupos são organizados pelo campo de setor, sem associação individual de membros ainda; mensagens diretas, notificações, presença, confirmação de leitura, anexos e criação de ocorrência a partir da conversa ficam para etapas posteriores. A gestão de ocorrências segue independente.
+
 ## Assistente Flash — Otimizações de Latência e Performance
 
 - **Cache operacional em memória (TTL 25s):** A agregação dos dados de OPs, ocorrências ativas, saldo de estoque e linhas de produção é armazenada em cache por 25 segundos, eliminando múltiplos roundtrips SQL repetitivos e reduzindo o tempo de consulta de banco de ~800ms para menos de 5ms em turnos subsequentes.

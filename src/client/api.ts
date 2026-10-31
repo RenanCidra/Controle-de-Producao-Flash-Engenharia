@@ -641,6 +641,11 @@ class ApiService {
     return this.request<any>(`/occurrences?${query.toString()}`);
   }
 
+  public getCommunicationGroups() { return this.request<any[]>('/communications/groups'); }
+  public getCommunicationMessages(groupId: number) { return this.request<any[]>(`/communications/groups/${groupId}/messages`); }
+  public createCommunicationGroup(name: string, sector: string) { return this.request<any>('/communications/groups', { method: 'POST', body: JSON.stringify({ name, sector }) }); }
+  public sendCommunicationMessage(groupId: number, body: string) { return this.request<any>(`/communications/groups/${groupId}/messages`, { method: 'POST', body: JSON.stringify({ body }) }); }
+
   public getOccurrencesForOp(numeroOp: string) {
     return this.request<any[]>(`/occurrences/op/${encodeURIComponent(numeroOp)}`);
   }
