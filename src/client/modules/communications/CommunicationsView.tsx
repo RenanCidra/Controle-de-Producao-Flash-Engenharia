@@ -161,8 +161,10 @@ export const CommunicationsView: React.FC<{ onBack: () => void; onOpenProfile: (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#263548] bg-[#151C25] px-4 text-white sm:px-6">
       <div className="flex min-w-0 items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]"><MessageCircle size={18}/></span><div className="min-w-0"><h1 className="truncate text-sm font-semibold">Central de comunicação</h1><p className="text-[11px] text-slate-300">Flash Connect</p></div></div>
       <div className="flex shrink-0 items-center gap-1">
+        <div className="flex items-center gap-1 md:hidden">
         <button type="button" onClick={onOpenProfile} title="Meu perfil" aria-label="Meu perfil" className="rounded-lg p-2 text-slate-200 transition hover:bg-[#263548] hover:text-white"><UserRound size={17}/></button>
         <button type="button" onClick={onOpenSettings} title="Configurações" aria-label="Configurações" className="rounded-lg p-2 text-slate-200 transition hover:bg-[#263548] hover:text-white"><Settings size={17}/></button>
+        </div>
         <button type="button" onClick={onBack} className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-[#263548] hover:text-white"><ArrowLeft size={15}/><span className="hidden sm:inline">Voltar ao sistema</span><span className="sm:hidden">Voltar</span></button>
       </div>
     </header>
@@ -189,6 +191,10 @@ export const CommunicationsView: React.FC<{ onBack: () => void; onOpenProfile: (
             {visibleDirects.map(conversation => <button key={conversation.conversationId} type="button" onClick={() => { setSelectedGroupId(null); setSelectedDirectId(conversation.conversationId); setDraftRecipient(null); setMessages([]); }} className={`flex w-full items-center gap-3 border-b border-[#F1F4F7] px-4 py-3.5 text-left ${selectedDirectId === conversation.conversationId ? 'bg-[#F1F4F7]' : 'hover:bg-slate-50'}`}><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]"><MessageCircle size={19}/></span><span className="min-w-0 flex-1"><b className="block truncate text-sm text-[#263548]">{conversation.name}</b><small className="mt-1 block truncate text-xs text-slate-500">{conversation.lastMessage?.body || conversation.department || 'Conversa direta'}</small></span>{conversation.lastMessage && <time className="self-start text-[10px] text-slate-400">{formatMessageTime(conversation.lastMessage.createdAt)}</time>}</button>)}
             {!visibleDirects.length && <div className="p-6 text-center text-xs leading-5 text-slate-500">Suas conversas individuais aparecerão aqui. Use o botão <b>+</b> para iniciar uma conversa.</div>}
           </>}
+        </div>
+        <div className="shrink-0 border-t border-[#E7ECF1] bg-white p-3">
+          <button type="button" onClick={onOpenProfile} className="hidden w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-medium text-[#263548] transition hover:bg-[#F1F4F7] md:flex"><UserRound size={16} className="text-slate-500"/>Meu perfil</button>
+          <button type="button" onClick={onOpenSettings} className="hidden w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-medium text-[#263548] transition hover:bg-[#F1F4F7] md:flex"><Settings size={16} className="text-[#916B19]"/>Configurações</button>
         </div>
       </aside>
 

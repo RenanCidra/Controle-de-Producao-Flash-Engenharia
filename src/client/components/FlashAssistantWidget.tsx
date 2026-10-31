@@ -527,6 +527,14 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
                   ))}
                 </div>
               </div>
+              <div className="border-t border-white/10 p-3">
+                <button type="button" onClick={onOpenProfile} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-medium text-slate-300 transition hover:bg-white/10 hover:text-white">
+                  <UserRound className="h-4 w-4 text-slate-400" />{t('Meu perfil')}
+                </button>
+                <button type="button" onClick={() => { setFullScreen(false); onNavigate('settings', { subTab: 'general' }); }} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-medium text-slate-300 transition hover:bg-white/10 hover:text-white">
+                  <Settings className="h-4 w-4 text-amber-400" />{t('Configurações')}
+                </button>
+              </div>
             </aside>
           )}
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -541,10 +549,10 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
               </div>
             </div>
             <div className="ml-3 flex shrink-0 items-center gap-1">
-              {fullScreen && <>
+              {fullScreen && <div className="flex items-center gap-1 md:hidden">
                 <button type="button" onClick={onOpenProfile} title={t('Meu perfil')} aria-label={t('Meu perfil')} className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"><UserRound className="h-4 w-4" /></button>
                 <button type="button" onClick={() => { setFullScreen(false); onNavigate('settings', { subTab: 'general' }); }} title={t('Configurações')} aria-label={t('Configurações')} className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"><Settings className="h-4 w-4" /></button>
-              </>}
+              </div>}
               <button type="button" onClick={startNewConversation} disabled={loading} title={t('Nova conversa')} aria-label={t('Nova conversa')} className={`rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 ${fullScreen ? 'md:hidden' : ''}`}>
                 <MessageSquarePlus className="h-4 w-4" />
               </button>
