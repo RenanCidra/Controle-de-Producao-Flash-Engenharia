@@ -300,7 +300,9 @@ export default function App() {
         </div>
       )}
 
-      {activeTab === 'settings' ? (
+      {activeTab === 'communications' ? (
+        <CommunicationsView onBack={() => setActiveTab('dashboard')} />
+      ) : activeTab === 'settings' ? (
         <SettingsView
           initialSubTab={settingsSubTab}
           onBack={handleBackFromSettings}
@@ -408,8 +410,6 @@ export default function App() {
                 />
               )}
 
-              {activeTab === 'communications' && <CommunicationsView />}
-
               {activeTab === 'production-orders' && (
                 <ProductionOrdersView
                   orders={orders}
@@ -514,6 +514,8 @@ export default function App() {
               setActiveTab('occurrences');
             } else if (targetTab === 'settings') {
               handleNavigateToSettings((options?.subTab as SettingsSubTab) || 'general');
+            } else if (targetTab === 'communications') {
+              setActiveTab('communications');
             } else if (
               [
                 'dashboard',

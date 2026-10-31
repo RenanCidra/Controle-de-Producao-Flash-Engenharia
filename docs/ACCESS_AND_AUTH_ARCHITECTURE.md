@@ -139,10 +139,10 @@ O procedimento operacional completo para criar a primeira conta `ADMIN` está em
 
 ## Central de comunicação
 
-- **Primeira etapa implementada:** página dedicada com lista de grupos por setor, histórico de mensagens e envio de texto, usando atualização periódica de 10 segundos e a paleta Nexus/Flash.
-- **Persistência:** grupos e mensagens usam tabelas próprias (`communication_groups`, `communication_messages`), separadas dos registros de ocorrências. A migração incremental é `src/db/migrations/20261031_communications.sql`; aplique com `npm run db:migrate:communications` antes de usar a central.
+- **Primeira etapa implementada:** página dedicada em tela inteira, separada da sidebar/header globais, com conversas diretas, grupos por setor, histórico de mensagens e envio de texto, usando atualização periódica de 10 segundos e a paleta Nexus/Flash. O botão `+` no canto superior direito do cabeçalho da lista **Conversas** busca contas ativas elegíveis; o rascunho individual só é salvo com a primeira mensagem e conversas existentes do mesmo par são reutilizadas. O atalho usa ícone de telefone imediatamente acima do Assistente Flash; há retorno ao sistema e navegação adaptada para telas móveis.
+- **Persistência:** grupos, membros e mensagens usam tabelas próprias (`communication_groups`, `communication_group_members`, `communication_messages`), separadas dos registros de ocorrências. A migração incremental é `src/db/migrations/20261031_communications.sql`; aplique com `npm run db:migrate:communications` antes de usar a central.
 - **Permissões na API:** `ADMIN`, `SUPERVISOR` e `OPERATOR` podem consultar e enviar mensagens. `ADMIN` e `SUPERVISOR` podem criar grupos. Auditor não recebe as permissões de comunicação.
-- **Limites atuais:** grupos são organizados pelo campo de setor, sem associação individual de membros ainda; mensagens diretas, notificações, presença, confirmação de leitura, anexos e criação de ocorrência a partir da conversa ficam para etapas posteriores. A gestão de ocorrências segue independente.
+- **Limites atuais:** grupos têm membros escolhidos na criação e a API verifica essa associação para listar grupos, ler mensagens e enviar mensagens; os participantes de conversas diretas também são verificados em toda leitura e envio. Gestão posterior dos membros, notificações, presença, confirmação de leitura, anexos e criação de ocorrência a partir da conversa ficam para etapas posteriores. A gestão de ocorrências segue independente.
 
 ## Assistente Flash — Otimizações de Latência e Performance
 

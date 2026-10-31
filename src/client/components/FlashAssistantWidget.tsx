@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Briefcase, Coffee, History, LoaderCircle, Maximize2, MessageSquarePlus, Mic, MicOff, Minimize2, Send, Settings2, Sparkles, Trash2, X, Zap } from 'lucide-react';
+import { ArrowRight, Briefcase, Coffee, History, LoaderCircle, Maximize2, MessageSquarePlus, Mic, MicOff, Minimize2, Phone, Send, Settings2, Sparkles, Trash2, X, Zap } from 'lucide-react';
 import { api } from '../api.ts';
 import type { AuthUser } from '../api.ts';
 import { getAppLanguage, getIntlLocale, translateText } from '../i18n/index.ts';
@@ -461,15 +461,20 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
   return (
     <>
       {!isOpen && (
-        <button
-          type="button"
-          onClick={onToggle}
-          title={`${t('Abrir Assistente Flash')} · Ctrl+K`}
-          aria-label={`${t('Abrir Assistente Flash')} (Ctrl+K)`}
-          className="flash-assistant-float fixed bottom-4 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full border border-amber-300 bg-slate-900 shadow-lg shadow-slate-950/20 ring-2 ring-white transition-colors hover:bg-slate-800 hover:shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 sm:bottom-5 sm:right-5"
-        >
-          <img src="/assets/flash-symbol.png" alt="" aria-hidden="true" className="h-7 w-7 object-contain" />
-        </button>
+        <>
+          {['ADMIN', 'SUPERVISOR', 'OPERATOR'].includes(currentUser?.role || '') && <button type="button" onClick={() => onNavigate('communications')} title="Central de comunicação" aria-label="Abrir central de comunicação" className="fixed bottom-[5.25rem] right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full border border-[#DCE3EB] bg-white text-[#263548] shadow-lg shadow-slate-950/20 ring-2 ring-white transition hover:border-[#FFAA00] hover:bg-[#F8FAFC] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#FFAA00] sm:bottom-[5.75rem] sm:right-5">
+            <Phone className="h-5 w-5" />
+          </button>}
+          <button
+            type="button"
+            onClick={onToggle}
+            title={`${t('Abrir Assistente Flash')} · Ctrl+K`}
+            aria-label={`${t('Abrir Assistente Flash')} (Ctrl+K)`}
+            className="flash-assistant-float fixed bottom-4 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full border border-amber-300 bg-slate-900 shadow-lg shadow-slate-950/20 ring-2 ring-white transition-colors hover:bg-slate-800 hover:shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 sm:bottom-5 sm:right-5"
+          >
+            <img src="/assets/flash-symbol.png" alt="" aria-hidden="true" className="h-7 w-7 object-contain" />
+          </button>
+        </>
       )}
 
       {isOpen && (

@@ -4,7 +4,6 @@ import {
   GitBranch,
   ClipboardList,
   CalendarDays,
-  MessageCircle,
   Settings,
   ChevronDown,
   ChevronRight,
@@ -64,7 +63,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'dashboard', label: 'Painel Geral', icon: Home },
     { id: 'traceability', label: 'Pedidos e OPs', icon: GitBranch },
     { id: 'occurrences', label: 'Gestão de ocorrências', icon: ClipboardList },
-    { id: 'communications', label: 'Comunicação', icon: MessageCircle },
     { label: 'PMP · Mestre da Produção', icon: CalendarDays, badge: 'Planejado', planned: true },
   ];
 

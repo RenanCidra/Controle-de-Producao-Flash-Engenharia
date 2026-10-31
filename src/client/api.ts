@@ -641,9 +641,14 @@ class ApiService {
     return this.request<any>(`/occurrences?${query.toString()}`);
   }
 
+  public getCommunicationDirectory() { return this.request<Array<{ id: number; name: string; department: string | null }>>('/communications/directory'); }
+  public getCommunicationDirectConversations() { return this.request<any[]>('/communications/direct'); }
+  public getCommunicationDirectMessages(conversationId: number) { return this.request<any[]>(`/communications/direct/${conversationId}/messages`); }
+  public startCommunicationDirectMessage(recipientId: number, body: string) { return this.request<{ conversationId: number; message: any }>('/communications/direct/messages', { method: 'POST', body: JSON.stringify({ recipientId, body }) }); }
+  public sendCommunicationDirectMessage(conversationId: number, body: string) { return this.request<any>(`/communications/direct/${conversationId}/messages`, { method: 'POST', body: JSON.stringify({ body }) }); }
   public getCommunicationGroups() { return this.request<any[]>('/communications/groups'); }
   public getCommunicationMessages(groupId: number) { return this.request<any[]>(`/communications/groups/${groupId}/messages`); }
-  public createCommunicationGroup(name: string, sector: string) { return this.request<any>('/communications/groups', { method: 'POST', body: JSON.stringify({ name, sector }) }); }
+  public createCommunicationGroup(name: string, sector: string, memberIds: number[]) { return this.request<any>('/communications/groups', { method: 'POST', body: JSON.stringify({ name, sector, memberIds }) }); }
   public sendCommunicationMessage(groupId: number, body: string) { return this.request<any>(`/communications/groups/${groupId}/messages`, { method: 'POST', body: JSON.stringify({ body }) }); }
 
   public getOccurrencesForOp(numeroOp: string) {

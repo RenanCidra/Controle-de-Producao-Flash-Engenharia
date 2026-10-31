@@ -379,6 +379,17 @@ export const communicationGroups = pgTable("communication_groups", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [index("communication_groups_sector_idx").on(table.sector)]);
 
+export const communicationGroupMembers = pgTable("communication_group_members", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id").notNull().references(() => communicationGroups.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  addedByUid: text("added_by_uid").notNull(),
+  addedAt: timestamp("added_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("communication_group_members_unique").on(table.groupId, table.userId),
+  index("communication_group_members_user_idx").on(table.userId, table.groupId),
+]);
+
 export const communicationMessages = pgTable("communication_messages", {
   id: serial("id").primaryKey(),
   groupId: integer("group_id").notNull().references(() => communicationGroups.id, { onDelete: "cascade" }),
@@ -387,6 +398,32 @@ export const communicationMessages = pgTable("communication_messages", {
   body: text("body").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [index("communication_messages_group_idx").on(table.groupId, table.createdAt)]);
+
+export const communicationDirectConversations = pgTable("communication_direct_conversations", {
+  id: serial("id").primaryKey(),
+  directKey: text("direct_key").notNull(),
+  createdByUid: text("created_by_uid").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [uniqueIndex("communication_direct_conversations_key_unique").on(table.directKey)]);
+
+export const communicationDirectMembers = pgTable("communication_direct_members", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").notNull().references(() => communicationDirectConversations.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  addedAt: timestamp("added_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("communication_direct_members_unique").on(table.conversationId, table.userId),
+  index("communication_direct_members_user_idx").on(table.userId, table.conversationId),
+]);
+
+export const communicationDirectMessages = pgTable("communication_direct_messages", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").notNull().references(() => communicationDirectConversations.id, { onDelete: "cascade" }),
+  authorUid: text("author_uid").notNull(),
+  authorName: text("author_name").notNull(),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [index("communication_direct_messages_conversation_idx").on(table.conversationId, table.createdAt)]);
 
 // Relations
 export const productionOrdersRelations = relations(productionOrders, ({ one, many }) => ({
