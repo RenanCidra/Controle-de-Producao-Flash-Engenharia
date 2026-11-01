@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { check, index, integer, numeric, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { check, index, integer, numeric, pgTable, serial, text, timestamp, uniqueIndex, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 // Organizations own accounts, employee records, and operational data.
 export const organizations = pgTable("organizations", {
@@ -397,6 +397,7 @@ export const communicationMessages = pgTable("communication_messages", {
   authorUid: text("author_uid").notNull(),
   authorName: text("author_name").notNull(),
   body: text("body").notNull(),
+  replyToMessageId: integer("reply_to_message_id").references((): AnyPgColumn => communicationMessages.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [index("communication_messages_group_idx").on(table.groupId, table.createdAt)]);
 
@@ -424,6 +425,7 @@ export const communicationDirectMessages = pgTable("communication_direct_message
   authorUid: text("author_uid").notNull(),
   authorName: text("author_name").notNull(),
   body: text("body").notNull(),
+  replyToMessageId: integer("reply_to_message_id").references((): AnyPgColumn => communicationDirectMessages.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [index("communication_direct_messages_conversation_idx").on(table.conversationId, table.createdAt)]);
 

@@ -1,16 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, MessageCircle, MessageSquarePlus, Plus, Search, Send, Users } from 'lucide-react';
+import { ArrowLeft, Copy, Forward, Info, MessageCircle, MessageSquarePlus, MoreVertical, Plus, Reply, Search, Send, UserRound, Users, X } from 'lucide-react';
 import { api, type AuthUser } from '../../api.ts';
 import { UserAccountMenu } from '../../components/UserAccountMenu.tsx';
 
 type Group = { id: number; name: string; sector: string; createdAt: string; unreadCount: number; lastMessage: Pick<Message, 'body' | 'authorUid' | 'authorName' | 'createdAt'> | null };
-type Message = { id: number; body: string; authorUid: string; authorName: string; createdAt: string };
-type DirectoryUser = { id: number; name: string; department: string | null };
+type Message = { id: number; body: string; authorUid: string; authorName: string; createdAt: string; replyToMessageId?: number | null };
+type DirectoryUser = { id: number; name: string; department: string | null; role?: string };
 type DirectConversation = {
   conversationId: number;
   userId: number;
   name: string;
   department: string | null;
+  role?: string;
   createdAt: string;
   lastMessage: Pick<Message, 'body' | 'authorUid' | 'authorName' | 'createdAt'> | null;
   unreadCount: number;
@@ -33,6 +34,13 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
   const [name, setName] = useState('');
   const [sector, setSector] = useState('');
   const [memberIds, setMemberIds] = useState<number[]>([]);
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
+  const [forwardTarget, setForwardTarget] = useState('');
+  const [messageDetails, setMessageDetails] = useState<Message | null>(null);
+  const [conversationInfoOpen, setConversationInfoOpen] = useState(false);
+  const [groupMembers, setGroupMembers] = useState<DirectoryUser[]>([]);
+  const [profileUser, setProfileUser] = useState<DirectoryUser | null>(null);
   const [search, setSearch] = useState('');
   const [userSearch, setUserSearch] = useState('');
   const [section, setSection] = useState<'conversations' | 'groups'>('conversations');
@@ -122,6 +130,34 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
     () => (Array.isArray(directory) ? directory : []).filter(user => user && `${user.name || ''} ${user.department || ''}`.toLowerCase().includes((userSearch || '').toLowerCase())),
     [directory, userSearch],
   );
+  const openConversationInfo = async () => {
+    setError('');
+    setProfileUser(null);
+    if (selectedGroupId !== null) {
+      try { setGroupMembers(await api.getCommunicationGroupMembers(selectedGroupId)); }
+      catch (e: any) { setError(e.message); return; }
+    } else if (selectedDirectId !== null) {
+      const conversation = directs.find(item => (item.conversationId || (item as any).id) === selectedDirectId);
+      if (conversation) setProfileUser({ id: conversation.userId, name: conversation.name, department: conversation.department, role: conversation.role });
+    } else if (draftRecipient) {
+      setProfileUser(draftRecipient);
+    }
+    setConversationInfoOpen(true);
+  };
+  const sendForward = async () => {
+    if (!forwardingMessage || !forwardTarget) return;
+    setError('');
+    const forwardedBody = `Encaminhada de ${forwardingMessage.authorName}:\n${forwardingMessage.body}`.slice(0, 4000);
+    try {
+      const [kind, rawId] = forwardTarget.split(':');
+      const targetId = Number(rawId);
+      if (kind === 'group') await api.sendCommunicationMessage(targetId, forwardedBody);
+      else if (kind === 'direct') await api.sendCommunicationDirectMessage(targetId, forwardedBody);
+      setForwardingMessage(null);
+      setForwardTarget('');
+      await Promise.all([loadGroups(), loadDirects()]);
+    } catch (e: any) { setError(e.message); }
+  };
 
   const clearSelection = () => {
     setSelectedGroupId(null);
@@ -129,6 +165,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
     setDraftRecipient(null);
     setMessages([]);
     setBody('');
+    setReplyingTo(null);
   };
   const openCreateGroup = async () => {
     setError('');
@@ -167,6 +204,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
     setDraftRecipient(existing ? null : user);
     setMessages([]);
     setBody('');
+    setReplyingTo(null);
     setNewConversation(false);
   };
   const send = async (event: React.FormEvent) => {
@@ -177,9 +215,9 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
     try {
       let directConversationId = selectedDirectId;
       if (selectedGroupId !== null) {
-        await api.sendCommunicationMessage(selectedGroupId, messageBody);
+        await api.sendCommunicationMessage(selectedGroupId, messageBody, replyingTo?.id);
       } else if (selectedDirectId !== null) {
-        await api.sendCommunicationDirectMessage(selectedDirectId, messageBody);
+        await api.sendCommunicationDirectMessage(selectedDirectId, messageBody, replyingTo?.id);
       } else if (draftRecipient) {
         const created = await api.startCommunicationDirectMessage(draftRecipient.id, messageBody);
         directConversationId = created.conversationId;
@@ -187,6 +225,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
         setDraftRecipient(null);
       } else return;
       setBody('');
+      setReplyingTo(null);
       if (selectedGroupId !== null) setMessages(await api.getCommunicationMessages(selectedGroupId));
       else if (directConversationId !== null) {
         setMessages(await api.getCommunicationDirectMessages(directConversationId));
@@ -240,7 +279,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
                 <button
                   key={`group-${group.id || index}`}
                   type="button"
-                  onClick={() => { setSelectedGroupId(group.id); setSelectedDirectId(null); setDraftRecipient(null); setMessages([]); lastSeenMessageRef.current = null; void api.markCommunicationGroupRead(group.id).then(loadGroups).catch(() => undefined); }}
+                  onClick={() => { setSelectedGroupId(group.id); setSelectedDirectId(null); setDraftRecipient(null); setMessages([]); setReplyingTo(null); lastSeenMessageRef.current = null; void api.markCommunicationGroupRead(group.id).then(loadGroups).catch(() => undefined); }}
                   className={`flex w-full items-center gap-3 border-b border-[#F1F4F7] px-4 py-3.5 text-left ${selectedGroupId === group.id ? 'bg-[#F1F4F7]' : 'hover:bg-slate-50'}`}
                 >
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]">
@@ -264,7 +303,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
                   <button
                     key={`direct-${directId}`}
                     type="button"
-                    onClick={() => { setSelectedGroupId(null); setSelectedDirectId(directId); setDraftRecipient(null); setMessages([]); lastSeenMessageRef.current = null; void api.markCommunicationDirectRead(directId).then(loadDirects).catch(() => undefined); }}
+                    onClick={() => { setSelectedGroupId(null); setSelectedDirectId(directId); setDraftRecipient(null); setMessages([]); setReplyingTo(null); lastSeenMessageRef.current = null; void api.markCommunicationDirectRead(directId).then(loadDirects).catch(() => undefined); }}
                     className={`flex w-full items-center gap-3 border-b border-[#F1F4F7] px-4 py-3.5 text-left ${selectedDirectId === directId ? 'bg-[#F1F4F7]' : 'hover:bg-slate-50'}`}
                   >
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]">
@@ -294,17 +333,32 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
 
       <main className={`${selectedConversation ? 'flex' : 'hidden md:flex'} min-w-0 flex-1 flex-col bg-[#F1F4F7]`}>
         {selectedGroup ? <>
-          <header className="flex items-center gap-3 border-b border-[#DCE3EB] bg-white px-4 py-3.5 sm:px-5"><button type="button" onClick={clearSelection} aria-label="Voltar à lista" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7] md:hidden"><ArrowLeft size={18}/></button><span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]"><Users size={18}/></span><div><h2 className="text-sm font-semibold text-[#263548]">{selectedGroup.name}</h2><p className="text-xs text-slate-500">{selectedGroup.sector}</p></div></header>
-          <MessageList messages={messages}/>
-          <MessageComposer body={body} setBody={setBody} send={send}/>
+          <header className="flex items-center gap-3 border-b border-[#DCE3EB] bg-white px-4 py-3.5 sm:px-5"><button type="button" onClick={clearSelection} aria-label="Voltar à lista" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7] md:hidden"><ArrowLeft size={18}/></button><span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]"><Users size={18}/></span><button type="button" onClick={() => void openConversationInfo()} className="min-w-0 flex-1 text-left"><h2 className="truncate text-sm font-semibold text-[#263548]">{selectedGroup.name}</h2><p className="text-xs text-slate-500">{selectedGroup.sector} · {groupMembers.length || 'Ver'} participantes</p></button><button type="button" onClick={() => void openConversationInfo()} title="Dados do grupo" aria-label="Dados do grupo" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7]"><Info size={18}/></button></header>
+          <MessageList messages={messages} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={setMessageDetails}/>
+          <MessageComposer body={body} setBody={setBody} send={send} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
         </> : directTitle ? <>
-          <header className="flex items-center gap-3 border-b border-[#DCE3EB] bg-white px-4 py-3.5 sm:px-5"><button type="button" onClick={clearSelection} aria-label="Voltar à lista" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7] md:hidden"><ArrowLeft size={18}/></button><span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]"><MessageCircle size={18}/></span><div><h2 className="text-sm font-semibold text-[#263548]">{directTitle}</h2><p className="text-xs text-slate-500">{draftRecipient ? 'Nova conversa · será criada ao enviar a primeira mensagem' : directDepartment || 'Conversa direta'}</p></div></header>
-          <MessageList messages={messages}/>
-          <MessageComposer body={body} setBody={setBody} send={send}/>
+          <header className="flex items-center gap-3 border-b border-[#DCE3EB] bg-white px-4 py-3.5 sm:px-5"><button type="button" onClick={clearSelection} aria-label="Voltar à lista" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7] md:hidden"><ArrowLeft size={18}/></button><span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]"><MessageCircle size={18}/></span><button type="button" onClick={() => void openConversationInfo()} className="min-w-0 flex-1 text-left"><h2 className="truncate text-sm font-semibold text-[#263548]">{directTitle}</h2><p className="text-xs text-slate-500">{draftRecipient ? 'Nova conversa · será criada ao enviar a primeira mensagem' : directDepartment || 'Conversa direta'}</p></button><button type="button" onClick={() => void openConversationInfo()} title="Ver perfil" aria-label="Ver perfil" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7]"><Info size={18}/></button></header>
+          <MessageList messages={messages} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={setMessageDetails}/>
+          <MessageComposer body={body} setBody={setBody} send={send} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
         </> : <div className="m-auto max-w-md px-6 text-center"><div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white text-[#916B19] shadow-sm"><MessageCircle size={28}/></div><h2 className="text-lg font-semibold text-[#263548]">Sua comunicação de produção</h2><p className="mt-2 text-sm leading-6 text-slate-500">Selecione uma conversa ou grupo. As mensagens ficam visíveis apenas para seus participantes.</p></div>}
         {error && <p role="alert" className="border-t border-rose-100 bg-rose-50 px-4 py-2 text-xs text-rose-700">{error}</p>}
       </main>
     </div>
+
+    {conversationInfoOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" onMouseDown={event => { if (event.target === event.currentTarget) setConversationInfoOpen(false); }}>
+      <section role="dialog" aria-modal="true" aria-label={profileUser ? 'Perfil do usuário' : selectedGroup ? 'Informações do grupo' : 'Perfil do usuário'} className="max-h-[85dvh] w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <header className="flex items-center justify-between border-b border-[#E7ECF1] px-5 py-4"><div className="flex items-center gap-2">{profileUser && selectedGroup && <button type="button" onClick={() => setProfileUser(null)} className="mr-1 rounded-lg p-1.5 text-slate-500 hover:bg-[#F1F4F7]" aria-label="Voltar ao grupo"><ArrowLeft size={17}/></button>}<h3 className="font-semibold text-[#263548]">{profileUser ? 'Perfil' : selectedGroup ? 'Informações do grupo' : 'Perfil'}</h3></div><button type="button" onClick={() => setConversationInfoOpen(false)} aria-label="Fechar" className="rounded-lg p-1.5 text-slate-500 hover:bg-[#F1F4F7]"><X size={18}/></button></header>
+        <div className="max-h-[calc(85dvh-60px)] overflow-y-auto p-5">
+          {profileUser ? <div className="text-center"><span className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-[#263548] text-2xl font-semibold text-[#FFAA00]">{profileUser.name.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase()}</span><h4 className="mt-3 text-lg font-semibold text-[#263548]">{profileUser.name}</h4><p className="text-sm text-slate-500">{roleLabel(profileUser.role)}</p><div className="mt-5 divide-y divide-[#E7ECF1] rounded-xl border border-[#E7ECF1] text-left"><ProfileRow label="Setor" value={profileUser.department || 'Não informado'}/><ProfileRow label="Acesso" value={roleLabel(profileUser.role)}/></div>{selectedGroup && profileUser.id !== api.getUser()?.id ? <button type="button" onClick={() => { startConversation(profileUser); setConversationInfoOpen(false); }} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#FFAA00] px-4 py-2 text-sm font-semibold text-[#151C25]"><MessageCircle size={16}/>Iniciar conversa individual</button> : <button type="button" onClick={() => setConversationInfoOpen(false)} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#FFAA00] px-4 py-2 text-sm font-semibold text-[#151C25]"><MessageCircle size={16}/>{selectedGroup ? 'Voltar ao grupo' : 'Voltar à conversa'}</button>}</div>
+            : selectedGroup ? <><div className="text-center"><span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]"><Users size={26}/></span><h4 className="mt-3 text-lg font-semibold text-[#263548]">{selectedGroup.name}</h4><p className="text-sm text-slate-500">{selectedGroup.sector}</p><p className="mt-1 text-xs text-slate-400">{groupMembers.length} participantes</p></div><h5 className="mb-2 mt-6 text-xs font-semibold uppercase tracking-wide text-slate-500">Participantes</h5><div className="divide-y divide-[#E7ECF1] rounded-xl border border-[#E7ECF1]">{groupMembers.map(member => <button key={member.id} type="button" onClick={() => setProfileUser(member)} className="flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-[#F8FAFC]"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#263548] text-xs font-semibold text-[#FFAA00]">{member.name.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase()}</span><span className="min-w-0 flex-1"><b className="block truncate text-sm text-[#263548]">{member.name}</b><small className="text-xs text-slate-500">{member.department || roleLabel(member.role)}</small></span><UserRound size={16} className="text-slate-400"/></button>)}</div></>
+            : null}
+        </div>
+      </section>
+    </div>}
+
+    {forwardingMessage && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"><section role="dialog" aria-modal="true" aria-label="Encaminhar mensagem" className="w-full max-w-md space-y-4 rounded-2xl bg-white p-5 shadow-2xl"><div className="flex items-center justify-between"><h3 className="font-semibold text-[#263548]">Encaminhar mensagem</h3><button type="button" onClick={() => setForwardingMessage(null)} aria-label="Fechar" className="rounded-lg p-1.5 text-slate-500 hover:bg-[#F1F4F7]"><X size={18}/></button></div><p className="line-clamp-3 rounded-lg bg-[#F1F4F7] p-3 text-sm text-slate-600">{forwardingMessage.body}</p><label className="block text-xs font-semibold text-slate-600">Enviar para</label><select value={forwardTarget} onChange={event => setForwardTarget(event.target.value)} className="w-full rounded-lg border border-[#DCE3EB] px-3 py-2.5 text-sm text-[#263548]"><option value="">Escolha uma conversa ou grupo</option>{directs.map(item => <option key={`forward-direct-${item.conversationId}`} value={`direct:${item.conversationId}`}>{item.name}</option>)}{groups.map(item => <option key={`forward-group-${item.id}`} value={`group:${item.id}`}>{item.name} · {item.sector}</option>)}</select><div className="flex justify-end gap-2"><button type="button" onClick={() => setForwardingMessage(null)} className="rounded-lg border border-[#DCE3EB] px-3 py-2 text-sm text-slate-600">Cancelar</button><button type="button" onClick={() => void sendForward()} disabled={!forwardTarget} className="inline-flex items-center gap-2 rounded-lg bg-[#FFAA00] px-3 py-2 text-sm font-semibold text-[#151C25] disabled:opacity-50"><Forward size={15}/>Encaminhar</button></div></section></div>}
+
+    {messageDetails && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" onMouseDown={event => { if (event.target === event.currentTarget) setMessageDetails(null); }}><section role="dialog" aria-modal="true" aria-label="Dados da mensagem" className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl"><header className="flex items-center justify-between border-b border-[#E7ECF1] px-4 py-3"><h3 className="font-semibold text-[#263548]">Dados da mensagem</h3><button type="button" onClick={() => setMessageDetails(null)} aria-label="Fechar" className="rounded-lg p-1.5 text-slate-500 hover:bg-[#F1F4F7]"><X size={17}/></button></header><div className="space-y-3 p-4"><p className="whitespace-pre-wrap break-words rounded-lg bg-[#F1F4F7] p-3 text-sm text-[#263548]">{messageDetails.body}</p><ProfileRow label="Enviada por" value={messageDetails.authorName}/><ProfileRow label="Data e hora" value={new Date(messageDetails.createdAt).toLocaleString()}/>{messageDetails.replyToMessageId && <ProfileRow label="Resposta a mensagem" value={`#${messageDetails.replyToMessageId}`}/>}</div></section></div>}
 
     {(newGroup || newConversation) && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       {newConversation ? <div className="w-full max-w-md space-y-3 rounded-2xl bg-white p-5 shadow-xl">
@@ -320,6 +374,28 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
   </section>;
 };
 
-const MessageList: React.FC<{ messages: Message[] }> = ({ messages }) => <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 pb-5 sm:p-6">{(Array.isArray(messages) ? messages : []).map((message, index) => <article key={`msg-${message.id || index}-${message.createdAt || ''}`} className={`max-w-[90%] rounded-xl border px-3.5 py-2.5 shadow-sm sm:max-w-[82%] ${message.authorUid === api.getUser()?.uid ? 'ml-auto border-[#E4D2A2] bg-[#FFF9E9]' : 'border-[#E7ECF1] bg-white'}`}><p className="mb-1 text-[10px] font-semibold text-[#916B19]">{message.authorName}</p><p className="whitespace-pre-wrap break-words text-sm text-[#263548]">{message.body}</p><time className="mt-1 block text-right text-[10px] text-slate-400">{formatMessageTime(message.createdAt)}</time></article>)}</div>;
+const MessageList: React.FC<{ messages: Message[]; onReply: (message: Message) => void; onForward: (message: Message) => void; onDetails: (message: Message) => void }> = ({ messages, onReply, onForward, onDetails }) => {
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
+  const copyMessage = async (message: Message) => {
+    try { await navigator.clipboard.writeText(message.body); setCopied(true); window.setTimeout(() => setCopied(false), 1600); }
+    catch { setCopied(false); }
+    setOpenMenuId(null);
+  };
+  return <div className="relative min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 pb-5 sm:p-6">{copied && <div role="status" className="sticky top-1 z-10 mx-auto w-fit rounded-full bg-[#151C25] px-3 py-1.5 text-xs text-white shadow">Mensagem copiada</div>}{(Array.isArray(messages) ? messages : []).map((message, index) => {
+    const quoted = messages.find(item => item.id === message.replyToMessageId);
+    const own = message.authorUid === api.getUser()?.uid;
+    return <article key={`msg-${message.id || index}-${message.createdAt || ''}`} className={`group relative max-w-[90%] rounded-xl border px-3.5 py-2.5 pr-10 shadow-sm sm:max-w-[82%] ${own ? 'ml-auto border-[#E4D2A2] bg-[#FFF9E9]' : 'border-[#E7ECF1] bg-white'}`}>
+      <button type="button" onClick={() => setOpenMenuId(openMenuId === message.id ? null : message.id)} aria-label="Ações da mensagem" title="Ações da mensagem" className="absolute right-1.5 top-1.5 rounded-md p-1 text-slate-400 hover:bg-black/5 hover:text-[#263548] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"><MoreVertical size={16}/></button>
+      {openMenuId === message.id && <div className={`absolute ${own ? 'right-1' : 'left-1'} top-8 z-30 w-44 overflow-hidden rounded-xl border border-[#DCE3EB] bg-white py-1 shadow-xl`}><button type="button" onClick={() => { onDetails(message); setOpenMenuId(null); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Info size={14}/>Dados da mensagem</button><button type="button" onClick={() => { onReply(message); setOpenMenuId(null); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Reply size={14}/>Responder</button><button type="button" onClick={() => void copyMessage(message)} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Copy size={14}/>Copiar</button><button type="button" onClick={() => { onForward(message); setOpenMenuId(null); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Forward size={14}/>Encaminhar</button></div>}
+      <p className="mb-1 text-[10px] font-semibold text-[#916B19]">{message.authorName}</p>
+      {message.replyToMessageId && <div className="mb-2 border-l-2 border-[#FFAA00] bg-[#F1F4F7]/80 px-2.5 py-1.5"><p className="text-[10px] font-semibold text-[#916B19]">{quoted?.authorName || 'Mensagem anterior'}</p><p className="line-clamp-2 whitespace-pre-wrap break-words text-xs text-slate-600">{quoted?.body || 'Conteúdo fora do histórico carregado'}</p></div>}
+      <p className="whitespace-pre-wrap break-words text-sm text-[#263548]">{message.body}</p><time className="mt-1 block text-right text-[10px] text-slate-400">{formatMessageTime(message.createdAt)}</time>
+    </article>;
+  })}</div>;
+};
 
-const MessageComposer: React.FC<{ body: string; setBody: (value: string) => void; send: (event: React.FormEvent) => void }> = ({ body, setBody, send }) => <form onSubmit={send} className="sticky bottom-0 z-10 flex shrink-0 items-end gap-2 border-t border-[#DCE3EB] bg-white p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-4"><textarea value={body} onChange={event => setBody(event.target.value)} maxLength={4000} rows={1} placeholder="Escreva uma mensagem" className="max-h-28 min-h-11 min-w-0 flex-1 resize-y rounded-2xl border border-[#DCE3EB] px-4 py-3 text-sm text-[#263548] outline-none focus:border-[#FFAA00]"/><button type="submit" disabled={!body.trim()} title="Enviar mensagem" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FFAA00] text-[#151C25] hover:bg-amber-300 disabled:opacity-40"><Send size={17}/></button></form>;
+const MessageComposer: React.FC<{ body: string; setBody: (value: string) => void; send: (event: React.FormEvent) => void; replyingTo: Message | null; cancelReply: () => void }> = ({ body, setBody, send, replyingTo, cancelReply }) => <form onSubmit={send} className="sticky bottom-0 z-10 flex shrink-0 items-end gap-2 border-t border-[#DCE3EB] bg-white p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-4"><div className="min-w-0 flex-1">{replyingTo && <div className="mb-2 flex items-center gap-2 rounded-lg border-l-2 border-[#FFAA00] bg-[#F1F4F7] px-2.5 py-1.5"><span className="min-w-0 flex-1"><b className="block text-[10px] text-[#916B19]">Respondendo a {replyingTo.authorName}</b><small className="block truncate text-xs text-slate-600">{replyingTo.body}</small></span><button type="button" onClick={cancelReply} aria-label="Cancelar resposta" className="rounded p-1 text-slate-500 hover:bg-white"><X size={15}/></button></div>}<textarea value={body} onChange={event => setBody(event.target.value)} maxLength={4000} rows={1} placeholder="Escreva uma mensagem" className="max-h-28 min-h-11 w-full resize-y rounded-2xl border border-[#DCE3EB] px-4 py-3 text-sm text-[#263548] outline-none focus:border-[#FFAA00]"/></div><button type="submit" disabled={!body.trim()} title="Enviar mensagem" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FFAA00] text-[#151C25] hover:bg-amber-300 disabled:opacity-40"><Send size={17}/></button></form>;
+
+const roleLabel = (role?: string) => ({ ADMIN: 'Administrador', SUPERVISOR: 'Supervisor', OPERATOR: 'Operador', AUDITOR: 'Auditor' }[role || ''] || 'Usuário do sistema');
+const ProfileRow: React.FC<{ label: string; value: string }> = ({ label, value }) => <div className="px-3 py-2.5"><small className="block text-[10px] uppercase tracking-wide text-slate-400">{label}</small><span className="text-sm text-[#263548]">{value}</span></div>;

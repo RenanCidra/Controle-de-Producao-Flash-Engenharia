@@ -22,7 +22,7 @@ async function isDirectMember(conversationId: number, userId: number) {
 }
 
 router.get('/directory', asyncHandler(async (req, res) => {
-  const directory = await db.select({ id: users.id, name: users.name, department: users.department })
+  const directory = await db.select({ id: users.id, name: users.name, department: users.department, role: users.role })
     .from(users).where(and(eq(users.status, 'ACTIVE'), inArray(users.role, ['ADMIN', 'SUPERVISOR', 'OPERATOR']), ne(users.id, req.user!.userId))).orderBy(asc(users.name)).limit(200);
   return res.json(directory);
 }));
@@ -34,7 +34,7 @@ router.get('/direct', asyncHandler(async (req, res) => {
   if (!mine.length) return res.json([]);
   const ids = mine.map((conversation) => conversation.id);
   const [others, latestMessages, unreadRows] = await Promise.all([
-    db.select({ conversationId: communicationDirectMembers.conversationId, userId: users.id, name: users.name, department: users.department })
+    db.select({ conversationId: communicationDirectMembers.conversationId, userId: users.id, name: users.name, department: users.department, role: users.role })
       .from(communicationDirectMembers).innerJoin(users, eq(users.id, communicationDirectMembers.userId))
       .where(and(inArray(communicationDirectMembers.conversationId, ids), ne(communicationDirectMembers.userId, req.user!.userId))),
     db.selectDistinctOn([communicationDirectMessages.conversationId], {
@@ -70,6 +70,7 @@ router.get('/direct', asyncHandler(async (req, res) => {
       userId: other.userId,
       name: other.name,
       department: other.department,
+      role: other.role,
       lastMessage: latestByConversation.get(conversation.id) || null,
       unreadCount: unreadByConversation.get(conversation.id) || 0,
     }] : [];
@@ -83,6 +84,16 @@ router.get('/direct/:id/messages', asyncHandler(async (req, res) => {
   if (!await isDirectMember(id, req.user!.userId)) return res.status(404).json({ error: 'Conversa não encontrada.' });
   return res.json(await db.select().from(communicationDirectMessages).where(eq(communicationDirectMessages.conversationId, id))
     .orderBy(desc(communicationDirectMessages.createdAt)).limit(100).then(rows => rows.reverse()));
+}));
+
+router.get('/direct/:id/profile', asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Conversa inválida.' });
+  if (!await isDirectMember(id, req.user!.userId)) return res.status(404).json({ error: 'Conversa não encontrada.' });
+  const [participant] = await db.select({ id: users.id, name: users.name, department: users.department, role: users.role, status: users.status })
+    .from(communicationDirectMembers).innerJoin(users, eq(users.id, communicationDirectMembers.userId))
+    .where(and(eq(communicationDirectMembers.conversationId, id), ne(users.id, req.user!.userId))).limit(1);
+  return participant ? res.json(participant) : res.status(404).json({ error: 'Participante não encontrado.' });
 }));
 
 router.patch('/direct/:id/read', requirePermission('communications:write'), asyncHandler(async (req, res) => {
@@ -128,11 +139,17 @@ router.post('/direct/messages', requirePermission('communications:write'), allow
   return res.status(201).json(result);
 }));
 
-router.post('/direct/:id/messages', requirePermission('communications:write'), allowBodyFields('body'), asyncHandler(async (req, res) => {
+router.post('/direct/:id/messages', requirePermission('communications:write'), allowBodyFields('body', 'replyToMessageId'), asyncHandler(async (req, res) => {
   const id = Number(req.params.id), body = typeof req.body.body === 'string' ? req.body.body.trim() : '';
   if (!Number.isInteger(id) || id < 1 || !body || body.length > 4000) return res.status(400).json({ error: 'Mensagem ou conversa inválida.' });
   if (!await isDirectMember(id, req.user!.userId)) return res.status(404).json({ error: 'Conversa não encontrada.' });
-  const [message] = await db.insert(communicationDirectMessages).values({ conversationId: id, body, authorUid: req.user!.uid, authorName: req.user!.name }).returning();
+  const replyToMessageId = req.body.replyToMessageId == null ? null : Number(req.body.replyToMessageId);
+  if (replyToMessageId !== null) {
+    const [source] = await db.select({ id: communicationDirectMessages.id }).from(communicationDirectMessages)
+      .where(and(eq(communicationDirectMessages.id, replyToMessageId), eq(communicationDirectMessages.conversationId, id))).limit(1);
+    if (!Number.isInteger(replyToMessageId) || !source) return res.status(400).json({ error: 'A mensagem respondida não pertence a esta conversa.' });
+  }
+  const [message] = await db.insert(communicationDirectMessages).values({ conversationId: id, body, replyToMessageId, authorUid: req.user!.uid, authorName: req.user!.name }).returning();
   return res.status(201).json(message);
 }));
 
@@ -180,6 +197,15 @@ router.get('/groups/:id/messages', asyncHandler(async (req, res) => {
   if (!await isGroupMember(id, req.user!.userId)) return res.status(404).json({ error: 'Grupo não encontrado.' });
   return res.json(await db.select().from(communicationMessages).where(eq(communicationMessages.groupId, id)).orderBy(desc(communicationMessages.createdAt)).limit(100).then(rows => rows.reverse()));
 }));
+router.get('/groups/:id/members', asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Grupo inválido.' });
+  if (!await isGroupMember(id, req.user!.userId)) return res.status(404).json({ error: 'Grupo não encontrado.' });
+  const members = await db.select({ id: users.id, name: users.name, department: users.department, role: users.role })
+    .from(communicationGroupMembers).innerJoin(users, eq(users.id, communicationGroupMembers.userId))
+    .where(eq(communicationGroupMembers.groupId, id)).orderBy(asc(users.name));
+  return res.json(members);
+}));
 router.patch('/groups/:id/read', requirePermission('communications:write'), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Grupo inválido.' });
@@ -206,11 +232,17 @@ router.post('/groups', requirePermission('communications:manage'), allowBodyFiel
   });
   return res.status(201).json(group);
 }));
-router.post('/groups/:id/messages', requirePermission('communications:write'), allowBodyFields('body'), asyncHandler(async (req, res) => {
+router.post('/groups/:id/messages', requirePermission('communications:write'), allowBodyFields('body', 'replyToMessageId'), asyncHandler(async (req, res) => {
   const id = Number(req.params.id), body = typeof req.body.body === 'string' ? req.body.body.trim() : '';
   if (!Number.isInteger(id) || id < 1 || !body || body.length > 4000) return res.status(400).json({ error: 'Mensagem ou grupo inválido.' });
   if (!await isGroupMember(id, req.user!.userId)) return res.status(404).json({ error: 'Grupo não encontrado.' });
-  const [message] = await db.insert(communicationMessages).values({ groupId: id, body, authorUid: req.user!.uid, authorName: req.user!.name }).returning();
+  const replyToMessageId = req.body.replyToMessageId == null ? null : Number(req.body.replyToMessageId);
+  if (replyToMessageId !== null) {
+    const [source] = await db.select({ id: communicationMessages.id }).from(communicationMessages)
+      .where(and(eq(communicationMessages.id, replyToMessageId), eq(communicationMessages.groupId, id))).limit(1);
+    if (!Number.isInteger(replyToMessageId) || !source) return res.status(400).json({ error: 'A mensagem respondida não pertence a este grupo.' });
+  }
+  const [message] = await db.insert(communicationMessages).values({ groupId: id, body, replyToMessageId, authorUid: req.user!.uid, authorName: req.user!.name }).returning();
   return res.status(201).json(message);
 }));
 router.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
