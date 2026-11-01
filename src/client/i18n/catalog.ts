@@ -1000,6 +1000,21 @@ const es: Record<string, string> = {
 	"Próxima": "Siguiente"
 };
 Object.assign(en, {
+  'Inserir emoji': 'Insert emoji',
+  'Gravar áudio': 'Record audio',
+  'Parar e enviar áudio': 'Stop and send audio',
+  'Carregar áudio para reproduzir': 'Load audio to play',
+  'Carregando áudio…': 'Loading audio…',
+  'Áudio indisponível': 'Audio unavailable',
+  'Carregar mensagens anteriores…': 'Load older messages…',
+  'Mensagem de áudio': 'Audio message',
+  'Gravação de áudio não é suportada neste navegador.': 'Audio recording is not supported in this browser.',
+  'O áudio excede o limite de 5 MB.': 'The audio exceeds the 5 MB limit.',
+  'Não foi possível acessar o microfone.': 'Could not access the microphone.',
+  'Gravando; limite de dois minutos.': 'Recording; two-minute limit.',
+  'Fechar seletor de emojis': 'Close emoji picker',
+  'Emojis': 'Emojis',
+  'Tentar carregar áudio': 'Try loading audio',
   'Início': 'Home',
   'Ir para a página inicial': 'Go to home page',
   'Controle de produção industrial': 'Industrial production control',
@@ -1207,6 +1222,21 @@ Object.assign(en, {
 	"Consultando chão de fábrica...": "Querying shop floor..."
 });
 Object.assign(es, {
+  'Inserir emoji': 'Insertar emoji',
+  'Gravar áudio': 'Grabar audio',
+  'Parar e enviar áudio': 'Detener y enviar audio',
+  'Carregar áudio para reproduzir': 'Cargar audio para reproducir',
+  'Carregando áudio…': 'Cargando audio…',
+  'Áudio indisponível': 'Audio no disponible',
+  'Carregar mensagens anteriores…': 'Cargar mensajes anteriores…',
+  'Mensagem de áudio': 'Mensaje de audio',
+  'Gravação de áudio não é suportada neste navegador.': 'Este navegador no admite la grabación de audio.',
+  'O áudio excede o limite de 5 MB.': 'El audio supera el límite de 5 MB.',
+  'Não foi possível acessar o microfone.': 'No se pudo acceder al micrófono.',
+  'Gravando; limite de dois minutos.': 'Grabando; límite de dos minutos.',
+  'Fechar seletor de emojis': 'Cerrar selector de emojis',
+  'Emojis': 'Emojis',
+  'Tentar carregar áudio': 'Intentar cargar audio',
   'Início': 'Inicio',
   'Ir para a página inicial': 'Ir a la página de inicio',
   'Controle de produção industrial': 'Control de producción industrial',

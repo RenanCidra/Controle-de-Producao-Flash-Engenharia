@@ -398,6 +398,9 @@ export const communicationMessages = pgTable("communication_messages", {
   authorName: text("author_name").notNull(),
   body: text("body").notNull(),
   replyToMessageId: integer("reply_to_message_id").references((): AnyPgColumn => communicationMessages.id, { onDelete: "set null" }),
+  audioStoragePath: text("audio_storage_path"),
+  audioMimeType: text("audio_mime_type"),
+  audioDurationMs: integer("audio_duration_ms"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [index("communication_messages_group_idx").on(table.groupId, table.createdAt)]);
 
@@ -426,6 +429,9 @@ export const communicationDirectMessages = pgTable("communication_direct_message
   authorName: text("author_name").notNull(),
   body: text("body").notNull(),
   replyToMessageId: integer("reply_to_message_id").references((): AnyPgColumn => communicationDirectMessages.id, { onDelete: "set null" }),
+  audioStoragePath: text("audio_storage_path"),
+  audioMimeType: text("audio_mime_type"),
+  audioDurationMs: integer("audio_duration_ms"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [index("communication_direct_messages_conversation_idx").on(table.conversationId, table.createdAt)]);
 

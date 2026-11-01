@@ -1,15 +1,75 @@
-import { Router, type Request, type RequestHandler, type Response, type NextFunction } from 'express';
-import { and, asc, count, desc, eq, gt, inArray, ne } from 'drizzle-orm';
+import express, { Router, type Request, type RequestHandler, type Response, type NextFunction } from 'express';
+import { randomUUID } from 'node:crypto';
+import { and, asc, count, desc, eq, gt, inArray, lt, ne } from 'drizzle-orm';
 import { db } from '../../db/index.ts';
 import { communicationDirectConversations, communicationDirectMembers, communicationDirectMessages, communicationGroupMembers, communicationGroups, communicationMessages, users } from '../../db/schema.ts';
 import { requirePermission } from '../../middleware/access-control.ts';
 import type { AuthenticatedRequest } from '../../middleware/auth.middleware.ts';
 import { allowBodyFields } from '../../middleware/request-protection.ts';
+import { communicationStorageBucket } from '../../lib/communication-storage.ts';
 
 const router = Router();
 router.use(requirePermission('communications:read'));
+const MESSAGE_PAGE_SIZE = 30;
+const MAX_AUDIO_BYTES = 5 * 1024 * 1024;
+const MAX_AUDIO_DURATION_MS = 120_000;
+const AUDIO_MIME_TYPES = new Set(['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg']);
 const asyncHandler = (handler: (req: AuthenticatedRequest, res: Response) => Promise<unknown>): RequestHandler =>
   (req, res, next) => { void handler(req as AuthenticatedRequest, res).catch(next); };
+
+function messagePageOptions(req: Request) {
+  const rawBefore = req.query.beforeId, rawAfter = req.query.afterId;
+  const beforeId = typeof rawBefore === 'string' ? Number(rawBefore) : null;
+  const afterId = typeof rawAfter === 'string' ? Number(rawAfter) : null;
+  const requestedLimit = typeof req.query.limit === 'string' ? Number(req.query.limit) : MESSAGE_PAGE_SIZE;
+  return {
+    beforeId: Number.isSafeInteger(beforeId) && beforeId! > 0 ? beforeId : null,
+    afterId: Number.isSafeInteger(afterId) && afterId! > 0 ? afterId : null,
+    limit: Number.isSafeInteger(requestedLimit) ? Math.min(50, Math.max(1, requestedLimit)) : MESSAGE_PAGE_SIZE,
+  };
+}
+
+function publicMessage<T extends { audioStoragePath?: string | null; audioMimeType?: string | null; audioDurationMs?: number | null }>(message: T) {
+  const { audioStoragePath, ...visibleMessage } = message;
+  return { ...visibleMessage, hasAudio: Boolean(audioStoragePath) };
+}
+
+function normalizedAudioMimeType(req: Request) {
+  return (req.get('content-type') || '').split(';', 1)[0].trim().toLowerCase();
+}
+
+function parseDuration(req: Request) {
+  const duration = Number(req.query.durationMs);
+  return Number.isInteger(duration) ? Math.min(MAX_AUDIO_DURATION_MS, Math.max(0, duration)) : null;
+}
+
+function validatedAudioBody(req: AuthenticatedRequest, res: Response) {
+  const mimeType = normalizedAudioMimeType(req);
+  const durationMs = parseDuration(req);
+  if (!AUDIO_MIME_TYPES.has(mimeType)) {
+    res.status(415).json({ error: 'Formato de áudio não suportado. Grave novamente em WebM, Ogg ou MP4.' });
+    return null;
+  }
+  if (!Buffer.isBuffer(req.body) || req.body.length < 1 || req.body.length > MAX_AUDIO_BYTES || durationMs === null || durationMs < 250) {
+    res.status(400).json({ error: 'Áudio inválido; o limite é 5 MB e 2 minutos.' });
+    return null;
+  }
+  return { mimeType, durationMs, buffer: req.body as Buffer };
+}
+
+async function streamAudio(objectPath: string, mimeType: string, res: Response, onError: (error: unknown) => void) {
+  try {
+    const file = communicationStorageBucket().file(objectPath);
+    const [metadata] = await file.getMetadata();
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Length', String(metadata.size || 0));
+    res.setHeader('Content-Disposition', 'inline; filename="voice-message"');
+    res.setHeader('Cache-Control', 'private, no-store');
+    const stream = file.createReadStream();
+    stream.on('error', onError);
+    stream.pipe(res);
+  } catch (error) { onError(error); }
+}
 async function isGroupMember(groupId: number, userId: number) {
   const [member] = await db.select({ id: communicationGroupMembers.id }).from(communicationGroupMembers)
     .where(and(eq(communicationGroupMembers.groupId, groupId), eq(communicationGroupMembers.userId, userId))).limit(1);
@@ -82,8 +142,24 @@ router.get('/direct/:id/messages', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Conversa inválida.' });
   if (!await isDirectMember(id, req.user!.userId)) return res.status(404).json({ error: 'Conversa não encontrada.' });
-  return res.json(await db.select().from(communicationDirectMessages).where(eq(communicationDirectMessages.conversationId, id))
-    .orderBy(desc(communicationDirectMessages.createdAt)).limit(100).then(rows => rows.reverse()));
+  const page = messagePageOptions(req);
+  if (page.beforeId && page.afterId) return res.status(400).json({ error: 'Use um único cursor de mensagens.' });
+  const predicates = [eq(communicationDirectMessages.conversationId, id)];
+  if (page.beforeId) predicates.push(lt(communicationDirectMessages.id, page.beforeId));
+  if (page.afterId) predicates.push(gt(communicationDirectMessages.id, page.afterId));
+  const rows = await db.select().from(communicationDirectMessages).where(and(...predicates))
+    .orderBy(page.afterId ? asc(communicationDirectMessages.id) : desc(communicationDirectMessages.id)).limit(page.limit);
+  return res.json((page.afterId ? rows : rows.reverse()).map(publicMessage));
+}));
+
+router.get('/direct/:id/messages/:messageId/audio', asyncHandler(async (req, res) => {
+  const conversationId = Number(req.params.id), messageId = Number(req.params.messageId);
+  if (!Number.isInteger(conversationId) || conversationId < 1 || !Number.isInteger(messageId) || messageId < 1) return res.status(400).json({ error: 'Mensagem inválida.' });
+  if (!await isDirectMember(conversationId, req.user!.userId)) return res.status(404).json({ error: 'Conversa não encontrada.' });
+  const [message] = await db.select({ path: communicationDirectMessages.audioStoragePath, mimeType: communicationDirectMessages.audioMimeType })
+    .from(communicationDirectMessages).where(and(eq(communicationDirectMessages.id, messageId), eq(communicationDirectMessages.conversationId, conversationId))).limit(1);
+  if (!message?.path || !message.mimeType) return res.status(404).json({ error: 'Áudio não encontrado.' });
+  return streamAudio(message.path, message.mimeType, res, () => { if (!res.headersSent) res.status(503).json({ error: 'Não foi possível carregar o áudio.' }); else res.destroy(); });
 }));
 
 router.get('/direct/:id/profile', asyncHandler(async (req, res) => {
@@ -153,6 +229,25 @@ router.post('/direct/:id/messages', requirePermission('communications:write'), a
   return res.status(201).json(message);
 }));
 
+router.post('/direct/:id/audio', requirePermission('communications:write'), express.raw({ type: 'audio/*', limit: MAX_AUDIO_BYTES }), asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Conversa inválida.' });
+  if (!await isDirectMember(id, req.user!.userId)) return res.status(404).json({ error: 'Conversa não encontrada.' });
+  const audio = validatedAudioBody(req, res);
+  if (!audio) return;
+  const extension = audio.mimeType === 'audio/ogg' ? 'ogg' : audio.mimeType === 'audio/mp4' ? 'm4a' : audio.mimeType === 'audio/mpeg' ? 'mp3' : 'webm';
+  const objectPath = `communications/direct/${id}/${randomUUID()}.${extension}`;
+  const file = communicationStorageBucket().file(objectPath);
+  await file.save(audio.buffer, { resumable: false, metadata: { contentType: audio.mimeType, cacheControl: 'private, no-store' } });
+  try {
+    const [message] = await db.insert(communicationDirectMessages).values({
+      conversationId: id, body: 'Mensagem de áudio', authorUid: req.user!.uid, authorName: req.user!.name,
+      audioStoragePath: objectPath, audioMimeType: audio.mimeType, audioDurationMs: audio.durationMs,
+    }).returning();
+    return res.status(201).json(publicMessage(message));
+  } catch (error) { await file.delete().catch(() => undefined); throw error; }
+}));
+
 router.get('/groups', asyncHandler(async (req, res) => {
   const groups = await db.select({ id: communicationGroups.id, name: communicationGroups.name, sector: communicationGroups.sector, createdAt: communicationGroups.createdAt, lastReadAt: communicationGroupMembers.lastReadAt })
     .from(communicationGroups).innerJoin(communicationGroupMembers, eq(communicationGroupMembers.groupId, communicationGroups.id))
@@ -195,7 +290,24 @@ router.get('/groups/:id/messages', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Grupo inválido.' });
   if (!await isGroupMember(id, req.user!.userId)) return res.status(404).json({ error: 'Grupo não encontrado.' });
-  return res.json(await db.select().from(communicationMessages).where(eq(communicationMessages.groupId, id)).orderBy(desc(communicationMessages.createdAt)).limit(100).then(rows => rows.reverse()));
+  const page = messagePageOptions(req);
+  if (page.beforeId && page.afterId) return res.status(400).json({ error: 'Use um único cursor de mensagens.' });
+  const predicates = [eq(communicationMessages.groupId, id)];
+  if (page.beforeId) predicates.push(lt(communicationMessages.id, page.beforeId));
+  if (page.afterId) predicates.push(gt(communicationMessages.id, page.afterId));
+  const rows = await db.select().from(communicationMessages).where(and(...predicates))
+    .orderBy(page.afterId ? asc(communicationMessages.id) : desc(communicationMessages.id)).limit(page.limit);
+  return res.json((page.afterId ? rows : rows.reverse()).map(publicMessage));
+}));
+
+router.get('/groups/:id/messages/:messageId/audio', asyncHandler(async (req, res) => {
+  const groupId = Number(req.params.id), messageId = Number(req.params.messageId);
+  if (!Number.isInteger(groupId) || groupId < 1 || !Number.isInteger(messageId) || messageId < 1) return res.status(400).json({ error: 'Mensagem inválida.' });
+  if (!await isGroupMember(groupId, req.user!.userId)) return res.status(404).json({ error: 'Grupo não encontrado.' });
+  const [message] = await db.select({ path: communicationMessages.audioStoragePath, mimeType: communicationMessages.audioMimeType })
+    .from(communicationMessages).where(and(eq(communicationMessages.id, messageId), eq(communicationMessages.groupId, groupId))).limit(1);
+  if (!message?.path || !message.mimeType) return res.status(404).json({ error: 'Áudio não encontrado.' });
+  return streamAudio(message.path, message.mimeType, res, () => { if (!res.headersSent) res.status(503).json({ error: 'Não foi possível carregar o áudio.' }); else res.destroy(); });
 }));
 router.get('/groups/:id/members', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
@@ -245,8 +357,27 @@ router.post('/groups/:id/messages', requirePermission('communications:write'), a
   const [message] = await db.insert(communicationMessages).values({ groupId: id, body, replyToMessageId, authorUid: req.user!.uid, authorName: req.user!.name }).returning();
   return res.status(201).json(message);
 }));
+router.post('/groups/:id/audio', requirePermission('communications:write'), express.raw({ type: 'audio/*', limit: MAX_AUDIO_BYTES }), asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Grupo inválido.' });
+  if (!await isGroupMember(id, req.user!.userId)) return res.status(404).json({ error: 'Grupo não encontrado.' });
+  const audio = validatedAudioBody(req, res);
+  if (!audio) return;
+  const extension = audio.mimeType === 'audio/ogg' ? 'ogg' : audio.mimeType === 'audio/mp4' ? 'm4a' : audio.mimeType === 'audio/mpeg' ? 'mp3' : 'webm';
+  const objectPath = `communications/groups/${id}/${randomUUID()}.${extension}`;
+  const file = communicationStorageBucket().file(objectPath);
+  await file.save(audio.buffer, { resumable: false, metadata: { contentType: audio.mimeType, cacheControl: 'private, no-store' } });
+  try {
+    const [message] = await db.insert(communicationMessages).values({
+      groupId: id, body: 'Mensagem de áudio', authorUid: req.user!.uid, authorName: req.user!.name,
+      audioStoragePath: objectPath, audioMimeType: audio.mimeType, audioDurationMs: audio.durationMs,
+    }).returning();
+    return res.status(201).json(publicMessage(message));
+  } catch (error) { await file.delete().catch(() => undefined); throw error; }
+}));
 router.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   console.error('Communications request failed:', error);
-  return res.status(503).json({ error: 'A central de comunicação está indisponível no momento.' });
+  const status = typeof error === 'object' && error !== null && 'status' in error && Number((error as { status?: unknown }).status) === 413 ? 413 : 503;
+  return res.status(status).json({ error: status === 413 ? 'O áudio excede o limite de 5 MB.' : 'A central de comunicação está indisponível no momento.' });
 });
 export default router;

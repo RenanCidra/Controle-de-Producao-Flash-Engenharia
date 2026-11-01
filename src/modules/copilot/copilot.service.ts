@@ -16,6 +16,7 @@ export type CopilotPersonality = 'direct' | 'casual' | 'formal';
 
 export interface CopilotChatOptions {
   message: string;
+  audio?: { data: string; mimeType: string };
   history?: Array<{ role: 'user' | 'model'; text: string }>;
   language?: 'pt-BR' | 'en-US' | 'es-ES';
   personality?: CopilotPersonality;
@@ -262,7 +263,16 @@ export class CopilotService {
     const language = options.language || 'pt-BR';
     const personality = options.personality || 'casual';
 
-    if (this.isAuthorshipQuestion(message)) {
+    if (options.audio && !this.ai) {
+      const reply = language === 'en-US'
+        ? 'Voice messages are unavailable because the AI service is not enabled for this environment.'
+        : language === 'es-ES'
+          ? 'Los mensajes de voz no están disponibles porque el servicio de IA no está habilitado en este entorno.'
+          : 'O envio de áudio ao Assistente está indisponível porque o serviço de IA não está habilitado neste ambiente.';
+      return { reply, actions: [], mode: 'data_fallback' };
+    }
+
+    if (!options.audio && this.isAuthorshipQuestion(message)) {
       return { reply: this.authorshipReply(language, personality), actions: [], mode: 'data_fallback' };
     }
 
@@ -272,7 +282,7 @@ export class CopilotService {
 
     // Fast-path: Common operational prompts and specific OP lookups return immediately (< 30ms)
     // with exact, real-time factory data from the operational cache.
-    if (this.isDirectOperationalQuery(message) || specificOp?.status === 'found') {
+    if (!options.audio && (this.isDirectOperationalQuery(message) || specificOp?.status === 'found')) {
       return { ...this.generateDataFallback(message, context, specificOp, language, personality), mode: 'data_fallback' };
     }
 
@@ -353,7 +363,9 @@ DIRETRIZES DE ATUAÇÃO:
           const generatePromise = (async () => {
             const res = await this.ai!.models.generateContent({
               model: modelName,
-              contents: [...history, { role: 'user', parts: [{ text: currentTurn }] }],
+              contents: [...history, { role: 'user', parts: options.audio
+                ? [{ text: `Responda ao áudio enviado pelo usuário. Se não conseguir compreender, peça que repita. Contexto operacional: ${JSON.stringify(compactSnapshot)}` }, { inlineData: options.audio }]
+                : [{ text: currentTurn }] }],
               config: { systemInstruction, maxOutputTokens: 700 },
             });
             return res.text?.trim() || null;

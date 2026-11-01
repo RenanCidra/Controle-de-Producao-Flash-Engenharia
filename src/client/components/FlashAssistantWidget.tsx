@@ -4,6 +4,8 @@ import { api } from '../api.ts';
 import type { AuthUser } from '../api.ts';
 import { getAppLanguage, getIntlLocale, translateText } from '../i18n/index.ts';
 import { UserAccountMenu } from './UserAccountMenu.tsx';
+import { AudioRecorderButton } from './AudioRecorderButton.tsx';
+import { EmojiPicker } from './EmojiPicker.tsx';
 
 export type PersonalityMode = 'direct' | 'casual' | 'formal';
 export type TypingDisplayMode = 'realtime' | 'instant';
@@ -16,6 +18,7 @@ interface Message {
   actions?: Array<{ type: string; target: string; label: string }>;
   mode?: 'gemini' | 'data_fallback';
   error?: boolean;
+  audioUrl?: string;
 }
 
 interface Conversation {
@@ -246,7 +249,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
         id: activeConversationId,
         title,
         updatedAt: new Date().toISOString(),
-        messages: messages.slice(-MAX_SAVED_MESSAGES),
+        messages: messages.slice(-MAX_SAVED_MESSAGES).map(({ audioUrl: _audioUrl, ...message }) => message),
       };
       const updated = existing
         ? previous.map((conversation) => conversation.id === activeConversationId ? nextConversation : conversation)
@@ -338,9 +341,9 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
     };
   }, []);
 
-  const handleSendMessage = async (suggestedText?: string) => {
+  const handleSendMessage = async (suggestedText?: string, audioBlob?: Blob) => {
     const text = (suggestedText ?? inputValue).trim();
-    if (!text || loading) return;
+    if ((!text && !audioBlob) || loading) return;
 
     if (streamingAbortRef.current) {
       streamingAbortRef.current();
@@ -351,13 +354,15 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
       .filter((item) => item.id !== 'welcome' && !item.error)
       .slice(-10)
       .map((item) => ({ role: item.sender === 'user' ? 'user' as const : 'model' as const, text: item.text }));
-    const userMessage: Message = { id: `user-${Date.now()}`, sender: 'user', text, timestamp: currentTime() };
+    const userMessage: Message = { id: `user-${Date.now()}`, sender: 'user', text: text || 'Mensagem de áudio', timestamp: currentTime(), audioUrl: audioBlob ? URL.createObjectURL(audioBlob) : undefined };
     setMessages((previous) => [...previous, userMessage]);
     setInputValue('');
     setLoading(true);
 
     try {
-      const response = await api.sendCopilotMessage(text, history, getAppLanguage(), personality);
+      const response = audioBlob
+        ? await api.sendCopilotAudio(audioBlob, history, getAppLanguage(), personality)
+        : await api.sendCopilotMessage(text, history, getAppLanguage(), personality);
       const assistantMessageId = `assistant-${Date.now()}`;
       const fullText = response.reply;
 
@@ -704,6 +709,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
                       : 'rounded-tl-sm border border-[#E7ECF1] bg-white text-[#263548]'}`}>
                     <div className="space-y-1">
                       {renderMessageText(message.text)}
+                      {message.audioUrl && <audio controls preload="metadata" src={message.audioUrl} className="mt-2 max-w-full" />}
                       {streamingMessageId === message.id && (
                         <span className="inline-block h-3.5 w-1.5 ml-0.5 rounded-[1px] bg-amber-500 animate-pulse align-middle" aria-hidden="true" />
                       )}
@@ -759,6 +765,8 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
               <div className="mb-2 text-[10px] text-slate-500" aria-live="polite">{isListening ? t('Ouvindo... Fale agora') : ''}</div>
             )}
             <form onSubmit={(event) => { event.preventDefault(); void handleSendMessage(); }} className={`mx-auto flex w-full items-center gap-2 ${fullScreen ? 'max-w-4xl' : ''}`}>
+              <EmojiPicker onSelect={emoji => setInputValue(value => `${value}${emoji}`.slice(0, 2000))} label={t('Inserir emoji')} />
+              <AudioRecorderButton onRecorded={async (audio) => { await handleSendMessage(undefined, audio); }} disabled={loading} label={t('Gravar áudio')} />
               {speechSupported && (
                 <button type="button" onClick={toggleListening} disabled={loading} title={t(isListening ? 'Parar ditado' : 'Ditar pergunta por voz')} aria-label={t(isListening ? 'Parar ditado' : 'Ditar pergunta por voz')} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition disabled:opacity-40 ${isListening ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-[#DCE3EB] bg-white text-slate-500 hover:border-amber-300 hover:text-slate-900'}`}>
                   {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}

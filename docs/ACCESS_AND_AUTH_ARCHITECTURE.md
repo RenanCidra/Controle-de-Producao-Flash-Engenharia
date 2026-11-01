@@ -151,6 +151,14 @@ O procedimento operacional completo para criar a primeira conta `ADMIN` está em
 - **Layout mobile da comunicação:** marca Flash no cabeçalho, caixa de pesquisa logo abaixo, lista ocupando a área central e navegação **Conversas / Grupos** no rodapé; ao entrar em um chat, o rodapé/lista são ocultados e há retorno à lista. O acesso à conta continua no topo.
 - **Roteiro funcional sugerido:** reações e menções; fixação/favoritos persistentes e seleção múltipla com autorização de exclusão; referência rápida a OP; integração com ocorrências somente após definir como converter contexto de conversa em ocorrência, mantendo as duas entidades separadas. Anexos e transporte em tempo real dependem de decisão prévia de armazenamento e infraestrutura.
 
+### Histórico paginado, emojis e voz
+
+- A central carrega as 30 mensagens mais recentes por conversa, busca lotes anteriores ao rolar ao topo e consulta mensagens novas pelo cursor de ID durante o polling de 10 segundos.
+- Emojis e gravação com MediaRecorder estão disponíveis tanto na central quanto no Assistente. Áudios são limitados a 5 MB e dois minutos.
+- Áudios da central ficam em bucket privado do Firebase Storage; apenas caminho interno, MIME e duração ficam no PostgreSQL. Downloads passam pela API autenticada e exigem participação na conversa/grupo; o cliente só baixa o áudio ao solicitar reprodução.
+- Executar a migração incremental `20261101_communications_audio.sql` com as migrações de comunicação. Configurar `COMMUNICATIONS_STORAGE_BUCKET` opcionalmente e conceder à identidade de runtime acesso privado de leitura/escrita no bucket.
+- O Assistente encaminha a mídia ao Gemini no endpoint autenticado de áudio sob a configuração de consentimento já existente. O histórico do Assistente ainda é salvo localmente no navegador, sem sincronização entre dispositivos; blobs e URLs temporárias de áudio não são persistidos.
+
 ## Assistente Flash — Otimizações de Latência e Performance
 
 - **Cache operacional em memória (TTL 25s):** A agregação dos dados de OPs, ocorrências ativas, saldo de estoque e linhas de produção é armazenada em cache por 25 segundos, eliminando múltiplos roundtrips SQL repetitivos e reduzindo o tempo de consulta de banco de ~800ms para menos de 5ms em turnos subsequentes.

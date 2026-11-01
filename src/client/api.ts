@@ -643,17 +643,41 @@ class ApiService {
 
   public getCommunicationDirectory() { return this.request<Array<{ id: number; name: string; department: string | null; role?: string }>>('/communications/directory'); }
   public getCommunicationDirectConversations() { return this.request<any[]>('/communications/direct'); }
-  public getCommunicationDirectMessages(conversationId: number) { return this.request<any[]>(`/communications/direct/${conversationId}/messages`); }
+  private communicationMessagePage(path: string, params?: { beforeId?: number; afterId?: number; limit?: number }) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => { if (value !== undefined) query.set(key, String(value)); });
+    return this.request<any[]>(`${path}${query.size ? `?${query.toString()}` : ''}`);
+  }
+  public getCommunicationDirectMessages(conversationId: number, params?: { beforeId?: number; afterId?: number; limit?: number }) { return this.communicationMessagePage(`/communications/direct/${conversationId}/messages`, params); }
   public markCommunicationDirectRead(conversationId: number) { return this.request<{ success: boolean }>(`/communications/direct/${conversationId}/read`, { method: 'PATCH' }); }
   public startCommunicationDirectMessage(recipientId: number, body: string) { return this.request<{ conversationId: number; message: any }>('/communications/direct/messages', { method: 'POST', body: JSON.stringify({ recipientId, body }) }); }
   public sendCommunicationDirectMessage(conversationId: number, body: string, replyToMessageId?: number | null) { return this.request<any>(`/communications/direct/${conversationId}/messages`, { method: 'POST', body: JSON.stringify({ body, replyToMessageId }) }); }
+  public sendCommunicationDirectAudio(conversationId: number, audio: Blob, durationMs: number) { return this.uploadCommunicationAudio(`/communications/direct/${conversationId}/audio`, audio, durationMs); }
+  public getCommunicationDirectAudio(conversationId: number, messageId: number) { return this.getPrivateAudio(`/communications/direct/${conversationId}/messages/${messageId}/audio`); }
   public getCommunicationDirectProfile(conversationId: number) { return this.request<{ id: number; name: string; department: string | null; role: string; status: string }>(`/communications/direct/${conversationId}/profile`); }
   public getCommunicationGroups() { return this.request<any[]>('/communications/groups'); }
-  public getCommunicationMessages(groupId: number) { return this.request<any[]>(`/communications/groups/${groupId}/messages`); }
+  public getCommunicationMessages(groupId: number, params?: { beforeId?: number; afterId?: number; limit?: number }) { return this.communicationMessagePage(`/communications/groups/${groupId}/messages`, params); }
   public getCommunicationGroupMembers(groupId: number) { return this.request<Array<{ id: number; name: string; department: string | null; role: string }>>(`/communications/groups/${groupId}/members`); }
   public markCommunicationGroupRead(groupId: number) { return this.request<{ success: boolean }>(`/communications/groups/${groupId}/read`, { method: 'PATCH' }); }
   public createCommunicationGroup(name: string, sector: string, memberIds: number[]) { return this.request<any>('/communications/groups', { method: 'POST', body: JSON.stringify({ name, sector, memberIds }) }); }
   public sendCommunicationMessage(groupId: number, body: string, replyToMessageId?: number | null) { return this.request<any>(`/communications/groups/${groupId}/messages`, { method: 'POST', body: JSON.stringify({ body, replyToMessageId }) }); }
+  public sendCommunicationGroupAudio(groupId: number, audio: Blob, durationMs: number) { return this.uploadCommunicationAudio(`/communications/groups/${groupId}/audio`, audio, durationMs); }
+  public getCommunicationGroupAudio(groupId: number, messageId: number) { return this.getPrivateAudio(`/communications/groups/${groupId}/messages/${messageId}/audio`); }
+
+  private async uploadCommunicationAudio(path: string, audio: Blob, durationMs: number) {
+    const response = await fetch(`/api${path}?durationMs=${Math.round(durationMs)}`, {
+      method: 'POST', headers: { Authorization: `Bearer ${this.token || ''}`, 'Content-Type': audio.type.split(';')[0] || 'audio/webm' }, body: audio,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Não foi possível enviar o áudio.');
+    return data;
+  }
+
+  private async getPrivateAudio(path: string): Promise<string> {
+    const response = await fetch(`/api${path}`, { headers: { Authorization: `Bearer ${this.token || ''}` } });
+    if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data.error || 'Não foi possível carregar o áudio.'); }
+    return URL.createObjectURL(await response.blob());
+  }
 
   public getOccurrencesForOp(numeroOp: string) {
     return this.request<any[]>(`/occurrences/op/${encodeURIComponent(numeroOp)}`);
@@ -750,6 +774,23 @@ class ApiService {
       method: 'POST',
       body: JSON.stringify({ message, history, language, personality }),
     });
+  }
+
+  public async sendCopilotAudio(audio: Blob, history: Array<{ role: 'user' | 'model'; text: string }> = [], language: 'pt-BR' | 'en-US' | 'es-ES' = 'pt-BR', personality: 'direct' | 'casual' | 'formal' = 'casual') {
+    const response = await fetch('/api/copilot/audio', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.token || ''}`,
+        'Content-Type': audio.type.split(';')[0] || 'audio/webm',
+        'X-Copilot-History': JSON.stringify(history.slice(-6)),
+        'X-Copilot-Language': language,
+        'X-Copilot-Personality': personality,
+      },
+      body: audio,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Não foi possível analisar o áudio.');
+    return data as { reply: string; mode: 'gemini' | 'data_fallback'; actions?: Array<{ type: string; target: string; label: string }> };
   }
 
   public async getCopilotBriefing(): Promise<{ reply: string; mode: 'gemini' | 'data_fallback'; actions?: Array<{ type: string; target: string; label: string }> }> {

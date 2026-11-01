@@ -2,9 +2,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, Copy, Forward, Info, MessageCircle, MessageSquarePlus, MoreVertical, Plus, Reply, Search, Send, UserRound, Users, X } from 'lucide-react';
 import { api, type AuthUser } from '../../api.ts';
 import { UserAccountMenu } from '../../components/UserAccountMenu.tsx';
+import { AudioRecorderButton } from '../../components/AudioRecorderButton.tsx';
+import { EmojiPicker } from '../../components/EmojiPicker.tsx';
+import { translateText } from '../../i18n/index.ts';
 
 type Group = { id: number; name: string; sector: string; createdAt: string; unreadCount: number; lastMessage: Pick<Message, 'body' | 'authorUid' | 'authorName' | 'createdAt'> | null };
-type Message = { id: number; body: string; authorUid: string; authorName: string; createdAt: string; replyToMessageId?: number | null };
+type Message = { id: number; body: string; authorUid: string; authorName: string; createdAt: string; replyToMessageId?: number | null; hasAudio?: boolean; audioDurationMs?: number | null };
 type DirectoryUser = { id: number; name: string; department: string | null; role?: string };
 type DirectConversation = {
   conversationId: number;
@@ -27,6 +30,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
   const [selectedDirectId, setSelectedDirectId] = useState<number | null>(null);
   const [draftRecipient, setDraftRecipient] = useState<DirectoryUser | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const messagesRef = useRef<Message[]>([]);
   const [body, setBody] = useState('');
   const [error, setError] = useState('');
   const [newGroup, setNewGroup] = useState(false);
@@ -45,6 +49,11 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
   const [userSearch, setUserSearch] = useState('');
   const [section, setSection] = useState<'conversations' | 'groups'>('conversations');
   const lastSeenMessageRef = useRef<{ conversationKey: string; messageId: number } | null>(null);
+  const loadedConversationRef = useRef<string | null>(null);
+  const messageListRef = useRef<HTMLDivElement>(null);
+  const loadingOlderRef = useRef(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasOlderMessages, setHasOlderMessages] = useState(true);
   const canCreateGroups = ['ADMIN', 'SUPERVISOR'].includes(api.getUser()?.role || '');
   const selectedConversation = selectedGroupId !== null || selectedDirectId !== null || draftRecipient !== null;
 
@@ -77,10 +86,15 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
   };
   const loadMessages = useCallback(async () => {
     try {
+      const conversationKey = selectedGroupId !== null ? `group:${selectedGroupId}` : selectedDirectId !== null ? `direct:${selectedDirectId}` : null;
+      if (!conversationKey) { setMessages([]); loadedConversationRef.current = null; return; }
+      const initial = loadedConversationRef.current !== conversationKey;
+      const latestLoadedId = messagesRef.current.at(-1)?.id;
       if (selectedGroupId !== null) {
-        const data = await api.getCommunicationMessages(selectedGroupId);
+        const data = await api.getCommunicationMessages(selectedGroupId, initial ? { limit: 30 } : latestLoadedId ? { afterId: latestLoadedId, limit: 30 } : { limit: 30 });
         const loaded = Array.isArray(data) ? data : [];
-        setMessages(loaded);
+        if (initial) { setMessages(loaded); loadedConversationRef.current = conversationKey; setHasOlderMessages(loaded.length === 30); }
+        else if (loaded.length) setMessages(previous => [...previous, ...loaded.filter(item => !previous.some(existing => existing.id === item.id))]);
         const latest = loaded.at(-1);
         const key = `group:${selectedGroupId}`;
         if (latest && lastSeenMessageRef.current?.conversationKey === key && latest.id !== lastSeenMessageRef.current.messageId && latest.authorUid !== api.getUser()?.uid && document.visibilityState === 'visible') {
@@ -88,9 +102,10 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
         }
         if (latest) lastSeenMessageRef.current = { conversationKey: key, messageId: latest.id };
       } else if (selectedDirectId !== null) {
-        const data = await api.getCommunicationDirectMessages(selectedDirectId);
+        const data = await api.getCommunicationDirectMessages(selectedDirectId, initial ? { limit: 30 } : latestLoadedId ? { afterId: latestLoadedId, limit: 30 } : { limit: 30 });
         const loaded = Array.isArray(data) ? data : [];
-        setMessages(loaded);
+        if (initial) { setMessages(loaded); loadedConversationRef.current = conversationKey; setHasOlderMessages(loaded.length === 30); }
+        else if (loaded.length) setMessages(previous => [...previous, ...loaded.filter(item => !previous.some(existing => existing.id === item.id))]);
         const latest = loaded.at(-1);
         const key = `direct:${selectedDirectId}`;
         if (latest && lastSeenMessageRef.current?.conversationKey === key && latest.id !== lastSeenMessageRef.current.messageId && latest.authorUid !== api.getUser()?.uid && document.visibilityState === 'visible') {
@@ -105,6 +120,27 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
       setError(e.message);
     }
   }, [selectedGroupId, selectedDirectId, loadGroups, loadDirects]);
+
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+  const loadOlderMessages = async () => {
+    if (!hasOlderMessages || loadingOlderRef.current || !messagesRef.current.length) return;
+    const firstId = messagesRef.current[0].id;
+    const conversationKey = selectedGroupId !== null ? `group:${selectedGroupId}` : selectedDirectId !== null ? `direct:${selectedDirectId}` : null;
+    if (!conversationKey) return;
+    loadingOlderRef.current = true; setLoadingOlder(true);
+    try {
+      const scroller = messageListRef.current;
+      const oldHeight = scroller?.scrollHeight || 0;
+      const page = selectedGroupId !== null
+        ? await api.getCommunicationMessages(selectedGroupId, { beforeId: firstId, limit: 30 })
+        : await api.getCommunicationDirectMessages(selectedDirectId!, { beforeId: firstId, limit: 30 });
+      setMessages(previous => [...page.filter(item => !previous.some(existing => existing.id === item.id)), ...previous]);
+      setHasOlderMessages(page.length === 30);
+      requestAnimationFrame(() => { if (scroller) scroller.scrollTop += scroller.scrollHeight - oldHeight; });
+    } catch (e: any) { setError(e.message); }
+    finally { loadingOlderRef.current = false; setLoadingOlder(false); }
+  };
 
   useEffect(() => {
     void loadGroups();
@@ -334,12 +370,12 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
       <main className={`${selectedConversation ? 'flex' : 'hidden md:flex'} min-w-0 flex-1 flex-col bg-[#F1F4F7]`}>
         {selectedGroup ? <>
           <header className="flex items-center gap-3 border-b border-[#DCE3EB] bg-white px-4 py-3.5 sm:px-5"><button type="button" onClick={clearSelection} aria-label="Voltar à lista" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7] md:hidden"><ArrowLeft size={18}/></button><span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]"><Users size={18}/></span><button type="button" onClick={() => void openConversationInfo()} className="min-w-0 flex-1 text-left"><h2 className="truncate text-sm font-semibold text-[#263548]">{selectedGroup.name}</h2><p className="text-xs text-slate-500">{selectedGroup.sector} · {groupMembers.length || 'Ver'} participantes</p></button><button type="button" onClick={() => void openConversationInfo()} title="Dados do grupo" aria-label="Dados do grupo" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7]"><Info size={18}/></button></header>
-          <MessageList messages={messages} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={setMessageDetails}/>
-          <MessageComposer body={body} setBody={setBody} send={send} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
+          <MessageList messages={messages} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={hasOlderMessages} loadingOlder={loadingOlder} groupId={selectedGroupId} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={setMessageDetails}/>
+          <MessageComposer body={body} setBody={setBody} send={send} onSendAudio={async (audio, duration) => { const created = await api.sendCommunicationGroupAudio(selectedGroup.id, audio, duration); setMessages(previous => [...previous, created]); await loadGroups(); }} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
         </> : directTitle ? <>
           <header className="flex items-center gap-3 border-b border-[#DCE3EB] bg-white px-4 py-3.5 sm:px-5"><button type="button" onClick={clearSelection} aria-label="Voltar à lista" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7] md:hidden"><ArrowLeft size={18}/></button><span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]"><MessageCircle size={18}/></span><button type="button" onClick={() => void openConversationInfo()} className="min-w-0 flex-1 text-left"><h2 className="truncate text-sm font-semibold text-[#263548]">{directTitle}</h2><p className="text-xs text-slate-500">{draftRecipient ? 'Nova conversa · será criada ao enviar a primeira mensagem' : directDepartment || 'Conversa direta'}</p></button><button type="button" onClick={() => void openConversationInfo()} title="Ver perfil" aria-label="Ver perfil" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7]"><Info size={18}/></button></header>
-          <MessageList messages={messages} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={setMessageDetails}/>
-          <MessageComposer body={body} setBody={setBody} send={send} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
+          <MessageList messages={messages} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={hasOlderMessages} loadingOlder={loadingOlder} directId={selectedDirectId} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={setMessageDetails}/>
+          <MessageComposer body={body} setBody={setBody} send={send} onSendAudio={async (audio, duration) => { if (selectedDirectId !== null) { const created = await api.sendCommunicationDirectAudio(selectedDirectId, audio, duration); setMessages(previous => [...previous, created]); await loadDirects(); } }} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
         </> : <div className="m-auto max-w-md px-6 text-center"><div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white text-[#916B19] shadow-sm"><MessageCircle size={28}/></div><h2 className="text-lg font-semibold text-[#263548]">Sua comunicação de produção</h2><p className="mt-2 text-sm leading-6 text-slate-500">Selecione uma conversa ou grupo. As mensagens ficam visíveis apenas para seus participantes.</p></div>}
         {error && <p role="alert" className="border-t border-rose-100 bg-rose-50 px-4 py-2 text-xs text-rose-700">{error}</p>}
       </main>
@@ -374,7 +410,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
   </section>;
 };
 
-const MessageList: React.FC<{ messages: Message[]; onReply: (message: Message) => void; onForward: (message: Message) => void; onDetails: (message: Message) => void }> = ({ messages, onReply, onForward, onDetails }) => {
+const MessageList: React.FC<{ messages: Message[]; scrollerRef: React.RefObject<HTMLDivElement | null>; loadOlder: () => void; hasOlder: boolean; loadingOlder: boolean; groupId?: number | null; directId?: number | null; onReply: (message: Message) => void; onForward: (message: Message) => void; onDetails: (message: Message) => void }> = ({ messages, scrollerRef, loadOlder, hasOlder, loadingOlder, groupId, directId, onReply, onForward, onDetails }) => {
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
   const copyMessage = async (message: Message) => {
@@ -382,7 +418,7 @@ const MessageList: React.FC<{ messages: Message[]; onReply: (message: Message) =
     catch { setCopied(false); }
     setOpenMenuId(null);
   };
-  return <div className="relative min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 pb-5 sm:p-6">{copied && <div role="status" className="sticky top-1 z-10 mx-auto w-fit rounded-full bg-[#151C25] px-3 py-1.5 text-xs text-white shadow">Mensagem copiada</div>}{(Array.isArray(messages) ? messages : []).map((message, index) => {
+  return <div ref={scrollerRef} onScroll={event => { if (event.currentTarget.scrollTop < 90 && hasOlder && !loadingOlder) loadOlder(); }} className="relative min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 pb-5 sm:p-6">{(loadingOlder || hasOlder && !messages.length) && <div className="sticky top-1 z-10 mx-auto w-fit rounded-full bg-white px-3 py-1.5 text-[11px] text-slate-500 shadow">{loadingOlder ? 'Carregando mensagens anteriores…' : ''}</div>}{copied && <div role="status" className="sticky top-1 z-10 mx-auto w-fit rounded-full bg-[#151C25] px-3 py-1.5 text-xs text-white shadow">Mensagem copiada</div>}{(Array.isArray(messages) ? messages : []).map((message, index) => {
     const quoted = messages.find(item => item.id === message.replyToMessageId);
     const own = message.authorUid === api.getUser()?.uid;
     return <article key={`msg-${message.id || index}-${message.createdAt || ''}`} className={`group relative max-w-[90%] rounded-xl border px-3.5 py-2.5 pr-10 shadow-sm sm:max-w-[82%] ${own ? 'ml-auto border-[#E4D2A2] bg-[#FFF9E9]' : 'border-[#E7ECF1] bg-white'}`}>
@@ -390,12 +426,19 @@ const MessageList: React.FC<{ messages: Message[]; onReply: (message: Message) =
       {openMenuId === message.id && <div className={`absolute ${own ? 'right-1' : 'left-1'} top-8 z-30 w-44 overflow-hidden rounded-xl border border-[#DCE3EB] bg-white py-1 shadow-xl`}><button type="button" onClick={() => { onDetails(message); setOpenMenuId(null); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Info size={14}/>Dados da mensagem</button><button type="button" onClick={() => { onReply(message); setOpenMenuId(null); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Reply size={14}/>Responder</button><button type="button" onClick={() => void copyMessage(message)} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Copy size={14}/>Copiar</button><button type="button" onClick={() => { onForward(message); setOpenMenuId(null); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Forward size={14}/>Encaminhar</button></div>}
       <p className="mb-1 text-[10px] font-semibold text-[#916B19]">{message.authorName}</p>
       {message.replyToMessageId && <div className="mb-2 border-l-2 border-[#FFAA00] bg-[#F1F4F7]/80 px-2.5 py-1.5"><p className="text-[10px] font-semibold text-[#916B19]">{quoted?.authorName || 'Mensagem anterior'}</p><p className="line-clamp-2 whitespace-pre-wrap break-words text-xs text-slate-600">{quoted?.body || 'Conteúdo fora do histórico carregado'}</p></div>}
-      <p className="whitespace-pre-wrap break-words text-sm text-[#263548]">{message.body}</p><time className="mt-1 block text-right text-[10px] text-slate-400">{formatMessageTime(message.createdAt)}</time>
+      {message.hasAudio && groupId !== undefined && groupId !== null ? <PrivateAudioPlayer message={message} load={() => api.getCommunicationGroupAudio(groupId, message.id)}/> : message.hasAudio && directId !== undefined && directId !== null ? <PrivateAudioPlayer message={message} load={() => api.getCommunicationDirectAudio(directId, message.id)}/> : <p className="whitespace-pre-wrap break-words text-sm text-[#263548]">{message.body}</p>}{message.hasAudio && <p className="mt-1 text-[10px] text-slate-500">Áudio · {Math.max(1, Math.round((message.audioDurationMs || 0) / 1000))}s</p>}<time className="mt-1 block text-right text-[10px] text-slate-400">{formatMessageTime(message.createdAt)}</time>
     </article>;
   })}</div>;
 };
 
-const MessageComposer: React.FC<{ body: string; setBody: (value: string) => void; send: (event: React.FormEvent) => void; replyingTo: Message | null; cancelReply: () => void }> = ({ body, setBody, send, replyingTo, cancelReply }) => <form onSubmit={send} className="sticky bottom-0 z-10 flex shrink-0 items-end gap-2 border-t border-[#DCE3EB] bg-white p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-4"><div className="min-w-0 flex-1">{replyingTo && <div className="mb-2 flex items-center gap-2 rounded-lg border-l-2 border-[#FFAA00] bg-[#F1F4F7] px-2.5 py-1.5"><span className="min-w-0 flex-1"><b className="block text-[10px] text-[#916B19]">Respondendo a {replyingTo.authorName}</b><small className="block truncate text-xs text-slate-600">{replyingTo.body}</small></span><button type="button" onClick={cancelReply} aria-label="Cancelar resposta" className="rounded p-1 text-slate-500 hover:bg-white"><X size={15}/></button></div>}<textarea value={body} onChange={event => setBody(event.target.value)} maxLength={4000} rows={1} placeholder="Escreva uma mensagem" className="max-h-28 min-h-11 w-full resize-y rounded-2xl border border-[#DCE3EB] px-4 py-3 text-sm text-[#263548] outline-none focus:border-[#FFAA00]"/></div><button type="submit" disabled={!body.trim()} title="Enviar mensagem" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FFAA00] text-[#151C25] hover:bg-amber-300 disabled:opacity-40"><Send size={17}/></button></form>;
+const MessageComposer: React.FC<{ body: string; setBody: (value: string) => void; send: (event: React.FormEvent) => void; onSendAudio: (audio: Blob, durationMs: number) => Promise<void>; replyingTo: Message | null; cancelReply: () => void }> = ({ body, setBody, send, onSendAudio, replyingTo, cancelReply }) => <form onSubmit={send} className="sticky bottom-0 z-10 flex shrink-0 items-end gap-2 border-t border-[#DCE3EB] bg-white p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-4"><EmojiPicker onSelect={emoji => setBody(`${body}${emoji}`.slice(0, 4000))}/><AudioRecorderButton onRecorded={onSendAudio}/><div className="min-w-0 flex-1">{replyingTo && <div className="mb-2 flex items-center gap-2 rounded-lg border-l-2 border-[#FFAA00] bg-[#F1F4F7] px-2.5 py-1.5"><span className="min-w-0 flex-1"><b className="block text-[10px] text-[#916B19]">Respondendo a {replyingTo.authorName}</b><small className="block truncate text-xs text-slate-600">{replyingTo.body}</small></span><button type="button" onClick={cancelReply} aria-label="Cancelar resposta" className="rounded p-1 text-slate-500 hover:bg-white"><X size={15}/></button></div>}<textarea value={body} onChange={event => setBody(event.target.value)} maxLength={4000} rows={1} placeholder="Escreva uma mensagem" className="max-h-28 min-h-11 w-full resize-y rounded-2xl border border-[#DCE3EB] px-4 py-3 text-sm text-[#263548] outline-none focus:border-[#FFAA00]"/></div><button type="submit" disabled={!body.trim()} title="Enviar mensagem" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FFAA00] text-[#151C25] hover:bg-amber-300 disabled:opacity-40"><Send size={17}/></button></form>;
+
+const PrivateAudioPlayer: React.FC<{ message: Message; load: () => Promise<string> }> = ({ message, load }) => {
+  const [url, setUrl] = useState(''); const [failed, setFailed] = useState(false); const [loading, setLoading] = useState(false);
+  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
+  const fetchAudio = async () => { setLoading(true); setFailed(false); try { setUrl(await load()); } catch { setFailed(true); } finally { setLoading(false); } };
+  return url ? <audio controls preload="none" src={url} className="max-w-full"/> : <button type="button" disabled={loading} onClick={() => void fetchAudio()} className="rounded-lg border border-[#DCE3EB] bg-white px-3 py-2 text-xs font-semibold text-[#263548] disabled:opacity-50">{translateText(loading ? 'Carregando áudio…' : failed ? 'Tentar carregar áudio' : 'Carregar áudio para reproduzir')}</button>;
+};
 
 const roleLabel = (role?: string) => ({ ADMIN: 'Administrador', SUPERVISOR: 'Supervisor', OPERATOR: 'Operador', AUDITOR: 'Auditor' }[role || ''] || 'Usuário do sistema');
 const ProfileRow: React.FC<{ label: string; value: string }> = ({ label, value }) => <div className="px-3 py-2.5"><small className="block text-[10px] uppercase tracking-wide text-slate-400">{label}</small><span className="text-sm text-[#263548]">{value}</span></div>;

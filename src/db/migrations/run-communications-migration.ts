@@ -11,6 +11,7 @@ try {
     readFile(fileURLToPath(new URL('./20261031_communications.sql', import.meta.url)), 'utf8'),
     readFile(fileURLToPath(new URL('./20261031_communications_read_state.sql', import.meta.url)), 'utf8'),
     readFile(fileURLToPath(new URL('./20261101_communications_message_replies.sql', import.meta.url)), 'utf8'),
+    readFile(fileURLToPath(new URL('./20261101_communications_audio.sql', import.meta.url)), 'utf8'),
   ]);
   const client = await pool.connect();
   try { await client.query('BEGIN'); for (const migration of migrations) await client.query(migration); await client.query('COMMIT'); console.log('Communications migrations applied.'); }

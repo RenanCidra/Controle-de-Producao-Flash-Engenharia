@@ -48,6 +48,14 @@ Quando o acesso à origem for definido, implementar sincronização incremental 
 
 ## Implementação concluída nesta etapa
 
+### Atualização posterior — Central e áudio (2026-11-01)
+
+- Mensagens da central são lidas em páginas de 30 por cursor; histórico antigo carrega ao rolar para cima e polling consulta somente IDs posteriores. O banco segue guardando o histórico completo.
+- Emoji picker e gravação de áudio MediaRecorder foram incluídos na Central e no Assistente. Limites de áudio: 5 MB e 120 segundos.
+- Mídias de conversa são objetos em bucket Firebase Storage privado; a API valida autenticação e participação antes de entregar. A migração `src/db/migrations/20261101_communications_audio.sql` deve ser aplicada no banco de destino; configurar bucket e permissões da identidade do servidor.
+- O Assistente envia a mídia ao Gemini por rota autenticada; em produção, aplica-se `COPILOT_EXTERNAL_DATA_ENABLED`. Histórico do Assistente permanece local no navegador; blob/URL temporária não é salva.
+- Build local não comprova upload real: é necessário banco migrado, credencial de runtime no Google Cloud e bucket privado acessível. Preview local mantém o bloqueio de escrita previamente estabelecido.
+
 - Auditoria apresenta evento, registro, autor e resultado em uma tabela mais compacta; a consulta acompanha a página selecionada, mantém ordenação estável em empates e mostra erros de carregamento sem confundi-los com lista vazia. Detalhes legados ocultam campos que aparentam conter senhas, tokens, credenciais ou hashes.
 - Importações Protheus validam todos os registros antes de criar o lote. Datas, quantidades, status, unidades, clientes e sequências ausentes deixam de receber valores substitutos; o lote é rejeitado com entidade e número do registro para correção. Campos de saldo devem vir da fonte, pois divergências entre saldo e cálculo local precisam continuar visíveis.
 - A gravação de todas as entidades do lote usa uma transação: se qualquer persistência falhar, nenhuma entidade fica parcialmente atualizada. Apontamentos importados não sobrescrevem as quantidades e o saldo oficial da OP; o espelho preserva os valores recebidos da SC2.
