@@ -152,9 +152,8 @@ class ReportStore:
         self._workbooks = {}
         self._cursors = {}
         self._cursor_lock = threading.Lock()
-        missing = [name for name, *_ in REPORTS.values() if not (self.data_dir / name).is_file()]
-        if missing:
-            raise FileNotFoundError("Relatórios não encontrados: " + ", ".join(missing))
+        self.missing_reports = sorted({name for name, *_ in REPORTS.values() if not (self.data_dir / name).is_file()})
+        self.available_entities = sorted(entity for entity, (name, *_rest) in REPORTS.items() if (self.data_dir / name).is_file())
 
     def page(self, entity: str, page: int, page_size: int) -> dict[str, Any]:
         if entity not in REPORTS:
@@ -291,7 +290,12 @@ def make_handler(store: ReportStore):
                     + ["GET /v1/sales-orders (501; SC6 lacks the sales-order link key C6_NUM)", "GET /v1/health", "GET /v1/flow-check (full read-only preflight)"],
                 })
             if parsed.path == "/v1/health":
-                return self._send(200, {"status": "online", "simulation": True, "readOnly": True, "connectsToProtheus": False, "writesToApplication": False})
+                return self._send(200, {
+                    "status": "online", "simulation": True, "readOnly": True,
+                    "connectsToProtheus": False, "writesToApplication": False,
+                    "availableEntities": store.available_entities,
+                    "missingReports": store.missing_reports,
+                })
             if parsed.path == "/v1/flow-check":
                 try:
                     from protheus_mock_flow import run_preflight
@@ -342,6 +346,8 @@ def make_handler(store: ReportStore):
                 return self._send(404, {"error": "ENTITY_NOT_AVAILABLE", "entity": entity})
             except ValueError as error:
                 return self._send(400, {"error": "INVALID_PAGINATION", "message": str(error)})
+            except FileNotFoundError:
+                return self._send(503, {"error": "SOURCE_REPORT_MISSING", "entity": entity})
             except Exception:
                 # Keep filesystem paths and workbook internals out of API responses.
                 return self._send(500, {"error": "REPORT_READ_FAILED", "entity": entity})
