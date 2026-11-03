@@ -137,6 +137,13 @@ A migração `src/db/migrations/20261029_access_accounts.sql` cria `organization
 
 O procedimento operacional completo para criar a primeira conta `ADMIN` está em [`docs/PRIMEIRO_ACESSO.md`](./PRIMEIRO_ACESSO.md). Não existe usuário/senha padrão; o bootstrap protegido é o caminho de primeiro acesso.
 
+## Ajuda e feedback interno
+
+- O menu compartilhado da conta reúne perfil, configurações, ajuda e saída no sistema, Central de Comunicação e Assistente em tela cheia; Configurações permanece sem esse menu. Ajuda aponta para os documentos/página oficiais da Flash.
+- Contas autenticadas podem enviar sugestões e problemas. O autor é derivado da sessão no backend. ADMIN/SUPERVISOR podem consultar os envios e alterar o status; a API exige `feedback:read` e `feedback:manage`.
+- A tabela `feedback_submissions`, migração incremental `20261103_feedback.sql` e comando `npm run db:migrate:feedback` estão implementados. A aplicação da migração no banco de destino ainda precisa ser confirmada. Prévia local usa somente `localStorage`, com aviso de que não envia dados ao servidor.
+- A primeira versão não inclui anexos, e-mail/notificações, resposta ao autor, SLA ou conversão automática em ocorrência. Ver [`FEEDBACK.md`](./FEEDBACK.md).
+
 ## Central de comunicação
 
 - **Primeira etapa implementada:** página dedicada em tela inteira, separada da sidebar/header globais, com conversas diretas, grupos por setor, histórico de mensagens e envio de texto, usando atualização periódica de 10 segundos e a paleta Nexus/Flash. O botão `+` no canto superior direito do cabeçalho da lista **Conversas** busca contas ativas elegíveis; o rascunho individual só é salvo com a primeira mensagem e conversas existentes do mesmo par são reutilizadas. Em desktop, Central e Assistente em tela cheia usam no rodapé do painel lateral o mesmo menu expansível da conta da tela principal, com **Meu perfil**, **Configurações** e **Sair**; cartão e popover mantêm fundo escuro mesmo sobre painéis brancos. Em telas móveis, o mesmo menu fica no cabeçalho. A tela Configurações não exibe o menu. O atalho da central usa ícone de telefone imediatamente acima do Assistente Flash; há retorno ao sistema e navegação adaptada para telas móveis. As preferências próprias do assistente permanecem separadas.

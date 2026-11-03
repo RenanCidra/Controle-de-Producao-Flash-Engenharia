@@ -157,6 +157,27 @@ export const auditLogs = pgTable("audit_logs", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const feedbackSubmissions = pgTable("feedback_submissions", {
+  id: serial("id").primaryKey(),
+  category: text("category").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  sourceScreen: text("source_screen"),
+  status: text("status").notNull().default("NEW"),
+  submitterUid: text("submitter_uid").notNull(),
+  submitterName: text("submitter_name").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("feedback_submissions_status_created_idx").on(table.status, table.createdAt),
+  index("feedback_submissions_submitter_idx").on(table.submitterUid, table.createdAt),
+  check("feedback_submissions_category_check", sql`${table.category} IN ('IDEA', 'BUG', 'QUESTION', 'OTHER')`),
+  check("feedback_submissions_status_check", sql`${table.status} IN ('NEW', 'IN_REVIEW', 'PLANNED', 'COMPLETED', 'DECLINED')`),
+  check("feedback_submissions_title_length_check", sql`length(btrim(${table.title})) BETWEEN 1 AND 120`),
+  check("feedback_submissions_description_length_check", sql`length(btrim(${table.description})) BETWEEN 1 AND 3000`),
+  check("feedback_submissions_source_length_check", sql`${table.sourceScreen} IS NULL OR length(${table.sourceScreen}) <= 120`),
+]);
+
 // ==========================================
 // TOTVS PROTHEUS NORMALIZED CORE MODULE (Módulo 1)
 // ==========================================

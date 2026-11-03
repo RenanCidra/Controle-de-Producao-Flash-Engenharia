@@ -20,6 +20,7 @@ import { UserProfileModal } from './client/modules/auth/UserProfileModal.tsx';
 import { FlashAssistantWidget } from './client/components/FlashAssistantWidget.tsx';
 import { WelcomeView } from './client/modules/home/WelcomeView.tsx';
 import { CommunicationsView } from './client/modules/communications/CommunicationsView.tsx';
+import { FeedbackDialog } from './client/modules/feedback/FeedbackDialog.tsx';
 
 const DEV_PREVIEW_AUTH = import.meta.env.DEV && import.meta.env.VITE_DEV_PREVIEW_AUTH === 'true';
 const DEV_PREVIEW_USER: AuthUser = {
@@ -49,6 +50,7 @@ export default function App() {
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [feedbackDialog, setFeedbackDialog] = useState<'submit' | 'inbox' | null>(null);
   const [setupRequired, setSetupRequired] = useState(false);
   const [bootstrapEnabled, setBootstrapEnabled] = useState(false);
   const [setupStatusChecked, setSetupStatusChecked] = useState(false);
@@ -366,6 +368,7 @@ export default function App() {
             if (!pendingDashboardDataRef.current) finishCommunicationsTransition();
           }}
           onOpenProfile={() => setProfileModalOpen(true)}
+          onOpenFeedback={(tab = 'submit') => setFeedbackDialog(tab)}
           onOpenSettings={() => {
             setAssistantOpen(false);
             handleNavigateToSettings('general');
@@ -411,6 +414,7 @@ export default function App() {
             currentUser={currentUser}
             onOpenAuth={() => setAuthModalOpen(true)}
             onOpenProfile={() => setProfileModalOpen(true)}
+            onOpenFeedback={(tab = 'submit') => setFeedbackDialog(tab)}
             onLogout={handleLogout}
             onOpenSettings={handleNavigateToSettings}
             collapsed={sidebarCollapsed && !mobileSidebarOpen}
@@ -572,6 +576,7 @@ export default function App() {
           isOpen={assistantOpen}
           onToggle={() => setAssistantOpen((prev) => !prev)}
           onOpenProfile={() => setProfileModalOpen(true)}
+          onOpenFeedback={(tab = 'submit') => setFeedbackDialog(tab)}
           onOpenSettings={() => {
             setAssistantOpen(false);
             handleNavigateToSettings('general');
@@ -645,6 +650,7 @@ export default function App() {
         </div>
       )}
       <UserProfileModal isOpen={profileModalOpen} user={currentUser} onClose={() => setProfileModalOpen(false)} />
+      {currentUser && feedbackDialog && <FeedbackDialog user={currentUser} localPreview={DEV_PREVIEW_AUTH} initialTab={feedbackDialog} onClose={() => setFeedbackDialog(null)} onToast={showToast} />}
     </div>
   );
 }

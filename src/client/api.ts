@@ -17,6 +17,21 @@ export interface AuthUser {
   department?: string | null;
 }
 
+export type FeedbackCategory = 'IDEA' | 'BUG' | 'QUESTION' | 'OTHER';
+export type FeedbackStatus = 'NEW' | 'IN_REVIEW' | 'PLANNED' | 'COMPLETED' | 'DECLINED';
+export interface FeedbackSubmission {
+  id: number;
+  category: FeedbackCategory;
+  title: string;
+  description: string;
+  sourceScreen: string | null;
+  status: FeedbackStatus;
+  submitterUid: string;
+  submitterName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ProtheusSyncResult {
   batchId: number;
   batchCode: string;
@@ -795,6 +810,18 @@ class ApiService {
 
   public async getCopilotBriefing(): Promise<{ reply: string; mode: 'gemini' | 'data_fallback'; actions?: Array<{ type: string; target: string; label: string }> }> {
     return this.request('/copilot/briefing');
+  }
+
+  public async createFeedback(input: { category: FeedbackCategory; title: string; description: string; sourceScreen?: string }) {
+    return this.request<FeedbackSubmission>('/feedback', { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  public async getFeedback() {
+    return this.request<{ items: FeedbackSubmission[] }>('/feedback');
+  }
+
+  public async updateFeedbackStatus(id: number, status: FeedbackStatus) {
+    return this.request<FeedbackSubmission>(`/feedback/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
   }
 }
 

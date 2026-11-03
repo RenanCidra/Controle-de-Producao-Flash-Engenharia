@@ -120,6 +120,13 @@ Quando o acesso à origem for definido, implementar sincronização incremental 
 - Para a prévia local existe bypass sintético somente em desenvolvimento, descrito no documento de primeiro acesso. O ambiente local ignorado pelo Git pode conter configuração de preview; não copiar essa configuração ao deploy nem commitar `.env`.
 - A migração de acesso está no repositório, mas sua aplicação no banco de destino deve ser verificada diretamente no ambiente. Sessões revogáveis, refresh token rotativo, escopo por organização/planta e permissões configuráveis continuam no roadmap.
 
+## Menu de ajuda e feedback
+
+- `UserAccountMenu` é o menu compartilhado na barra lateral, Central de Comunicação e Assistente em tela cheia. A Ajuda contém os links oficiais de termos, privacidade, cookies, CFTV e Sobre a Flash. Configurações não mostra o menu, conforme o desenho atual.
+- Feedback interno foi implementado com formulário autenticado e persistência em `feedback_submissions`. Qualquer perfil autenticado pode enviar; somente ADMIN/SUPERVISOR consultam a caixa de entrada e alteram o status. A API protege as operações por `feedback:create`, `feedback:read` e `feedback:manage`, com auditoria de criação e mudança de situação.
+- Aplicar a migração `npm run db:migrate:feedback` no banco de destino antes de habilitar o fluxo persistente. A migração está no código, mas **não foi executada neste ambiente**. Na prévia local, salvamentos demonstrativos ficam no localStorage e são explicitamente identificados como não enviados ao servidor.
+- A primeira versão não envia e-mail, notificações, anexos ou respostas ao autor; também não converte feedback automaticamente em ocorrência. Ver `docs/FEEDBACK.md`.
+
 ## Próximas etapas recomendadas
 
 1. Com o TI, validar os dicionários e chaves nativas dos relatórios já recebidos — incluindo empresa/filial, revisão do roteiro, identificador do apontamento, recurso/setor, empenho e vínculo SC5/SC6 — e obter apenas amostras adicionais anonimizadas quando faltar campo ou caso de borda.

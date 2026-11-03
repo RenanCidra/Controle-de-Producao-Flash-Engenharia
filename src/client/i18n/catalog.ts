@@ -1981,4 +1981,40 @@ Object.assign(es, {
   'O sistema não conseguiu consultar os dados do espelho.': 'El sistema no pudo consultar los datos del espejo.',
 });
 
+Object.assign(en, {
+  'Ajuda': 'Help', 'Sobre a Flash': 'About Flash', 'Meu perfil': 'My profile',
+  'Termos de Uso': 'Terms of Use', 'Política de Privacidade': 'Privacy Policy', 'Política de Cookies': 'Cookie Policy', 'Política de CFTV': 'CCTV Policy',
+  'Enviar feedback': 'Send feedback', 'Feedback recebido': 'Feedback inbox', 'Feedback e sugestões': 'Feedback and suggestions',
+  'Ajude a melhorar o sistema para a rotina da fábrica.': 'Help improve the system for factory operations.',
+  'Prévia local: os dados ficam apenas neste navegador e não são enviados ao servidor.': 'Local preview: data stays in this browser and is not sent to the server.',
+  'Feedback salvo nesta prévia local; não foi enviado ao servidor.': 'Feedback saved in this local preview; it was not sent to the server.',
+  'Feedback enviado. Obrigado pela contribuição.': 'Feedback sent. Thank you for contributing.',
+  'Não foi possível enviar o feedback.': 'Could not send feedback.', 'Não foi possível atualizar a sugestão.': 'Could not update the suggestion.',
+  'Não foi possível carregar as sugestões. Tente novamente.': 'Could not load suggestions. Try again.',
+  'Nenhum feedback recebido ainda': 'No feedback received yet', 'As sugestões enviadas aparecerão aqui para triagem.': 'Submitted suggestions will appear here for review.',
+  'Sugestão de melhoria': 'Improvement idea', 'Problema encontrado': 'Problem encountered', 'Dúvida': 'Question', 'Outro assunto': 'Other',
+  'Novo': 'New', 'Em análise': 'Under review', 'Planejado': 'Planned', 'Concluído': 'Completed', 'Não será implementado': 'Declined',
+  'Tipo de feedback': 'Feedback type', 'Título': 'Title', 'Resuma a ideia ou problema': 'Summarize the idea or problem', 'Descrição': 'Description',
+  'Conte o que aconteceu ou como essa melhoria ajudaria no trabalho.': 'Describe what happened or how this improvement would help at work.',
+  'Obrigado por contribuir com a melhoria do sistema.': 'Thank you for helping improve the system.', 'Carregando feedback…': 'Loading feedback…', 'Situação': 'Status', 'Fechar': 'Close', 'Enviar': 'Send',
+});
+
+Object.assign(es, {
+  'Ajuda': 'Ayuda', 'Sobre a Flash': 'Sobre Flash', 'Meu perfil': 'Mi perfil',
+  'Termos de Uso': 'Términos de uso', 'Política de Privacidade': 'Política de privacidad', 'Política de Cookies': 'Política de cookies', 'Política de CFTV': 'Política de CCTV',
+  'Enviar feedback': 'Enviar comentarios', 'Feedback recebido': 'Bandeja de comentarios', 'Feedback e sugestões': 'Comentarios y sugerencias',
+  'Ajude a melhorar o sistema para a rotina da fábrica.': 'Ayude a mejorar el sistema para las operaciones de fábrica.',
+  'Prévia local: os dados ficam apenas neste navegador e não são enviados ao servidor.': 'Vista previa local: los datos permanecen en este navegador y no se envían al servidor.',
+  'Feedback salvo nesta prévia local; não foi enviado ao servidor.': 'Comentario guardado en esta vista previa local; no se envió al servidor.',
+  'Feedback enviado. Obrigado pela contribuição.': 'Comentario enviado. Gracias por contribuir.',
+  'Não foi possível enviar o feedback.': 'No se pudo enviar el comentario.', 'Não foi possível atualizar a sugestão.': 'No se pudo actualizar la sugerencia.',
+  'Não foi possível carregar as sugestões. Tente novamente.': 'No se pudieron cargar las sugerencias. Inténtelo de nuevo.',
+  'Nenhum feedback recebido ainda': 'Aún no se han recibido comentarios', 'As sugestões enviadas aparecerão aqui para triagem.': 'Las sugerencias enviadas aparecerán aquí para su revisión.',
+  'Sugestão de melhoria': 'Sugerencia de mejora', 'Problema encontrado': 'Problema encontrado', 'Dúvida': 'Pregunta', 'Outro assunto': 'Otro asunto',
+  'Novo': 'Nuevo', 'Em análise': 'En revisión', 'Planejado': 'Planificado', 'Concluído': 'Completado', 'Não será implementado': 'Rechazado',
+  'Tipo de feedback': 'Tipo de comentario', 'Título': 'Título', 'Resuma a ideia ou problema': 'Resuma la idea o el problema', 'Descrição': 'Descripción',
+  'Conte o que aconteceu ou como essa melhoria ajudaria no trabalho.': 'Describa qué ocurrió o cómo esta mejora ayudaría en el trabajo.',
+  'Obrigado por contribuir com a melhoria do sistema.': 'Gracias por contribuir a mejorar el sistema.', 'Carregando feedback…': 'Cargando comentarios…', 'Situação': 'Estado', 'Fechar': 'Cerrar', 'Enviar': 'Enviar',
+});
+
 export const catalogs: Record<Exclude<AppLanguage, 'pt-BR'>, Record<string, string>> = { 'en-US': en, 'es-ES': es };

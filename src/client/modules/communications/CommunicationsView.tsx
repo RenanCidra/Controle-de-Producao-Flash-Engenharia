@@ -45,7 +45,7 @@ const previewConversationMessages = (conversationKey: string, currentUser: AuthU
   return messages;
 };
 
-export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localPreview: boolean; onBack: () => void; onInitialLoadComplete: () => void; onOpenProfile: () => void; onOpenSettings: () => void; onLogout: () => void }> = ({ currentUser, localPreview, onBack, onInitialLoadComplete, onOpenProfile, onOpenSettings, onLogout }) => {
+export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localPreview: boolean; onBack: () => void; onInitialLoadComplete: () => void; onOpenProfile: () => void; onOpenSettings: () => void; onOpenFeedback: (initialTab?: 'submit' | 'inbox') => void; onLogout: () => void }> = ({ currentUser, localPreview, onBack, onInitialLoadComplete, onOpenProfile, onOpenSettings, onOpenFeedback, onLogout }) => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [directs, setDirects] = useState<DirectConversation[]>([]);
   const [directory, setDirectory] = useState<DirectoryUser[]>([]);
@@ -411,7 +411,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
         <div className="hidden min-w-0 md:block"><h1 className="truncate text-sm font-semibold">Central de comunicação</h1><p className="text-[11px] text-slate-300">Flash Connect</p></div>
       </div>
       <div className="flex shrink-0 items-center gap-1">
-        <div className="md:hidden"><UserAccountMenu compact currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onLogout={onLogout}/></div>
+        <div className="md:hidden"><UserAccountMenu compact currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenFeedback={onOpenFeedback} onLogout={onLogout}/></div>
         <button type="button" onClick={onBack} className="inline-flex items-center gap-2 rounded-lg px-2 py-2 text-xs font-semibold text-slate-200 transition hover:bg-[#263548] hover:text-white sm:px-3"><ArrowLeft size={15}/><span className="hidden sm:inline">Voltar ao sistema</span><span className="sm:hidden">Voltar</span></button>
       </div>
     </header>
@@ -485,7 +485,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
           )}
         </div>
         <div className="hidden shrink-0 border-t border-[#202936] bg-[#151C25] p-3 md:block">
-          <UserAccountMenu currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onLogout={onLogout}/>
+          <UserAccountMenu currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenFeedback={onOpenFeedback} onLogout={onLogout}/>
         </div>
         <nav aria-label="Seções da comunicação" className="flex shrink-0 items-stretch border-t border-[#263548] bg-[#151C25] pb-[env(safe-area-inset-bottom)] md:hidden">
           <button type="button" onClick={() => { setSection('conversations'); clearSelection(); }} aria-current={section === 'conversations' ? 'page' : undefined} className={`relative flex min-h-16 flex-1 flex-col items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold transition ${section === 'conversations' ? 'text-[#FFAA00]' : 'text-slate-300'}`}><MessageCircle size={19}/><span>Conversas</span>{unreadDirectTotal > 0 && <b className="absolute right-[calc(50%-25px)] top-1 min-w-4 rounded-full bg-[#FFAA00] px-1 text-center text-[9px] leading-4 text-[#151C25]">{unreadDirectTotal}</b>}</button>
