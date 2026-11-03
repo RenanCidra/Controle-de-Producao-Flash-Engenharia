@@ -34,7 +34,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ stats, loading, error,
           </div>
           <aside className="rounded-xl border border-white/10 bg-black/25 p-4 text-white backdrop-blur-sm">
             <div className="flex items-center gap-2 text-xs font-semibold"><span className={`h-2 w-2 rounded-full ${error ? 'bg-rose-400' : loading ? 'animate-pulse bg-amber-300' : stats ? 'bg-emerald-400' : 'bg-slate-400'}`} />{translateText('Espelho operacional do Protheus')}</div>
-            {error ? <DataUnavailableState compact title="Resumo indisponível" description="O sistema não conseguiu consultar os dados do espelho." onRetry={onRetry} retrying={loading} /> : <>
+            {error ? <DataUnavailableState compact tone="dark" title="Resumo indisponível" description="O sistema não conseguiu consultar os dados do espelho." onRetry={onRetry} retrying={loading} /> : <>
               <p className="mt-2 text-xs leading-relaxed text-slate-300">{stats ? translateText('Resumo baseado nas cargas e registros disponíveis no banco da aplicação.') : translateText('A consulta usa os dados recebidos no espelho; não representa uma conexão ativa ao Protheus.')}</p>
               {stats && <div className="mt-4 grid grid-cols-2 gap-2"><div className="rounded-lg bg-white/5 p-2.5"><span className="block text-[10px] text-slate-400">{translateText('OPs no espelho')}</span><strong className="mt-1 block text-lg">{stats.totalProtheusOp.toLocaleString()}</strong></div><div className="rounded-lg bg-white/5 p-2.5"><span className="block text-[10px] text-slate-400">{translateText('Pedidos no espelho')}</span><strong className="mt-1 block text-lg">{stats.totalProtheusPv.toLocaleString()}</strong></div></div>}
             </>}

@@ -135,6 +135,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ stats, refreshing,
         <p className="mt-1 text-xs text-[#64748B]">Os gráficos e indicadores dependem dos dados consultados no sistema.</p>
       </section>
       <DataUnavailableState
+        compact
         title="Dados do painel indisponíveis"
         description="Não foi possível consultar os dados necessários para montar os indicadores. Verifique a conexão do sistema e tente novamente."
         onRetry={() => { onRefresh(); void loadProduction(applied); }}

@@ -89,6 +89,7 @@ O projeto também contém testes Python da API simulada; instruções estão na 
 - [Primeiro acesso e configuração de ambiente](docs/PRIMEIRO_ACESSO.md)
 - [Arquitetura de acesso, autenticação e colaboradores](docs/ACCESS_AND_AUTH_ARCHITECTURE.md)
 - [Simulação local da API Protheus](docs/PROTHEUS_API_SIMULATION.md)
+- [Cache offline das imagens da interface](docs/OFFLINE_ASSETS.md)
 - [Continuidade do projeto e próximos passos](docs/AI_STUDIO_HANDOFF.md)
 
 ## Segurança e uso operacional
