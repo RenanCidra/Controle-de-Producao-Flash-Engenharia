@@ -3,7 +3,7 @@ import { Webhook, Plus, Trash2, Activity } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState.tsx';
 import { Modal } from '../../components/Modal.tsx';
 import { api } from '../../api.ts';
-import { confirmInCurrentLanguage } from '../../i18n/index.ts';
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog.tsx';
 
 interface IntegrationsViewProps {
   integrations: any[];
@@ -25,6 +25,8 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
   const [baseUrl, setBaseUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [testingId, setTestingId] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,15 +49,17 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirmInCurrentLanguage('Deseja excluir este conector?')) return;
+  const handleDelete = async () => {
+    if (!deleteTarget || deleteSubmitting) return;
+    setDeleteSubmitting(true);
     try {
-      await api.deleteIntegration(id);
-      onSuccess('Conector excluído.');
+      await api.deleteIntegration(deleteTarget.id);
+      onSuccess(`Conector ${deleteTarget.name} excluído.`);
+      setDeleteTarget(null);
       onReload();
     } catch (err: any) {
       onError(err.message);
-    }
+    } finally { setDeleteSubmitting(false); }
   };
 
   const handleTest = async (id: number) => {
@@ -136,7 +140,9 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
                   {testingId === item.id ? 'Testando...' : 'Testar Conexão'}
                 </button>
                 <button
-                  onClick={() => handleDelete(item.id)}
+                  onClick={() => setDeleteTarget(item)}
+                  title={`Excluir conector ${item.name}`}
+                  aria-label={`Excluir conector ${item.name}`}
                   className="text-[#64748B] hover:text-rose-400 p-1.5 transition"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -227,6 +233,7 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
           </div>
         </form>
       </Modal>
+      <ConfirmActionDialog isOpen={Boolean(deleteTarget)} title="Excluir conector?" description="A integração será removida do Nexus. Essa ação não altera a configuração do sistema conectado na outra ponta." itemLabel={deleteTarget?.name || ''} busy={deleteSubmitting} onCancel={() => setDeleteTarget(null)} onConfirm={() => void handleDelete()}/>
     </div>
   );
 };

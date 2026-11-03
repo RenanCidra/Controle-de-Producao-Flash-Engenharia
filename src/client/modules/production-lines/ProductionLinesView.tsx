@@ -3,7 +3,7 @@ import { Factory, Plus, Trash2 } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState.tsx';
 import { Modal } from '../../components/Modal.tsx';
 import { api } from '../../api.ts';
-import { confirmInCurrentLanguage } from '../../i18n/index.ts';
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog.tsx';
 
 interface ProductionLinesViewProps {
   lines: any[];
@@ -25,6 +25,8 @@ export const ProductionLinesView: React.FC<ProductionLinesViewProps> = ({
   const [capacityPerHour, setCapacityPerHour] = useState('0');
   const [status, setStatus] = useState<'OPERATIONAL' | 'MAINTENANCE' | 'IDLE'>('OPERATIONAL');
   const [supervisorName, setSupervisorName] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,15 +52,17 @@ export const ProductionLinesView: React.FC<ProductionLinesViewProps> = ({
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirmInCurrentLanguage('Deseja excluir este posto de trabalho?')) return;
+  const handleDelete = async () => {
+    if (!deleteTarget || deleteSubmitting) return;
+    setDeleteSubmitting(true);
     try {
-      await api.deleteProductionLine(id);
-      onSuccess('Posto de trabalho excluído.');
+      await api.deleteProductionLine(deleteTarget.id);
+      onSuccess(`Posto ${deleteTarget.code} excluído.`);
+      setDeleteTarget(null);
       onReload();
     } catch (err: any) {
       onError(err.message);
-    }
+    } finally { setDeleteSubmitting(false); }
   };
 
   return (
@@ -130,7 +134,9 @@ export const ProductionLinesView: React.FC<ProductionLinesViewProps> = ({
 
               <div className="flex justify-end pt-2 border-t border-[#DCE3EB]">
                 <button
-                  onClick={() => handleDelete(line.id)}
+                  onClick={() => setDeleteTarget(line)}
+                  title={`Excluir ${line.code}`}
+                  aria-label={`Excluir posto ${line.code} — ${line.name}`}
                   className="text-[#64748B] hover:text-rose-400 p-1 transition"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -232,6 +238,7 @@ export const ProductionLinesView: React.FC<ProductionLinesViewProps> = ({
           </div>
         </form>
       </Modal>
+      <ConfirmActionDialog isOpen={Boolean(deleteTarget)} title="Excluir posto de trabalho?" description="A exclusão é definitiva. Se o posto estiver vinculado a uma ordem, o sistema poderá impedir a operação." itemLabel={deleteTarget ? `${deleteTarget.code} · ${deleteTarget.name}` : ''} busy={deleteSubmitting} onCancel={() => setDeleteTarget(null)} onConfirm={() => void handleDelete()}/>
     </div>
   );
 };

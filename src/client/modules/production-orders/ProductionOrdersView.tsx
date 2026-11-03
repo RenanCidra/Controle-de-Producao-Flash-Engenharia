@@ -3,7 +3,7 @@ import { ClipboardList, Plus, Play, CheckCircle2, Sliders, Trash2 } from 'lucide
 import { EmptyState } from '../../components/EmptyState.tsx';
 import { Modal } from '../../components/Modal.tsx';
 import { api } from '../../api.ts';
-import { confirmInCurrentLanguage } from '../../i18n/index.ts';
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog.tsx';
 
 interface ProductionOrdersViewProps {
   orders: any[];
@@ -25,6 +25,8 @@ export const ProductionOrdersView: React.FC<ProductionOrdersViewProps> = ({
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [progressModalOpen, setProgressModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
   // Form states
   const [orderNumber, setOrderNumber] = useState('');
@@ -91,15 +93,17 @@ export const ProductionOrdersView: React.FC<ProductionOrdersViewProps> = ({
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirmInCurrentLanguage('Deseja excluir esta Ordem de Produção?')) return;
+  const handleDelete = async () => {
+    if (!deleteTarget || deleteSubmitting) return;
+    setDeleteSubmitting(true);
     try {
-      await api.deleteProductionOrder(id);
-      onSuccess('Ordem de Produção excluída.');
+      await api.deleteProductionOrder(deleteTarget.id);
+      onSuccess(`Ordem ${deleteTarget.orderNumber} excluída.`);
+      setDeleteTarget(null);
       onReload();
     } catch (err: any) {
       onError(err.message);
-    }
+    } finally { setDeleteSubmitting(false); }
   };
 
   return (
@@ -193,7 +197,9 @@ export const ProductionOrdersView: React.FC<ProductionOrdersViewProps> = ({
                       </>
                     )}
                     <button
-                      onClick={() => handleDelete(order.id)}
+                      onClick={() => setDeleteTarget(order)}
+                      title={`Excluir OP ${order.orderNumber}`}
+                      aria-label={`Excluir ordem de produção ${order.orderNumber}`}
                       className="text-slate-500 hover:text-rose-400 p-1 transition"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -426,6 +432,7 @@ export const ProductionOrdersView: React.FC<ProductionOrdersViewProps> = ({
           </div>
         </form>
       </Modal>
+      <ConfirmActionDialog isOpen={Boolean(deleteTarget)} title="Excluir ordem de produção?" description="A exclusão é definitiva e pode ser bloqueada se houver registros vinculados. Ordens espelhadas do Protheus devem ser gerenciadas na origem, não apagadas por esta ação." itemLabel={deleteTarget ? `OP ${deleteTarget.orderNumber} · ${deleteTarget.itemName || 'Produto não informado'}` : ''} busy={deleteSubmitting} onCancel={() => setDeleteTarget(null)} onConfirm={() => void handleDelete()}/>
     </div>
   );
 };

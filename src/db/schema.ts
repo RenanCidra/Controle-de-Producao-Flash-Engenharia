@@ -422,6 +422,8 @@ export const communicationMessages = pgTable("communication_messages", {
   audioStoragePath: text("audio_storage_path"),
   audioMimeType: text("audio_mime_type"),
   audioDurationMs: integer("audio_duration_ms"),
+  deletedAt: timestamp("deleted_at"),
+  deletedByUid: text("deleted_by_uid"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [index("communication_messages_group_idx").on(table.groupId, table.createdAt)]);
 
@@ -453,6 +455,8 @@ export const communicationDirectMessages = pgTable("communication_direct_message
   audioStoragePath: text("audio_storage_path"),
   audioMimeType: text("audio_mime_type"),
   audioDurationMs: integer("audio_duration_ms"),
+  deletedAt: timestamp("deleted_at"),
+  deletedByUid: text("deleted_by_uid"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [index("communication_direct_messages_conversation_idx").on(table.conversationId, table.createdAt)]);
 

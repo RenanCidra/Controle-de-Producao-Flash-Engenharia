@@ -3,7 +3,7 @@ import { Boxes, Plus, Trash2 } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState.tsx';
 import { Modal } from '../../components/Modal.tsx';
 import { api } from '../../api.ts';
-import { confirmInCurrentLanguage } from '../../i18n/index.ts';
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog.tsx';
 
 interface InventoryViewProps {
   items: any[];
@@ -27,6 +27,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   const [quantityOnHand, setQuantityOnHand] = useState(0);
   const [minimumStock, setMinimumStock] = useState(10);
   const [description, setDescription] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,15 +56,17 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirmInCurrentLanguage('Deseja excluir este item do inventário?')) return;
+  const handleDelete = async () => {
+    if (!deleteTarget || deleteSubmitting) return;
+    setDeleteSubmitting(true);
     try {
-      await api.deleteInventoryItem(id);
-      onSuccess('Item excluído.');
+      await api.deleteInventoryItem(deleteTarget.id);
+      onSuccess(`Item ${deleteTarget.sku} excluído.`);
+      setDeleteTarget(null);
       onReload();
     } catch (err: any) {
       onError(err.message);
-    }
+    } finally { setDeleteSubmitting(false); }
   };
 
   return (
@@ -125,7 +129,9 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   </td>
                   <td className="py-3 px-4 text-right">
                     <button
-                      onClick={() => handleDelete(item.id)}
+                      onClick={() => setDeleteTarget(item)}
+                      title={`Excluir ${item.sku}`}
+                      aria-label={`Excluir ${item.sku} — ${item.name}`}
                       className="text-[#64748B] hover:text-rose-400 p-1 transition"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -241,6 +247,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           </div>
         </form>
       </Modal>
+      <ConfirmActionDialog isOpen={Boolean(deleteTarget)} title="Excluir item de estoque?" description="A exclusão é definitiva. Se houver registros vinculados, o sistema poderá impedir a operação." itemLabel={deleteTarget ? `${deleteTarget.sku} · ${deleteTarget.name}` : ''} busy={deleteSubmitting} onCancel={() => setDeleteTarget(null)} onConfirm={() => void handleDelete()}/>
     </div>
   );
 };

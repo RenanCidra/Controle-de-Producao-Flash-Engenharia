@@ -1,12 +1,13 @@
 import express, { Router, type Request, type RequestHandler, type Response, type NextFunction } from 'express';
 import { randomUUID } from 'node:crypto';
-import { and, asc, count, desc, eq, gt, inArray, lt, ne } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, inArray, isNull, lt, ne, or } from 'drizzle-orm';
 import { db } from '../../db/index.ts';
 import { communicationDirectConversations, communicationDirectMembers, communicationDirectMessages, communicationGroupMembers, communicationGroups, communicationMessages, users } from '../../db/schema.ts';
 import { requirePermission } from '../../middleware/access-control.ts';
 import type { AuthenticatedRequest } from '../../middleware/auth.middleware.ts';
 import { allowBodyFields } from '../../middleware/request-protection.ts';
 import { communicationStorageBucket } from '../../lib/communication-storage.ts';
+import { AuditService } from '../../services/audit.service.ts';
 
 const router = Router();
 router.use(requirePermission('communications:read'));
@@ -18,13 +19,15 @@ const asyncHandler = (handler: (req: AuthenticatedRequest, res: Response) => Pro
   (req, res, next) => { void handler(req as AuthenticatedRequest, res).catch(next); };
 
 function messagePageOptions(req: Request) {
-  const rawBefore = req.query.beforeId, rawAfter = req.query.afterId;
+  const rawBefore = req.query.beforeId, rawAfter = req.query.afterId, rawChangedAfter = req.query.changedAfter;
   const beforeId = typeof rawBefore === 'string' ? Number(rawBefore) : null;
   const afterId = typeof rawAfter === 'string' ? Number(rawAfter) : null;
+  const changedAfterDate = typeof rawChangedAfter === 'string' ? new Date(rawChangedAfter) : null;
   const requestedLimit = typeof req.query.limit === 'string' ? Number(req.query.limit) : MESSAGE_PAGE_SIZE;
   return {
     beforeId: Number.isSafeInteger(beforeId) && beforeId! > 0 ? beforeId : null,
     afterId: Number.isSafeInteger(afterId) && afterId! > 0 ? afterId : null,
+    changedAfter: changedAfterDate && Number.isFinite(changedAfterDate.getTime()) ? changedAfterDate : null,
     limit: Number.isSafeInteger(requestedLimit) ? Math.min(50, Math.max(1, requestedLimit)) : MESSAGE_PAGE_SIZE,
   };
 }
@@ -146,10 +149,28 @@ router.get('/direct/:id/messages', asyncHandler(async (req, res) => {
   if (page.beforeId && page.afterId) return res.status(400).json({ error: 'Use um único cursor de mensagens.' });
   const predicates = [eq(communicationDirectMessages.conversationId, id)];
   if (page.beforeId) predicates.push(lt(communicationDirectMessages.id, page.beforeId));
-  if (page.afterId) predicates.push(gt(communicationDirectMessages.id, page.afterId));
+  else if (page.afterId && page.changedAfter) predicates.push(or(gt(communicationDirectMessages.id, page.afterId), gt(communicationDirectMessages.deletedAt, page.changedAfter))!);
+  else if (page.afterId) predicates.push(gt(communicationDirectMessages.id, page.afterId));
+  else if (page.changedAfter) predicates.push(or(gt(communicationDirectMessages.createdAt, page.changedAfter), gt(communicationDirectMessages.deletedAt, page.changedAfter))!);
   const rows = await db.select().from(communicationDirectMessages).where(and(...predicates))
     .orderBy(page.afterId ? asc(communicationDirectMessages.id) : desc(communicationDirectMessages.id)).limit(page.limit);
   return res.json((page.afterId ? rows : rows.reverse()).map(publicMessage));
+}));
+
+router.delete('/direct/:id/messages/:messageId', requirePermission('communications:write'), asyncHandler(async (req, res) => {
+  const conversationId = Number(req.params.id), messageId = Number(req.params.messageId);
+  if (!Number.isSafeInteger(conversationId) || conversationId < 1 || !Number.isSafeInteger(messageId) || messageId < 1) return res.status(400).json({ error: 'Mensagem ou conversa inválida.' });
+  if (!await isDirectMember(conversationId, req.user!.userId)) return res.status(404).json({ error: 'Conversa não encontrada.' });
+  const [message] = await db.select({ id: communicationDirectMessages.id, authorUid: communicationDirectMessages.authorUid, audioStoragePath: communicationDirectMessages.audioStoragePath, deletedAt: communicationDirectMessages.deletedAt })
+    .from(communicationDirectMessages).where(and(eq(communicationDirectMessages.id, messageId), eq(communicationDirectMessages.conversationId, conversationId))).limit(1);
+  if (!message || message.authorUid !== req.user!.uid || message.deletedAt) return res.status(404).json({ error: 'Mensagem não encontrada ou sem permissão para apagá-la.' });
+  const deletedAt = new Date();
+  const [deleted] = await db.update(communicationDirectMessages).set({ body: 'Mensagem apagada', deletedAt, deletedByUid: req.user!.uid, audioStoragePath: null, audioMimeType: null, audioDurationMs: null })
+    .where(and(eq(communicationDirectMessages.id, messageId), eq(communicationDirectMessages.conversationId, conversationId), eq(communicationDirectMessages.authorUid, req.user!.uid), isNull(communicationDirectMessages.deletedAt))).returning({ id: communicationDirectMessages.id });
+  if (!deleted) return res.status(404).json({ error: 'Mensagem não encontrada ou já apagada.' });
+  if (message.audioStoragePath) await communicationStorageBucket().file(message.audioStoragePath).delete().catch((error) => console.error('Failed to remove deleted direct-message audio:', error));
+  await AuditService.record({ userId: req.user!.uid, userEmail: req.user!.loginName, action: 'DELETE', entity: 'SYSTEM', entityId: String(messageId), details: { type: 'COMMUNICATION_DIRECT_MESSAGE', conversationId } }, req);
+  return res.json({ success: true });
 }));
 
 router.get('/direct/:id/messages/:messageId/audio', asyncHandler(async (req, res) => {
@@ -294,10 +315,28 @@ router.get('/groups/:id/messages', asyncHandler(async (req, res) => {
   if (page.beforeId && page.afterId) return res.status(400).json({ error: 'Use um único cursor de mensagens.' });
   const predicates = [eq(communicationMessages.groupId, id)];
   if (page.beforeId) predicates.push(lt(communicationMessages.id, page.beforeId));
-  if (page.afterId) predicates.push(gt(communicationMessages.id, page.afterId));
+  else if (page.afterId && page.changedAfter) predicates.push(or(gt(communicationMessages.id, page.afterId), gt(communicationMessages.deletedAt, page.changedAfter))!);
+  else if (page.afterId) predicates.push(gt(communicationMessages.id, page.afterId));
+  else if (page.changedAfter) predicates.push(or(gt(communicationMessages.createdAt, page.changedAfter), gt(communicationMessages.deletedAt, page.changedAfter))!);
   const rows = await db.select().from(communicationMessages).where(and(...predicates))
     .orderBy(page.afterId ? asc(communicationMessages.id) : desc(communicationMessages.id)).limit(page.limit);
   return res.json((page.afterId ? rows : rows.reverse()).map(publicMessage));
+}));
+
+router.delete('/groups/:id/messages/:messageId', requirePermission('communications:write'), asyncHandler(async (req, res) => {
+  const groupId = Number(req.params.id), messageId = Number(req.params.messageId);
+  if (!Number.isSafeInteger(groupId) || groupId < 1 || !Number.isSafeInteger(messageId) || messageId < 1) return res.status(400).json({ error: 'Mensagem ou grupo inválido.' });
+  if (!await isGroupMember(groupId, req.user!.userId)) return res.status(404).json({ error: 'Grupo não encontrado.' });
+  const [message] = await db.select({ id: communicationMessages.id, authorUid: communicationMessages.authorUid, audioStoragePath: communicationMessages.audioStoragePath, deletedAt: communicationMessages.deletedAt })
+    .from(communicationMessages).where(and(eq(communicationMessages.id, messageId), eq(communicationMessages.groupId, groupId))).limit(1);
+  if (!message || message.authorUid !== req.user!.uid || message.deletedAt) return res.status(404).json({ error: 'Mensagem não encontrada ou sem permissão para apagá-la.' });
+  const deletedAt = new Date();
+  const [deleted] = await db.update(communicationMessages).set({ body: 'Mensagem apagada', deletedAt, deletedByUid: req.user!.uid, audioStoragePath: null, audioMimeType: null, audioDurationMs: null })
+    .where(and(eq(communicationMessages.id, messageId), eq(communicationMessages.groupId, groupId), eq(communicationMessages.authorUid, req.user!.uid), isNull(communicationMessages.deletedAt))).returning({ id: communicationMessages.id });
+  if (!deleted) return res.status(404).json({ error: 'Mensagem não encontrada ou já apagada.' });
+  if (message.audioStoragePath) await communicationStorageBucket().file(message.audioStoragePath).delete().catch((error) => console.error('Failed to remove deleted group-message audio:', error));
+  await AuditService.record({ userId: req.user!.uid, userEmail: req.user!.loginName, action: 'DELETE', entity: 'SYSTEM', entityId: String(messageId), details: { type: 'COMMUNICATION_GROUP_MESSAGE', groupId } }, req);
+  return res.json({ success: true });
 }));
 
 router.get('/groups/:id/messages/:messageId/audio', asyncHandler(async (req, res) => {

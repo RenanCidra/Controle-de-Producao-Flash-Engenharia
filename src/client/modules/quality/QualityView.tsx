@@ -3,7 +3,7 @@ import { ShieldCheck, Plus, Trash2 } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState.tsx';
 import { Modal } from '../../components/Modal.tsx';
 import { api } from '../../api.ts';
-import { confirmInCurrentLanguage } from '../../i18n/index.ts';
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog.tsx';
 
 interface QualityViewProps {
   inspections: any[];
@@ -31,6 +31,8 @@ export const QualityView: React.FC<QualityViewProps> = ({
   const [status, setStatus] = useState<'PASSED' | 'FAILED' | 'PENDING'>('PASSED');
   const [inspectorName, setInspectorName] = useState(defaultInspector);
   const [notes, setNotes] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,15 +61,17 @@ export const QualityView: React.FC<QualityViewProps> = ({
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirmInCurrentLanguage('Deseja excluir este laudo de inspeção?')) return;
+  const handleDelete = async () => {
+    if (!deleteTarget || deleteSubmitting) return;
+    setDeleteSubmitting(true);
     try {
-      await api.deleteQualityInspection(id);
-      onSuccess('Laudo excluído.');
+      await api.deleteQualityInspection(deleteTarget.id);
+      onSuccess(`Laudo ${deleteTarget.batchNumber} excluído.`);
+      setDeleteTarget(null);
       onReload();
     } catch (err: any) {
       onError(err.message);
-    }
+    } finally { setDeleteSubmitting(false); }
   };
 
   return (
@@ -141,7 +145,9 @@ export const QualityView: React.FC<QualityViewProps> = ({
                   </td>
                   <td className="py-3 px-4 text-right">
                     <button
-                      onClick={() => handleDelete(q.id)}
+                      onClick={() => setDeleteTarget(q)}
+                      title={`Excluir laudo ${q.batchNumber}`}
+                      aria-label={`Excluir laudo ${q.batchNumber} da OP ${q.orderNumber}`}
                       className="text-[#64748B] hover:text-rose-400 p-1 transition"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -281,6 +287,7 @@ export const QualityView: React.FC<QualityViewProps> = ({
           </div>
         </form>
       </Modal>
+      <ConfirmActionDialog isOpen={Boolean(deleteTarget)} title="Excluir laudo de inspeção?" description="A exclusão é definitiva e será registrada na auditoria do sistema." itemLabel={deleteTarget ? `${deleteTarget.batchNumber} · OP ${deleteTarget.orderNumber}` : ''} busy={deleteSubmitting} onCancel={() => setDeleteTarget(null)} onConfirm={() => void handleDelete()}/>
     </div>
   );
 };

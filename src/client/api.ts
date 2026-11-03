@@ -658,24 +658,26 @@ class ApiService {
 
   public getCommunicationDirectory() { return this.request<Array<{ id: number; name: string; department: string | null; role?: string }>>('/communications/directory'); }
   public getCommunicationDirectConversations() { return this.request<any[]>('/communications/direct'); }
-  private communicationMessagePage(path: string, params?: { beforeId?: number; afterId?: number; limit?: number }) {
+  private communicationMessagePage(path: string, params?: { beforeId?: number; afterId?: number; changedAfter?: string; limit?: number }) {
     const query = new URLSearchParams();
     Object.entries(params || {}).forEach(([key, value]) => { if (value !== undefined) query.set(key, String(value)); });
     return this.request<any[]>(`${path}${query.size ? `?${query.toString()}` : ''}`);
   }
-  public getCommunicationDirectMessages(conversationId: number, params?: { beforeId?: number; afterId?: number; limit?: number }) { return this.communicationMessagePage(`/communications/direct/${conversationId}/messages`, params); }
+  public getCommunicationDirectMessages(conversationId: number, params?: { beforeId?: number; afterId?: number; changedAfter?: string; limit?: number }) { return this.communicationMessagePage(`/communications/direct/${conversationId}/messages`, params); }
   public markCommunicationDirectRead(conversationId: number) { return this.request<{ success: boolean }>(`/communications/direct/${conversationId}/read`, { method: 'PATCH' }); }
   public startCommunicationDirectMessage(recipientId: number, body: string) { return this.request<{ conversationId: number; message: any }>('/communications/direct/messages', { method: 'POST', body: JSON.stringify({ recipientId, body }) }); }
   public sendCommunicationDirectMessage(conversationId: number, body: string, replyToMessageId?: number | null) { return this.request<any>(`/communications/direct/${conversationId}/messages`, { method: 'POST', body: JSON.stringify({ body, replyToMessageId }) }); }
+  public deleteCommunicationDirectMessage(conversationId: number, messageId: number) { return this.request<{ success: boolean }>(`/communications/direct/${conversationId}/messages/${messageId}`, { method: 'DELETE' }); }
   public sendCommunicationDirectAudio(conversationId: number, audio: Blob, durationMs: number) { return this.uploadCommunicationAudio(`/communications/direct/${conversationId}/audio`, audio, durationMs); }
   public getCommunicationDirectAudio(conversationId: number, messageId: number) { return this.getPrivateAudio(`/communications/direct/${conversationId}/messages/${messageId}/audio`); }
   public getCommunicationDirectProfile(conversationId: number) { return this.request<{ id: number; name: string; department: string | null; role: string; status: string }>(`/communications/direct/${conversationId}/profile`); }
   public getCommunicationGroups() { return this.request<any[]>('/communications/groups'); }
-  public getCommunicationMessages(groupId: number, params?: { beforeId?: number; afterId?: number; limit?: number }) { return this.communicationMessagePage(`/communications/groups/${groupId}/messages`, params); }
+  public getCommunicationMessages(groupId: number, params?: { beforeId?: number; afterId?: number; changedAfter?: string; limit?: number }) { return this.communicationMessagePage(`/communications/groups/${groupId}/messages`, params); }
   public getCommunicationGroupMembers(groupId: number) { return this.request<Array<{ id: number; name: string; department: string | null; role: string }>>(`/communications/groups/${groupId}/members`); }
   public markCommunicationGroupRead(groupId: number) { return this.request<{ success: boolean }>(`/communications/groups/${groupId}/read`, { method: 'PATCH' }); }
   public createCommunicationGroup(name: string, sector: string, memberIds: number[]) { return this.request<any>('/communications/groups', { method: 'POST', body: JSON.stringify({ name, sector, memberIds }) }); }
   public sendCommunicationMessage(groupId: number, body: string, replyToMessageId?: number | null) { return this.request<any>(`/communications/groups/${groupId}/messages`, { method: 'POST', body: JSON.stringify({ body, replyToMessageId }) }); }
+  public deleteCommunicationMessage(groupId: number, messageId: number) { return this.request<{ success: boolean }>(`/communications/groups/${groupId}/messages/${messageId}`, { method: 'DELETE' }); }
   public sendCommunicationGroupAudio(groupId: number, audio: Blob, durationMs: number) { return this.uploadCommunicationAudio(`/communications/groups/${groupId}/audio`, audio, durationMs); }
   public getCommunicationGroupAudio(groupId: number, messageId: number) { return this.getPrivateAudio(`/communications/groups/${groupId}/messages/${messageId}/audio`); }
 
