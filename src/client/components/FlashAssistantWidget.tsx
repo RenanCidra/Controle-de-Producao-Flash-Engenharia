@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { ArrowRight, Briefcase, Coffee, History, LoaderCircle, Maximize2, MessageSquarePlus, Mic, MicOff, Minimize2, Phone, Send, Settings2, Sparkles, Trash2, X, Zap } from 'lucide-react';
 import { api } from '../api.ts';
 import type { AuthUser } from '../api.ts';
@@ -367,46 +368,60 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
       const fullText = response.reply;
 
       if (displayMode === 'realtime') {
-        setMessages((previous) => [...previous, {
-          id: assistantMessageId,
-          sender: 'assistant',
-          text: '',
-          timestamp: currentTime(),
-          mode: response.mode,
-          actions: response.actions,
-        }]);
-        setLoading(false);
-        setStreamingMessageId(assistantMessageId);
+        // Respostas curtas (ex: saudações, status de OP, navegações) ou do modo rápido exibem instantaneamente sem delay!
+        if (fullText.length <= 160 || response.mode === 'data_fallback') {
+          setMessages((previous) => [...previous, {
+            id: assistantMessageId,
+            sender: 'assistant',
+            text: fullText,
+            timestamp: currentTime(),
+            mode: response.mode,
+            actions: response.actions,
+          }]);
+          setLoading(false);
+        } else {
+          // Para respostas mais longas, revelação ultra-rápida e fluida (~150-200ms no total, sem travar o usuário)
+          setMessages((previous) => [...previous, {
+            id: assistantMessageId,
+            sender: 'assistant',
+            text: '',
+            timestamp: currentTime(),
+            mode: response.mode,
+            actions: response.actions,
+          }]);
+          setLoading(false);
+          setStreamingMessageId(assistantMessageId);
 
-        await new Promise<void>((resolve) => {
-          let currentIndex = 0;
-          const totalLength = fullText.length;
-          const stepSize = Math.max(3, Math.ceil(totalLength / 60));
-          const interval = setInterval(() => {
-            currentIndex = Math.min(totalLength, currentIndex + stepSize);
-            const currentSlice = fullText.slice(0, currentIndex);
-            setMessages((previous) =>
-              previous.map((m) => (m.id === assistantMessageId ? { ...m, text: currentSlice } : m))
-            );
-            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+          await new Promise<void>((resolve) => {
+            let currentIndex = 0;
+            const totalLength = fullText.length;
+            const stepSize = Math.max(18, Math.ceil(totalLength / 14));
+            const interval = setInterval(() => {
+              currentIndex = Math.min(totalLength, currentIndex + stepSize);
+              const currentSlice = fullText.slice(0, currentIndex);
+              setMessages((previous) =>
+                previous.map((m) => (m.id === assistantMessageId ? { ...m, text: currentSlice } : m))
+              );
+              messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
 
-            if (currentIndex >= totalLength) {
+              if (currentIndex >= totalLength) {
+                clearInterval(interval);
+                streamingAbortRef.current = null;
+                setStreamingMessageId(null);
+                resolve();
+              }
+            }, 10);
+
+            streamingAbortRef.current = () => {
               clearInterval(interval);
-              streamingAbortRef.current = null;
+              setMessages((previous) =>
+                previous.map((m) => (m.id === assistantMessageId ? { ...m, text: fullText } : m))
+              );
               setStreamingMessageId(null);
               resolve();
-            }
-          }, 16);
-
-          streamingAbortRef.current = () => {
-            clearInterval(interval);
-            setMessages((previous) =>
-              previous.map((m) => (m.id === assistantMessageId ? { ...m, text: fullText } : m))
-            );
-            setStreamingMessageId(null);
-            resolve();
-          };
-        });
+            };
+          });
+        }
       } else {
         setMessages((previous) => [...previous, {
           id: assistantMessageId,
@@ -488,42 +503,96 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
 
   return (
     <>
-      {!isOpen && showFloatingActions && !editingText && (
-        <>
-          {['ADMIN', 'SUPERVISOR', 'OPERATOR'].includes(currentUser?.role || '') && <button type="button" onClick={() => onNavigate('communications')} title="Central de comunicação" aria-label="Abrir central de comunicação" className="fixed bottom-[5.25rem] right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full border border-[#DCE3EB] bg-white text-[#263548] shadow-lg shadow-slate-950/20 ring-2 ring-white transition hover:border-[#FFAA00] hover:bg-[#F8FAFC] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#FFAA00] sm:bottom-[5.75rem] sm:right-5">
-            <Phone className="h-5 w-5" />
-          </button>}
-          <button
-            type="button"
-            onClick={onToggle}
-            title={`${t('Abrir Assistente Flash')} · Ctrl+K`}
-            aria-label={`${t('Abrir Assistente Flash')} (Ctrl+K)`}
-            className="flash-assistant-float fixed bottom-4 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full border border-amber-300 bg-slate-900 shadow-lg shadow-slate-950/20 ring-2 ring-white transition-colors hover:bg-slate-800 hover:shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 sm:bottom-5 sm:right-5"
+      <AnimatePresence>
+        {!isOpen && showFloatingActions && !editingText && (
+          <motion.div
+            key="flash-float-actions"
+            initial={{ opacity: 0, scale: 0.75, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.75, y: 16 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-2.5 sm:bottom-5 sm:right-5"
           >
-            <img src="/assets/flash-symbol.png" alt="" aria-hidden="true" className="h-7 w-7 object-contain" />
-          </button>
-        </>
-      )}
+            {['ADMIN', 'SUPERVISOR', 'OPERATOR'].includes(currentUser?.role || '') && (
+              <button
+                type="button"
+                onClick={() => onNavigate('communications')}
+                title="Central de comunicação"
+                aria-label="Abrir central de comunicação"
+                className="flex h-12 w-12 items-center justify-center rounded-full border border-[#DCE3EB] bg-white text-[#263548] shadow-lg shadow-slate-950/20 ring-2 ring-white transition hover:scale-105 hover:border-[#FFAA00] hover:bg-[#F8FAFC] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#FFAA00]"
+              >
+                <Phone className="h-5 w-5" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onToggle}
+              title={`${t('Abrir Assistente Flash')} · Ctrl+K`}
+              aria-label={`${t('Abrir Assistente Flash')} (Ctrl+K)`}
+              className="flash-assistant-float flex h-14 w-14 items-center justify-center rounded-full border border-amber-300 bg-slate-900 shadow-lg shadow-slate-950/20 ring-2 ring-white transition hover:scale-105 hover:bg-slate-800 hover:shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300"
+            >
+              <img src="/assets/flash-symbol.png" alt="" aria-hidden="true" className="h-7 w-7 object-contain" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {isOpen && !fullScreen && <button type="button" aria-label={t('Fechar Assistente Flash')} onClick={onToggle} className="fixed inset-0 z-40 cursor-default bg-slate-950/10" />}
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            {!fullScreen && (
+              <motion.button
+                key="assistant-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.28, ease: 'easeOut' }}
+                type="button"
+                aria-label={t('Fechar Assistente Flash')}
+                onClick={onToggle}
+                className="fixed inset-0 z-40 cursor-default bg-slate-950/25 backdrop-blur-[2px]"
+              />
+            )}
 
-      {isOpen && (
-        <section
-          role="dialog"
-          aria-modal="true"
-          aria-label={t('Assistente Flash')}
-          style={
-            !fullScreen && typeof window !== 'undefined' && window.innerWidth < 640
-              ? {
-                  bottom: keyboardOffset > 0 ? `${keyboardOffset + 6}px` : undefined,
-                  maxHeight: viewportHeight ? `${viewportHeight - 12}px` : undefined,
-                }
-              : undefined
-          }
-          className={fullScreen
-            ? 'fixed inset-0 z-50 flex min-h-0 flex-col overflow-hidden bg-[#F1F4F7] text-[#263548] md:flex-row'
-            : 'fixed inset-x-2 bottom-2 top-2 z-50 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[#DCE3EB] bg-white text-[#263548] shadow-2xl shadow-slate-950/25 transition-[bottom,max-height] duration-150 ease-out sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-auto sm:h-[min(680px,calc(100dvh-32px))] sm:w-[420px]'}
-        >
+            <motion.section
+              key="assistant-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-label={t('Assistente Flash')}
+              initial={
+                fullScreen
+                  ? { opacity: 0, scale: 0.94 }
+                  : { opacity: 0, scale: 0.85, y: 36 }
+              }
+              animate={
+                fullScreen
+                  ? { opacity: 1, scale: 1 }
+                  : { opacity: 1, scale: 1, y: 0 }
+              }
+              exit={
+                fullScreen
+                  ? { opacity: 0, scale: 0.94 }
+                  : { opacity: 0, scale: 0.85, y: 28 }
+              }
+              transition={{
+                duration: 0.35,
+                ease: [0.16, 1, 0.3, 1],
+              }}
+              style={{
+                transformOrigin: fullScreen ? 'center' : 'bottom right',
+                ...(!fullScreen && typeof window !== 'undefined' && window.innerWidth < 640
+                  ? {
+                      bottom: keyboardOffset > 0 ? `${keyboardOffset + 6}px` : undefined,
+                      maxHeight: viewportHeight ? `${viewportHeight - 12}px` : undefined,
+                    }
+                  : undefined),
+              }}
+              className={
+                fullScreen
+                  ? 'fixed inset-0 z-50 flex min-h-0 flex-col overflow-hidden bg-[#F1F4F7] text-[#263548] md:flex-row'
+                  : 'fixed inset-x-2 bottom-2 top-2 z-50 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[#DCE3EB] bg-white text-[#263548] shadow-2xl shadow-slate-950/25 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-auto sm:h-[min(680px,calc(100dvh-32px))] sm:w-[420px]'
+              }
+            >
           {fullScreen && (
             <aside className="hidden w-64 shrink-0 flex-col border-r border-[#263548] bg-[#151C25] text-white md:flex lg:w-72">
               <div className="flex items-center gap-3 border-b border-white/10 px-5 py-5">
@@ -795,9 +864,11 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
             <p className="mt-2 text-center text-[10px] text-slate-400">{t('Confira informações críticas na tela de origem antes de agir.')}</p>
           </footer>}
           </div>
-        </section>
-      )}
-    </>
+        </motion.section>
+      </>
+    )}
+  </AnimatePresence>
+</>
   );
 };
 

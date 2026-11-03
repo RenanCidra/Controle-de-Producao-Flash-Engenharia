@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Copy, Forward, Info, MessageCircle, MessageSquarePlus, MoreVertical, Plus, Reply, Search, Send, UserRound, Users, X } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import { ArrowLeft, Copy, Forward, Info, Lock, MessageCircle, MessageSquarePlus, MoreVertical, Plus, Reply, Search, Send, UserRound, Users, X } from 'lucide-react';
 import { api, type AuthUser } from '../../api.ts';
 import { UserAccountMenu } from '../../components/UserAccountMenu.tsx';
 import { AudioRecorderButton } from '../../components/AudioRecorderButton.tsx';
@@ -48,6 +49,10 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
   const [search, setSearch] = useState('');
   const [userSearch, setUserSearch] = useState('');
   const [section, setSection] = useState<'conversations' | 'groups'>('conversations');
+  const [showIntro, setShowIntro] = useState(true);
+  const [progress, setProgress] = useState(0);
+  const [leavingSystem, setLeavingSystem] = useState(false);
+  const [leavingProgress, setLeavingProgress] = useState(0);
   const lastSeenMessageRef = useRef<{ conversationKey: string; messageId: number } | null>(null);
   const loadedConversationRef = useRef<string | null>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
@@ -56,6 +61,45 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
   const [hasOlderMessages, setHasOlderMessages] = useState(true);
   const canCreateGroups = ['ADMIN', 'SUPERVISOR'].includes(api.getUser()?.role || '');
   const selectedConversation = selectedGroupId !== null || selectedDirectId !== null || draftRecipient !== null;
+
+  // Transições suaves de entrada na Central de Comunicações
+  useEffect(() => {
+    const progressTimer = window.setTimeout(() => {
+      setProgress(100);
+    }, 40);
+
+    const removeTimer = window.setTimeout(() => {
+      setShowIntro(false);
+    }, 1450);
+
+    return () => {
+      window.clearTimeout(progressTimer);
+      window.clearTimeout(removeTimer);
+    };
+  }, []);
+
+  const handleDismissIntro = () => {
+    setShowIntro(false);
+  };
+
+  // Transição suave ao voltar da central para o sistema
+  const handleBackToSystem = () => {
+    if (leavingSystem) return;
+    setLeavingSystem(true);
+    setLeavingProgress(0);
+
+    window.setTimeout(() => {
+      setLeavingProgress(100);
+    }, 30);
+
+    window.setTimeout(() => {
+      onBack();
+    }, 1050);
+  };
+
+  const handleSkipLeaving = () => {
+    onBack();
+  };
 
   const loadGroups = useCallback(async () => {
     try {
@@ -277,7 +321,173 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
   const unreadGroupTotal = groups.reduce((total, group) => total + (group.unreadCount || 0), 0);
   const unreadDirectTotal = directs.reduce((total, conversation) => total + (conversation.unreadCount || 0), 0);
 
-  return <section className="flex h-[100dvh] w-full min-w-0 flex-col overflow-hidden bg-white text-[#263548]">
+  return <section className="relative flex h-[100dvh] w-full min-w-0 flex-col overflow-hidden bg-white text-[#263548]">
+    <AnimatePresence>
+      {showIntro && (
+        <motion.div
+          key="comm-loading-screen"
+          role="status"
+          aria-live="polite"
+          aria-label="Carregando Central de Comunicações"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0, scale: 1.02 }}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+          onClick={handleDismissIntro}
+          className="fixed inset-0 z-50 flex cursor-pointer flex-col items-center justify-center bg-[#0C1118]/96 backdrop-blur-xl px-4 py-8 text-white select-none"
+        >
+          <div className="flex flex-col items-center justify-center text-center">
+            {/* Badge circular central com anel dourado animado */}
+            <div className="relative mb-6 flex h-28 w-28 items-center justify-center sm:h-32 sm:w-32">
+              {/* Trilha do anel */}
+              <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 100 100">
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="44"
+                  className="stroke-white/10"
+                  strokeWidth="3"
+                  fill="none"
+                />
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="44"
+                  stroke="url(#comm-gold-gradient)"
+                  strokeWidth="3.5"
+                  strokeLinecap="round"
+                  fill="none"
+                  strokeDasharray="276"
+                  strokeDashoffset={276 - (276 * progress) / 100}
+                  className="transition-all duration-[1150ms] ease-out drop-shadow-[0_0_10px_rgba(255,170,0,0.5)]"
+                />
+                <defs>
+                  <linearGradient id="comm-gold-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#FFAA00" />
+                    <stop offset="100%" stopColor="#FFD15C" />
+                  </linearGradient>
+                </defs>
+              </svg>
+
+              {/* Anel giratório sutil externo (spinner halo) */}
+              <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-[#FFAA00] opacity-70 [animation-duration:1.8s]" />
+
+              {/* Disco escuro central */}
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#161E28] border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.6)] sm:h-24 sm:w-24">
+                {/* Ícone de balão com 3 pontinhos idêntico ao modelo */}
+                <svg
+                  className="h-9 w-9 text-[#FFAA00] sm:h-11 sm:w-11 drop-shadow-[0_0_6px_rgba(255,170,0,0.35)]"
+                  viewBox="0 0 48 48"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 36l-4 4V12a4 4 0 0 1 4-4h24a4 4 0 0 1 4 4v18a4 4 0 0 1-4 4H12z" />
+                  <circle cx="18" cy="21" r="1.6" fill="currentColor" stroke="none" />
+                  <circle cx="24" cy="21" r="1.6" fill="currentColor" stroke="none" />
+                  <circle cx="30" cy="21" r="1.6" fill="currentColor" stroke="none" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Título: "Carregando Central de Comunicações" */}
+            <h2 className="text-xl font-medium tracking-tight text-white sm:text-2xl">
+              Carregando <span className="font-bold text-[#FFAA00]">Central de Comunicações</span>
+            </h2>
+
+            {/* Subtítulo: "Inicializando conversas, grupos e participantes..." */}
+            <p className="mt-2 text-xs text-slate-300 sm:text-sm">
+              Inicializando conversas, grupos e participantes...
+            </p>
+
+            {/* Barra de progresso com gradiente e brilho dourado */}
+            <div className="mt-6 h-2 w-64 overflow-hidden rounded-full bg-white/10 sm:w-80">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-[#FFAA00] via-[#FFB82E] to-[#FFAA00] shadow-[0_0_12px_rgba(255,170,0,0.6)] transition-all duration-[1150ms] ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {leavingSystem && (
+        <motion.div
+          key="comm-leaving-screen"
+          role="status"
+          aria-live="polite"
+          aria-label="Retornando ao Sistema"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.35, ease: 'easeInOut' }}
+          onClick={handleSkipLeaving}
+          className="fixed inset-0 z-50 flex cursor-pointer flex-col items-center justify-center bg-[#0C1118]/96 backdrop-blur-xl px-4 py-8 text-white select-none"
+        >
+          <div className="flex flex-col items-center justify-center text-center">
+            {/* Badge circular central com anel dourado animado e símbolo da Flash */}
+            <div className="relative mb-6 flex h-28 w-28 items-center justify-center sm:h-32 sm:w-32">
+              <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 100 100">
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="44"
+                  className="stroke-white/10"
+                  strokeWidth="3"
+                  fill="none"
+                />
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="44"
+                  stroke="url(#leaving-gold-gradient)"
+                  strokeWidth="3.5"
+                  strokeLinecap="round"
+                  fill="none"
+                  strokeDasharray="276"
+                  strokeDashoffset={276 - (276 * leavingProgress) / 100}
+                  className="transition-all duration-[950ms] ease-out drop-shadow-[0_0_10px_rgba(255,170,0,0.5)]"
+                />
+                <defs>
+                  <linearGradient id="leaving-gold-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#FFAA00" />
+                    <stop offset="100%" stopColor="#FFD15C" />
+                  </linearGradient>
+                </defs>
+              </svg>
+
+              <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-[#FFAA00] opacity-70 [animation-duration:1.6s]" />
+
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#161E28] border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.6)] sm:h-24 sm:w-24">
+                <img
+                  src="/assets/flash-symbol.png"
+                  alt="Flash"
+                  className="h-9 w-9 object-contain drop-shadow-[0_0_8px_rgba(255,170,0,0.5)] sm:h-11 sm:w-11"
+                />
+              </div>
+            </div>
+
+            <h2 className="text-xl font-medium tracking-tight text-white sm:text-2xl">
+              Retornando ao <span className="font-bold text-[#FFAA00]">Sistema</span>
+            </h2>
+
+            <p className="mt-2 text-xs text-slate-300 sm:text-sm">
+              Sincronizando painel, OPs e chão de fábrica...
+            </p>
+
+            <div className="mt-6 h-2 w-64 overflow-hidden rounded-full bg-white/10 sm:w-80">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-[#FFAA00] via-[#FFB82E] to-[#FFAA00] shadow-[0_0_12px_rgba(255,170,0,0.6)] transition-all duration-[950ms] ease-out"
+                style={{ width: `${leavingProgress}%` }}
+              />
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#263548] bg-[#151C25] px-3 text-white sm:px-6">
       <div className="flex min-w-0 items-center gap-3">
         <img src="/assets/flash-brand.svg" alt="Flash Engenharia" className="h-8 w-[132px] shrink-0 object-contain object-left md:hidden" />
@@ -286,7 +496,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
       </div>
       <div className="flex shrink-0 items-center gap-1">
         <div className="md:hidden"><UserAccountMenu compact currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onLogout={onLogout}/></div>
-        <button type="button" onClick={onBack} className="inline-flex items-center gap-2 rounded-lg px-2 py-2 text-xs font-semibold text-slate-200 transition hover:bg-[#263548] hover:text-white sm:px-3"><ArrowLeft size={15}/><span className="hidden sm:inline">Voltar ao sistema</span><span className="sm:hidden">Voltar</span></button>
+        <button type="button" onClick={handleBackToSystem} className="inline-flex items-center gap-2 rounded-lg px-2 py-2 text-xs font-semibold text-slate-200 transition hover:bg-[#263548] hover:text-white sm:px-3"><ArrowLeft size={15}/><span className="hidden sm:inline">Voltar ao sistema</span><span className="sm:hidden">Voltar</span></button>
       </div>
     </header>
 

@@ -137,10 +137,12 @@ export default function App() {
     setStatsLoading(true);
     try {
       const data = await api.getStats();
-      setStats(data);
-      setStatsError(null);
-      setStatsUpdatedAt(new Date().toISOString());
-      if (data.organization) setFactoryProfile(data.organization);
+      if (data) {
+        setStats(data);
+        setStatsError(null);
+        setStatsUpdatedAt(new Date().toISOString());
+        if (data.organization) setFactoryProfile(data.organization);
+      }
     } catch (err: any) {
       console.error(err);
       setStatsError(err.message || 'Não foi possível atualizar os dados do espelho.');
