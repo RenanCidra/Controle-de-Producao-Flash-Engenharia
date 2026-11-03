@@ -41,17 +41,17 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setupRequired, bootstrapEnab
   return (
     <main className="relative min-h-[100svh] overflow-x-hidden bg-[#0C1420] text-white selection:bg-amber-400/30">
       <div className="relative grid min-h-[100svh] w-full lg:grid-cols-[1.08fr_0.92fr]">
-        <section className="relative hidden flex-col justify-between overflow-hidden bg-[#0C1420] px-4 py-6 sm:px-8 sm:py-9 lg:order-1 lg:flex lg:px-16 lg:py-12">
+        <section className="auth-reveal-left relative hidden flex-col justify-between overflow-hidden bg-[#0C1420] px-4 py-6 sm:px-8 sm:py-9 lg:order-1 lg:flex lg:px-16 lg:py-12">
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-cover opacity-60 saturate-[0.8]" style={{ backgroundImage: "url('/assets/login-production.webp')", backgroundPosition: '62% center' }} />
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0C1420]/40 via-[#0C1420]/35 to-[#0C1420]/70" />
           <div className="pointer-events-none absolute -left-28 top-1/4 h-96 w-96 rounded-full bg-amber-500/10 blur-3xl" />
-          <div className="relative flex items-center gap-3">
+          <div className="auth-reveal-left auth-delay-1 relative flex items-center gap-3">
             <div className="flex flex-col items-start gap-1.5">
               <img src="/assets/flash-brand.svg" alt="Flash Engenharia" className="h-10 w-40 object-contain object-left sm:h-12 sm:w-[190px]" />
             </div>
           </div>
 
-          <div className="relative my-7 max-w-2xl sm:my-10 lg:my-0">
+          <div className="auth-reveal-left auth-delay-2 relative my-7 max-w-2xl sm:my-10 lg:my-0">
             <div className="mb-4 inline-flex max-w-full items-center gap-2 rounded-full border border-slate-700 bg-[#101A27] px-3 py-1.5 text-[10px] font-medium text-amber-300 sm:mb-5 sm:text-xs">
               <Activity size={14} className="shrink-0" /> {t('Produção conectada, rastreável e sob controle')}
             </div>
@@ -71,13 +71,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({ setupRequired, bootstrapEnab
             </div>
           </div>
 
-          <div className="relative flex items-center gap-2 text-xs text-slate-500"><LockKeyhole size={14} /> {t('Acesso interno protegido por autenticação')}</div>
+          <div className="auth-reveal-left auth-delay-3 relative flex items-center gap-2 text-xs text-slate-500"><LockKeyhole size={14} /> {t('Acesso interno protegido por autenticação')}</div>
         </section>
 
         <section className="relative isolate order-1 flex min-h-[100svh] items-center justify-center overflow-y-auto bg-[#0C1420] px-4 py-5 sm:px-8 sm:py-8 lg:order-2 lg:border-l lg:border-slate-800 lg:bg-[#111C2A] lg:px-12 lg:py-10 xl:px-20">
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-cover bg-[position:68%_center] opacity-30 sm:opacity-35 lg:bg-[position:62%_center] lg:opacity-25" style={{ backgroundImage: "url('/assets/login-production.webp')" }} />
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#0C1420]/75 via-[#0C1420]/85 to-[#0C1420]/95 lg:bg-gradient-to-br lg:from-[#111C2A]/80 lg:via-[#111C2A]/90 lg:to-[#111C2A]/95" />
-          <div className="relative w-full max-w-md rounded-2xl border border-slate-700/80 bg-[#0B1420]/95 px-5 py-5 shadow-2xl shadow-black/50 backdrop-blur-sm sm:rounded-3xl sm:px-7 sm:py-8">
+          <div className="auth-reveal-right relative w-full max-w-md rounded-2xl border border-slate-700/80 bg-[#0B1420]/95 px-5 py-5 shadow-2xl shadow-black/50 backdrop-blur-sm sm:rounded-3xl sm:px-7 sm:py-8">
             <div className="mb-5 sm:mb-8">
               <img src="/assets/flash-brand.svg" alt="Flash Engenharia" className="mb-5 h-8 w-32 object-contain object-left sm:hidden" />
               <div className="text-xs font-bold uppercase tracking-[0.18em] text-amber-400">{setupRequired ? t('Primeiro acesso') : t('Acesso ao sistema')}</div>
