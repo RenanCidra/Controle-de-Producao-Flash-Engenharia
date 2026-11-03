@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { motion } from 'motion/react';
-import { api, AuthUser } from './client/api.ts';
+import { api, AuthUser, type FeedbackCategory } from './client/api.ts';
 import { Sidebar, ActiveTab } from './client/components/Sidebar.tsx';
 import { Header } from './client/components/Header.tsx';
 import { AuthModal } from './client/modules/auth/AuthModal.tsx';
@@ -21,6 +21,7 @@ import { FlashAssistantWidget } from './client/components/FlashAssistantWidget.t
 import { WelcomeView } from './client/modules/home/WelcomeView.tsx';
 import { CommunicationsView } from './client/modules/communications/CommunicationsView.tsx';
 import { FeedbackDialog } from './client/modules/feedback/FeedbackDialog.tsx';
+import { HelpInfoDialog, type HelpInfoMode } from './client/components/HelpInfoDialog.tsx';
 
 const DEV_PREVIEW_AUTH = import.meta.env.DEV && import.meta.env.VITE_DEV_PREVIEW_AUTH === 'true';
 const DEV_PREVIEW_USER: AuthUser = {
@@ -51,6 +52,8 @@ export default function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [feedbackDialog, setFeedbackDialog] = useState<'submit' | 'inbox' | null>(null);
+  const [feedbackInitialCategory, setFeedbackInitialCategory] = useState<FeedbackCategory>('IDEA');
+  const [helpInfoDialog, setHelpInfoDialog] = useState<HelpInfoMode | null>(null);
   const [setupRequired, setSetupRequired] = useState(false);
   const [bootstrapEnabled, setBootstrapEnabled] = useState(false);
   const [setupStatusChecked, setSetupStatusChecked] = useState(false);
@@ -91,14 +94,37 @@ export default function App() {
   // Hotkey global (Ctrl+K ou Cmd+K) para alternar o Assistente Flash
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      const target = e.target as HTMLElement | null;
+      const editingText = target?.matches('input, textarea, select, [contenteditable="true"]');
+      if ((e.ctrlKey || e.metaKey) && (e.key === '/' || e.key === '?') && currentUser && !editingText) {
+        e.preventDefault();
+        setHelpInfoDialog((open) => open === 'shortcuts' ? null : 'shortcuts');
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && !editingText) {
         e.preventDefault();
         setAssistantOpen((prev) => !prev);
         return;
       }
+      if (e.key === 'Escape' && helpInfoDialog) {
+        setHelpInfoDialog(null);
+        return;
+      }
+      if (e.key === 'Escape' && feedbackDialog) {
+        setFeedbackDialog(null);
+        return;
+      }
+      if (e.key === 'Escape' && profileModalOpen) {
+        setProfileModalOpen(false);
+        return;
+      }
+      if (e.key === 'Escape' && authModalOpen && currentUser) {
+        setAuthModalOpen(false);
+        return;
+      }
       if (e.key === 'Escape' && !authModalOpen && !profileModalOpen && !assistantOpen) {
-        const target = e.target as HTMLElement | null;
         if (target?.matches('input, textarea, select, [contenteditable="true"]')) return;
+        if (target?.closest('[data-user-account-menu], [data-user-account-menu-popover], [role="dialog"]')) return;
         if (mobileSidebarOpen) {
           setMobileSidebarOpen(false);
           return;
@@ -108,7 +134,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [assistantOpen, authModalOpen, mobileSidebarOpen, profileModalOpen]);
+  }, [assistantOpen, authModalOpen, currentUser, feedbackDialog, helpInfoDialog, mobileSidebarOpen, profileModalOpen]);
 
   const handleNavigateToSettings = (subTab: SettingsSubTab = 'general') => {
     if (activeTab !== 'settings') {
@@ -164,6 +190,11 @@ export default function App() {
   const showToast = (text: string, type: 'success' | 'error' = 'success') => {
     setMessage({ text, type });
     setTimeout(() => setMessage(null), 4000);
+  };
+
+  const openFeedbackDialog = (tab: 'submit' | 'inbox' = 'submit', category: FeedbackCategory = 'IDEA') => {
+    setFeedbackInitialCategory(category);
+    setFeedbackDialog(tab);
   };
 
   const loadStats = useCallback(async () => {
@@ -368,7 +399,9 @@ export default function App() {
             if (!pendingDashboardDataRef.current) finishCommunicationsTransition();
           }}
           onOpenProfile={() => setProfileModalOpen(true)}
-          onOpenFeedback={(tab = 'submit') => setFeedbackDialog(tab)}
+          onOpenFeedback={openFeedbackDialog}
+          onOpenHelpInfo={setHelpInfoDialog}
+          onOpenShortcuts={() => setHelpInfoDialog('shortcuts')}
           onOpenSettings={() => {
             setAssistantOpen(false);
             handleNavigateToSettings('general');
@@ -414,7 +447,9 @@ export default function App() {
             currentUser={currentUser}
             onOpenAuth={() => setAuthModalOpen(true)}
             onOpenProfile={() => setProfileModalOpen(true)}
-            onOpenFeedback={(tab = 'submit') => setFeedbackDialog(tab)}
+            onOpenFeedback={openFeedbackDialog}
+            onOpenHelpInfo={setHelpInfoDialog}
+            onOpenShortcuts={() => setHelpInfoDialog('shortcuts')}
             onLogout={handleLogout}
             onOpenSettings={handleNavigateToSettings}
             collapsed={sidebarCollapsed && !mobileSidebarOpen}
@@ -576,7 +611,9 @@ export default function App() {
           isOpen={assistantOpen}
           onToggle={() => setAssistantOpen((prev) => !prev)}
           onOpenProfile={() => setProfileModalOpen(true)}
-          onOpenFeedback={(tab = 'submit') => setFeedbackDialog(tab)}
+          onOpenFeedback={openFeedbackDialog}
+          onOpenHelpInfo={setHelpInfoDialog}
+          onOpenShortcuts={() => setHelpInfoDialog('shortcuts')}
           onOpenSettings={() => {
             setAssistantOpen(false);
             handleNavigateToSettings('general');
@@ -650,7 +687,8 @@ export default function App() {
         </div>
       )}
       <UserProfileModal isOpen={profileModalOpen} user={currentUser} onClose={() => setProfileModalOpen(false)} />
-      {currentUser && feedbackDialog && <FeedbackDialog user={currentUser} localPreview={DEV_PREVIEW_AUTH} initialTab={feedbackDialog} onClose={() => setFeedbackDialog(null)} onToast={showToast} />}
+      {currentUser && feedbackDialog && <FeedbackDialog key={`${feedbackDialog}:${feedbackInitialCategory}`} user={currentUser} localPreview={DEV_PREVIEW_AUTH} initialTab={feedbackDialog} initialCategory={feedbackInitialCategory} onClose={() => setFeedbackDialog(null)} onToast={showToast} />}
+      {helpInfoDialog && <HelpInfoDialog mode={helpInfoDialog} onClose={() => setHelpInfoDialog(null)} />}
     </div>
   );
 }

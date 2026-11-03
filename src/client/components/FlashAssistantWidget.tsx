@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowRight, Briefcase, Coffee, History, LoaderCircle, Maximize2, MessageSquarePlus, Mic, MicOff, Minimize2, Phone, Send, Settings2, Sparkles, Trash2, X, Zap } from 'lucide-react';
 import { api } from '../api.ts';
-import type { AuthUser } from '../api.ts';
+import type { AuthUser, FeedbackCategory } from '../api.ts';
 import { getAppLanguage, getIntlLocale, translateText } from '../i18n/index.ts';
 import { UserAccountMenu } from './UserAccountMenu.tsx';
 import { AudioRecorderButton } from './AudioRecorderButton.tsx';
@@ -35,7 +35,9 @@ interface FlashAssistantWidgetProps {
   onToggle: () => void;
   onOpenProfile: () => void;
   onOpenSettings: () => void;
-  onOpenFeedback: (initialTab?: 'submit' | 'inbox') => void;
+  onOpenFeedback: (initialTab?: 'submit' | 'inbox', initialCategory?: FeedbackCategory) => void;
+  onOpenHelpInfo: (mode: 'help' | 'release' | 'shortcuts') => void;
+  onOpenShortcuts: () => void;
   onLogout: () => void;
   showFloatingActions?: boolean;
   onNavigate: (tab: string, options?: { op?: string; subTab?: string }) => void;
@@ -150,6 +152,8 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
   onOpenProfile,
   onOpenSettings,
   onOpenFeedback,
+  onOpenHelpInfo,
+  onOpenShortcuts,
   onLogout,
   showFloatingActions = true,
   onNavigate,
@@ -627,7 +631,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
                 </div>
               </div>
               <div className="border-t border-white/10 bg-[#151C25] p-3">
-                <UserAccountMenu currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={() => { setFullScreen(false); onOpenSettings(); }} onOpenFeedback={onOpenFeedback} onLogout={onLogout}/>
+                <UserAccountMenu currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={() => { setFullScreen(false); onOpenSettings(); }} onOpenFeedback={onOpenFeedback} onOpenHelpInfo={onOpenHelpInfo} onOpenShortcuts={onOpenShortcuts} onLogout={onLogout}/>
               </div>
             </aside>
           )}
@@ -643,7 +647,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
               </div>
             </div>
             <div className="ml-3 flex shrink-0 items-center gap-1">
-              {fullScreen && <div className="md:hidden"><UserAccountMenu compact currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={() => { setFullScreen(false); onOpenSettings(); }} onOpenFeedback={onOpenFeedback} onLogout={onLogout}/></div>}
+              {fullScreen && <div className="md:hidden"><UserAccountMenu compact currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={() => { setFullScreen(false); onOpenSettings(); }} onOpenFeedback={onOpenFeedback} onOpenHelpInfo={onOpenHelpInfo} onOpenShortcuts={onOpenShortcuts} onLogout={onLogout}/></div>}
               <button type="button" onClick={startNewConversation} disabled={loading} title={t('Nova conversa')} aria-label={t('Nova conversa')} className={`rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 ${fullScreen ? 'md:hidden' : ''}`}>
                 <MessageSquarePlus className="h-4 w-4" />
               </button>

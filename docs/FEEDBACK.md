@@ -2,7 +2,9 @@
 
 ## Menu da conta
 
-O menu reutilizável `UserAccountMenu` é usado na barra lateral do sistema, na Central de Comunicação e no Assistente em tela cheia. Ele oferece perfil, configurações, ajuda e saída. A tela de Configurações continua sem esse menu. **Ajuda** abre os links oficiais de termos, privacidade, cookies, CFTV e a página institucional da Flash em novas abas.
+O menu reutilizável `UserAccountMenu` é usado na barra lateral do sistema, na Central de Comunicação e no Assistente em tela cheia. No desktop, o cartão da conta e Ajuda abrem ao passar o mouse; clique por teclado continua acessível. Em dispositivos compactos, toque/clique abre o cartão. O menu mede o cartão de origem e recalcula posição/tamanho conforme viewport, rolagem e redimensionamento; o conteúdo fica limitado à área visível e pode rolar. No mobile, a lista de Ajuda navega dentro do próprio menu. O painel oferece Central de Ajuda, Central de Privacidade, Notas de versão, atalhos, documentos legais, Sobre a Flash e relato de bug. A tela de Configurações continua sem esse menu.
+
+Os atalhos `Ctrl+/` (ou `Cmd+/` no Mac) abrem a lista de comandos; `Ctrl+K`/`Cmd+K` alterna o Assistente Flash; `Esc` fecha diálogos e menus que estão abertos. Atalhos não são capturados enquanto o foco está em campos de texto.
 
 ## Feedback
 

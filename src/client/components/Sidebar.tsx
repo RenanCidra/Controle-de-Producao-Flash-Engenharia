@@ -9,7 +9,7 @@ import {
   X,
   LucideIcon,
 } from 'lucide-react';
-import { AuthUser } from '../api.ts';
+import type { AuthUser, FeedbackCategory } from '../api.ts';
 import { translateText } from '../i18n/index.ts';
 import { UserAccountMenu } from './UserAccountMenu.tsx';
 
@@ -32,7 +32,9 @@ interface SidebarProps {
   currentUser: AuthUser | null;
   onOpenAuth: () => void;
   onOpenProfile: () => void;
-  onOpenFeedback: (initialTab?: 'submit' | 'inbox') => void;
+  onOpenFeedback: (initialTab?: 'submit' | 'inbox', initialCategory?: FeedbackCategory) => void;
+  onOpenHelpInfo: (mode: 'help' | 'release' | 'shortcuts') => void;
+  onOpenShortcuts: () => void;
   onLogout: () => void;
   onOpenSettings?: (subTab?: any) => void;
   collapsed: boolean;
@@ -48,6 +50,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenAuth,
   onOpenProfile,
   onOpenFeedback,
+  onOpenHelpInfo,
+  onOpenShortcuts,
   onLogout,
   onOpenSettings,
   collapsed,
@@ -122,7 +126,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         })}
       </nav>
       <div className={`border-t border-[#202936] mt-2 bg-[#151C25] ${collapsed ? 'p-2' : 'p-3'}`}>
-        <UserAccountMenu currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={() => { onCloseMobile(); if (onOpenSettings) onOpenSettings('general'); else setActiveTab('settings'); }} onOpenFeedback={onOpenFeedback} onLogout={onLogout} onOpenAuth={onOpenAuth} onCloseMobile={onCloseMobile} collapsed={collapsed && !mobileOpen} />
+        <UserAccountMenu currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={() => { onCloseMobile(); if (onOpenSettings) onOpenSettings('general'); else setActiveTab('settings'); }} onOpenFeedback={onOpenFeedback} onOpenHelpInfo={onOpenHelpInfo} onOpenShortcuts={onOpenShortcuts} onLogout={onLogout} onOpenAuth={onOpenAuth} onCloseMobile={onCloseMobile} collapsed={collapsed && !mobileOpen} />
       </div>
     </aside>
     </>

@@ -1997,6 +1997,13 @@ Object.assign(en, {
   'Tipo de feedback': 'Feedback type', 'Título': 'Title', 'Resuma a ideia ou problema': 'Summarize the idea or problem', 'Descrição': 'Description',
   'Conte o que aconteceu ou como essa melhoria ajudaria no trabalho.': 'Describe what happened or how this improvement would help at work.',
   'Obrigado por contribuir com a melhoria do sistema.': 'Thank you for helping improve the system.', 'Carregando feedback…': 'Loading feedback…', 'Situação': 'Status', 'Fechar': 'Close', 'Enviar': 'Send',
+  'Central de Ajuda': 'Help Center', 'Central de privacidade': 'Privacy Center', 'Notas de versão': 'Release notes', 'Atalhos de teclado': 'Keyboard shortcuts', 'Termos de serviço': 'Terms of Service', 'Relatar um bug': 'Report a bug', 'Enviar sugestão': 'Send a suggestion',
+  'Abrir ou fechar o Assistente Flash': 'Open or close Flash Assistant', 'Mostrar atalhos de teclado': 'Show keyboard shortcuts', 'Fechar menu, janela ou painel aberto': 'Close an open menu, dialog, or panel',
+  'Ajuda e feedback': 'Help and feedback', 'Menu da conta com acesso aos documentos oficiais e à página Sobre a Flash.': 'Account menu with access to official documents and the About Flash page.',
+  'Formulário de feedback e caixa de triagem para administradores e supervisores.': 'Feedback form and review inbox for administrators and supervisors.', 'Atalhos de teclado para abrir o Assistente e consultar os comandos.': 'Keyboard shortcuts to open the Assistant and view available commands.',
+  'O Nexus ajuda a consultar o andamento da produção espelhado do Protheus e centraliza a comunicação interna.': 'Nexus helps check production progress mirrored from Protheus and centralizes internal communication.',
+  'Pedidos e OPs': 'Orders and WOs', 'Consulte pedidos, ordens e etapas disponíveis no espelho operacional.': 'Review orders, work orders, and steps available in the operational mirror.',
+  'Central de comunicação': 'Communication Center', 'Converse individualmente ou por grupos de setor habilitados.': 'Chat one-on-one or in enabled department groups.',
 });
 
 Object.assign(es, {
@@ -2015,6 +2022,13 @@ Object.assign(es, {
   'Tipo de feedback': 'Tipo de comentario', 'Título': 'Título', 'Resuma a ideia ou problema': 'Resuma la idea o el problema', 'Descrição': 'Descripción',
   'Conte o que aconteceu ou como essa melhoria ajudaria no trabalho.': 'Describa qué ocurrió o cómo esta mejora ayudaría en el trabajo.',
   'Obrigado por contribuir com a melhoria do sistema.': 'Gracias por contribuir a mejorar el sistema.', 'Carregando feedback…': 'Cargando comentarios…', 'Situação': 'Estado', 'Fechar': 'Cerrar', 'Enviar': 'Enviar',
+  'Central de Ajuda': 'Centro de ayuda', 'Central de privacidade': 'Centro de privacidad', 'Notas de versão': 'Notas de versión', 'Atalhos de teclado': 'Atajos de teclado', 'Termos de serviço': 'Términos del servicio', 'Relatar um bug': 'Informar de un error', 'Enviar sugestão': 'Enviar sugerencia',
+  'Abrir ou fechar o Assistente Flash': 'Abrir o cerrar el Asistente Flash', 'Mostrar atalhos de teclado': 'Mostrar atajos de teclado', 'Fechar menu, janela ou painel aberto': 'Cerrar un menú, ventana o panel abierto',
+  'Ajuda e feedback': 'Ayuda y comentarios', 'Menu da conta com acesso aos documentos oficiais e à página Sobre a Flash.': 'Menú de cuenta con acceso a documentos oficiales y a la página Sobre Flash.',
+  'Formulário de feedback e caixa de triagem para administradores e supervisores.': 'Formulario de comentarios y bandeja de revisión para administradores y supervisores.', 'Atalhos de teclado para abrir o Assistente e consultar os comandos.': 'Atajos para abrir el Asistente y consultar los comandos disponibles.',
+  'O Nexus ajuda a consultar o andamento da produção espelhado do Protheus e centraliza a comunicação interna.': 'Nexus ayuda a consultar el avance de producción reflejado desde Protheus y centraliza la comunicación interna.',
+  'Pedidos e OPs': 'Pedidos y órdenes de producción', 'Consulte pedidos, ordens e etapas disponíveis no espelho operacional.': 'Consulte pedidos, órdenes y etapas disponibles en el espejo operativo.',
+  'Central de comunicação': 'Centro de comunicación', 'Converse individualmente ou por grupos de setor habilitados.': 'Converse individualmente o en grupos de sectores habilitados.',
 });
 
 export const catalogs: Record<Exclude<AppLanguage, 'pt-BR'>, Record<string, string>> = { 'en-US': en, 'es-ES': es };

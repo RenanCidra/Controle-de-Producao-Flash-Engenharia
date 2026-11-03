@@ -20,12 +20,13 @@ export const FeedbackDialog: React.FC<{
   user: AuthUser;
   localPreview: boolean;
   initialTab: 'submit' | 'inbox';
+  initialCategory?: FeedbackCategory;
   onClose: () => void;
   onToast: (message: string, type: 'success' | 'error') => void;
-}> = ({ user, localPreview, initialTab, onClose, onToast }) => {
+}> = ({ user, localPreview, initialTab, initialCategory = 'IDEA', onClose, onToast }) => {
   const canReview = user.role === 'ADMIN' || user.role === 'SUPERVISOR';
   const [tab, setTab] = useState<'submit' | 'inbox'>(initialTab === 'inbox' && canReview ? 'inbox' : 'submit');
-  const [category, setCategory] = useState<FeedbackCategory>('IDEA');
+  const [category, setCategory] = useState<FeedbackCategory>(initialCategory);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);

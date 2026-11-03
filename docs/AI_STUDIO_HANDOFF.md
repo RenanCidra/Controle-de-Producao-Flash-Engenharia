@@ -122,7 +122,7 @@ Quando o acesso à origem for definido, implementar sincronização incremental 
 
 ## Menu de ajuda e feedback
 
-- `UserAccountMenu` é o menu compartilhado na barra lateral, Central de Comunicação e Assistente em tela cheia. A Ajuda contém os links oficiais de termos, privacidade, cookies, CFTV e Sobre a Flash. Configurações não mostra o menu, conforme o desenho atual.
+- `UserAccountMenu` é o menu compartilhado na barra lateral, Central de Comunicação e Assistente em tela cheia. No desktop, o cartão abre por hover; em mobile abre por toque. A posição e o tamanho dos painéis são recalculados em relação ao cartão quando a tela/rolagem muda e ficam limitados ao viewport. Ajuda inclui Central de Ajuda/Privacidade, notas, documentos, Sobre a Flash e relato de bug. Configurações não mostra o menu. `Ctrl+/` abre a lista de atalhos; `Ctrl+K` alterna o Assistente; `Esc` fecha menu/diálogo aberto.
 - Feedback interno foi implementado com formulário autenticado e persistência em `feedback_submissions`. Qualquer perfil autenticado pode enviar; somente ADMIN/SUPERVISOR consultam a caixa de entrada e alteram o status. A API protege as operações por `feedback:create`, `feedback:read` e `feedback:manage`, com auditoria de criação e mudança de situação.
 - Aplicar a migração `npm run db:migrate:feedback` no banco de destino antes de habilitar o fluxo persistente. A migração está no código, mas **não foi executada neste ambiente**. Na prévia local, salvamentos demonstrativos ficam no localStorage e são explicitamente identificados como não enviados ao servidor.
 - A primeira versão não envia e-mail, notificações, anexos ou respostas ao autor; também não converte feedback automaticamente em ocorrência. Ver `docs/FEEDBACK.md`.

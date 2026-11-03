@@ -139,7 +139,7 @@ O procedimento operacional completo para criar a primeira conta `ADMIN` está em
 
 ## Ajuda e feedback interno
 
-- O menu compartilhado da conta reúne perfil, configurações, ajuda e saída no sistema, Central de Comunicação e Assistente em tela cheia; Configurações permanece sem esse menu. Ajuda aponta para os documentos/página oficiais da Flash.
+- O menu compartilhado da conta reúne perfil, configurações, ajuda e saída no sistema, Central de Comunicação e Assistente em tela cheia; Configurações permanece sem esse menu. No desktop ele abre por hover; em layouts compactos abre por toque/clique. Os popovers são medidos em relação ao cartão e reposicionados ao rolar ou redimensionar, limitados ao viewport. `Ctrl+/` mostra atalhos; `Ctrl+K` alterna o Assistente.
 - Contas autenticadas podem enviar sugestões e problemas. O autor é derivado da sessão no backend. ADMIN/SUPERVISOR podem consultar os envios e alterar o status; a API exige `feedback:read` e `feedback:manage`.
 - A tabela `feedback_submissions`, migração incremental `20261103_feedback.sql` e comando `npm run db:migrate:feedback` estão implementados. A aplicação da migração no banco de destino ainda precisa ser confirmada. Prévia local usa somente `localStorage`, com aviso de que não envia dados ao servidor.
 - A primeira versão não inclui anexos, e-mail/notificações, resposta ao autor, SLA ou conversão automática em ocorrência. Ver [`FEEDBACK.md`](./FEEDBACK.md).
