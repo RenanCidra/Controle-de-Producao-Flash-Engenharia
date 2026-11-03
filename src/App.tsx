@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
+import { motion } from 'motion/react';
 import { api, AuthUser } from './client/api.ts';
 import { Sidebar, ActiveTab } from './client/components/Sidebar.tsx';
 import { Header } from './client/components/Header.tsx';
@@ -54,6 +55,36 @@ export default function App() {
   const [setupStatusError, setSetupStatusError] = useState('');
   const [languageRevision, setLanguageRevision] = useState(0);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [communicationsTransitionLoading, setCommunicationsTransitionLoading] = useState(false);
+  const [communicationsTransitionFading, setCommunicationsTransitionFading] = useState(false);
+  const transitionStartedAtRef = useRef(0);
+  const transitionTimerRef = useRef<number | null>(null);
+  const pendingDashboardDataRef = useRef(false);
+  const pendingDashboardStatsRef = useRef(false);
+  const beginCommunicationsTransition = () => {
+    if (transitionTimerRef.current !== null) window.clearTimeout(transitionTimerRef.current);
+    transitionStartedAtRef.current = Date.now();
+    setCommunicationsTransitionFading(false);
+    setCommunicationsTransitionLoading(true);
+  };
+  const finishCommunicationsTransition = useCallback(() => {
+    const minimumVisibleMs = 500;
+    const remainingMs = Math.max(0, minimumVisibleMs - (Date.now() - transitionStartedAtRef.current));
+    if (transitionTimerRef.current !== null) window.clearTimeout(transitionTimerRef.current);
+    transitionTimerRef.current = window.setTimeout(() => {
+      setCommunicationsTransitionFading(true);
+      transitionTimerRef.current = window.setTimeout(() => setCommunicationsTransitionLoading(false), 300);
+    }, remainingMs);
+  }, []);
+  const navigateToCommunications = () => {
+    beginCommunicationsTransition();
+    setActiveTab('communications');
+  };
+  const onCommunicationsInitialLoadComplete = finishCommunicationsTransition;
+  const onDashboardDataRequestSettled = useCallback(() => {
+    if (!pendingDashboardStatsRef.current) finishCommunicationsTransition();
+    pendingDashboardDataRef.current = false;
+  }, [finishCommunicationsTransition]);
 
   // Hotkey global (Ctrl+K ou Cmd+K) para alternar o Assistente Flash
   useEffect(() => {
@@ -135,6 +166,24 @@ export default function App() {
 
   const loadStats = useCallback(async () => {
     setStatsLoading(true);
+    if (DEV_PREVIEW_AUTH) {
+      await new Promise(resolve => window.setTimeout(resolve, 350));
+      setStats({
+        totalProtheusPv: 42,
+        totalProtheusOp: 68,
+        totalProtheusProducts: 126,
+        totalProtheusBatches: 12,
+        totalProtheusStructures: 84,
+        totalProtheusRoutings: 57,
+        totalProtheusAppointments: 214,
+        latestProtheusImport: { batchCode: 'PREVIEW-LOCAL', sourceType: 'DEMONSTRAÇÃO', entityType: 'PRODUÇÃO', recordsCount: 214, status: 'PREVIEW', createdAt: new Date().toISOString() },
+        organization: { id: 1, name: 'Flash Engenharia', tradeName: 'Flash Engenharia', plantCode: 'PLANTA DEMONSTRAÇÃO', timezone: 'America/Sao_Paulo' },
+      });
+      setStatsError(null);
+      setStatsUpdatedAt(new Date().toISOString());
+      setStatsLoading(false);
+      return;
+    }
     try {
       const data = await api.getStats();
       if (data) {
@@ -282,7 +331,7 @@ export default function App() {
     <div key={languageRevision} className="flex h-screen w-screen overflow-hidden bg-[#F1F4F7] font-sans text-[#263548] antialiased">
       {DEV_PREVIEW_AUTH && (
         <div className="fixed left-1/2 top-2 z-[60] -translate-x-1/2 rounded-full border border-amber-400/40 bg-slate-950/90 px-4 py-2 text-xs font-semibold text-amber-200 shadow-lg">
-          Prévia local autenticada · conta ADMIN simulada · alterações bloqueadas
+          Prévia local · dados demonstrativos · nenhuma alteração persistida
         </div>
       )}
       {message && (
@@ -305,7 +354,17 @@ export default function App() {
       {activeTab === 'communications' ? (
         <CommunicationsView
           currentUser={currentUser}
-          onBack={() => setActiveTab('dashboard')}
+          localPreview={DEV_PREVIEW_AUTH}
+          onInitialLoadComplete={onCommunicationsInitialLoadComplete}
+          onBack={async () => {
+            beginCommunicationsTransition();
+            pendingDashboardDataRef.current = true;
+            pendingDashboardStatsRef.current = true;
+            setActiveTab('dashboard');
+            await loadStats();
+            pendingDashboardStatsRef.current = false;
+            if (!pendingDashboardDataRef.current) finishCommunicationsTransition();
+          }}
           onOpenProfile={() => setProfileModalOpen(true)}
           onOpenSettings={() => {
             setAssistantOpen(false);
@@ -348,7 +407,7 @@ export default function App() {
         <div className="flex h-[100dvh] w-full min-w-0 overflow-hidden bg-[#F1F4F7]">
           <Sidebar
             activeTab={activeTab}
-            setActiveTab={setActiveTab}
+            setActiveTab={(tab) => tab === 'communications' ? navigateToCommunications() : setActiveTab(tab)}
             currentUser={currentUser}
             onOpenAuth={() => setAuthModalOpen(true)}
             onOpenProfile={() => setProfileModalOpen(true)}
@@ -384,7 +443,7 @@ export default function App() {
             />
 
             <div className="min-w-0 flex-1 overflow-y-auto bg-transparent p-3 sm:p-4 lg:p-6">
-              {activeTab === 'home' && <WelcomeView stats={stats} loading={statsLoading} error={statsError} onNavigate={setActiveTab} onOpenConnectors={() => handleNavigateToSettings('connectors')} />}
+              {activeTab === 'home' && <WelcomeView stats={stats} loading={statsLoading} error={statsError} onNavigate={(tab) => tab === 'communications' ? navigateToCommunications() : setActiveTab(tab)} onOpenConnectors={() => handleNavigateToSettings('connectors')} onRetry={() => void loadStats()} />}
 
               {activeTab === 'dashboard' && (
                 <DashboardView
@@ -393,8 +452,10 @@ export default function App() {
                   refreshError={statsError}
                   statsUpdatedAt={statsUpdatedAt}
                   onRefresh={() => void loadStats()}
-                  onNavigate={(tab) => setActiveTab(tab)}
+                  onNavigate={(tab) => tab === 'communications' ? navigateToCommunications() : setActiveTab(tab)}
                   onNavigateToConnectors={() => handleNavigateToSettings('connectors')}
+                  onDataRequestSettled={onDashboardDataRequestSettled}
+                  localPreview={DEV_PREVIEW_AUTH}
                 />
               )}
 
@@ -532,7 +593,7 @@ export default function App() {
               setAssistantOpen(false);
               handleNavigateToSettings((options?.subTab as SettingsSubTab) || 'general');
             } else if (targetTab === 'communications') {
-              setActiveTab('communications');
+              navigateToCommunications();
             } else if (
               [
                 'dashboard',
@@ -547,6 +608,41 @@ export default function App() {
             }
           }}
         />
+      )}
+      {communicationsTransitionLoading && (
+        <div className={`fixed inset-0 z-[70] flex items-center justify-center bg-[#0C1118]/[0.97] px-4 py-8 text-white backdrop-blur-xl transition-opacity duration-300 ease-out ${communicationsTransitionFading ? 'opacity-0' : 'opacity-100'}`} role="status" aria-live="polite" aria-label={activeTab === 'communications' ? 'Carregando Central de Comunicações' : 'Retornando ao Sistema'}>
+          <div className="flex w-full max-w-xl flex-col items-center justify-center text-center">
+            <div className="relative mb-6 flex h-28 w-28 items-center justify-center sm:h-32 sm:w-32">
+              <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
+                <circle cx="50" cy="50" r="44" className="stroke-white/10" strokeWidth="3" fill="none" />
+                <motion.circle
+                  cx="50" cy="50" r="44" stroke="url(#transition-gold-gradient)" strokeWidth="3.5" strokeLinecap="round" fill="none" strokeDasharray="74 202"
+                  animate={{ strokeDashoffset: [0, -276] }} transition={{ duration: 1.8, repeat: Infinity, ease: 'linear' }}
+                  style={{ filter: 'drop-shadow(0 0 8px rgba(255,170,0,.45))' }}
+                />
+                <defs><linearGradient id="transition-gold-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#FFAA00"/><stop offset="100%" stopColor="#FFD15C"/></linearGradient></defs>
+              </svg>
+              <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-[#FFAA00] opacity-70 [animation-duration:1.8s]" />
+              <div className="flex h-20 w-20 items-center justify-center rounded-full border border-white/10 bg-[#161E28] shadow-[0_4px_24px_rgba(0,0,0,0.6)] sm:h-24 sm:w-24">
+                {activeTab === 'communications' ? (
+                  <svg className="h-9 w-9 text-[#FFAA00] drop-shadow-[0_0_6px_rgba(255,170,0,0.35)] sm:h-11 sm:w-11" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M12 36l-4 4V12a4 4 0 0 1 4-4h24a4 4 0 0 1 4 4v18a4 4 0 0 1-4 4H12z" />
+                    <circle cx="18" cy="21" r="1.6" fill="currentColor" stroke="none"/><circle cx="24" cy="21" r="1.6" fill="currentColor" stroke="none"/><circle cx="30" cy="21" r="1.6" fill="currentColor" stroke="none"/>
+                  </svg>
+                ) : <img src="/assets/flash-symbol.png" alt="Flash" className="h-9 w-9 object-contain drop-shadow-[0_0_8px_rgba(255,170,0,0.5)] sm:h-11 sm:w-11" />}
+              </div>
+            </div>
+            <h2 className="text-xl font-medium tracking-tight text-white sm:text-2xl">
+              {activeTab === 'communications' ? <>Carregando <span className="font-bold text-[#FFAA00]">Central de Comunicações</span></> : <>Retornando ao <span className="font-bold text-[#FFAA00]">Sistema</span></>}
+            </h2>
+            <p className="mt-2 text-xs text-slate-300 sm:text-sm">
+              {activeTab === 'communications' ? 'Inicializando conversas, grupos e participantes...' : 'Sincronizando painel, OPs e chão de fábrica...'}
+            </p>
+            <div className="mt-6 h-2 w-64 overflow-hidden rounded-full bg-white/10 sm:w-80">
+              <motion.div className="h-full w-2/5 rounded-full bg-gradient-to-r from-[#FFAA00] via-[#FFB82E] to-[#FFAA00] shadow-[0_0_12px_rgba(255,170,0,0.6)]" animate={{ x: ['-110%', '250%'] }} transition={{ duration: 1.25, repeat: Infinity, ease: 'easeInOut' }} />
+            </div>
+          </div>
+        </div>
       )}
       <UserProfileModal isOpen={profileModalOpen} user={currentUser} onClose={() => setProfileModalOpen(false)} />
     </div>
