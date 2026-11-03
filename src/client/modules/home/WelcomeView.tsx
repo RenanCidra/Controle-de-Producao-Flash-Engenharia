@@ -2,6 +2,7 @@ import React from 'react';
 import { Activity, ArrowRight, ClipboardList, Database, GitBranch, ShieldCheck } from 'lucide-react';
 import { ActiveTab } from '../../components/Sidebar.tsx';
 import { translateText } from '../../i18n/index.ts';
+import { DataUnavailableState } from '../../components/DataStatus.tsx';
 
 interface WelcomeViewProps {
   stats: { totalProtheusOp: number; totalProtheusPv: number; totalProtheusBatches: number; latestProtheusImport?: { createdAt: string | null; entityType: string; recordsCount: number } | null } | null;
@@ -9,9 +10,10 @@ interface WelcomeViewProps {
   error: string | null;
   onNavigate: (tab: ActiveTab) => void;
   onOpenConnectors: () => void;
+  onRetry: () => void;
 }
 
-export const WelcomeView: React.FC<WelcomeViewProps> = ({ stats, loading, error, onNavigate, onOpenConnectors }) => {
+export const WelcomeView: React.FC<WelcomeViewProps> = ({ stats, loading, error, onNavigate, onOpenConnectors, onRetry }) => {
   const features = [
     { title: 'Rastreabilidade de pedidos e OPs', text: 'Consulte vínculos e andamento usando os registros existentes no espelho Protheus.', icon: GitBranch, action: 'traceability' as const, label: 'Abrir rastreabilidade' },
     { title: 'Gestão de ocorrências', text: 'Registre fatos por OP, acompanhe atualizações e visualize ocorrências consolidadas por PV.', icon: ClipboardList, action: 'occurrences' as const, label: 'Abrir ocorrências' },
@@ -32,8 +34,10 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ stats, loading, error,
           </div>
           <aside className="rounded-xl border border-white/10 bg-black/25 p-4 text-white backdrop-blur-sm">
             <div className="flex items-center gap-2 text-xs font-semibold"><span className={`h-2 w-2 rounded-full ${error ? 'bg-rose-400' : loading ? 'animate-pulse bg-amber-300' : stats ? 'bg-emerald-400' : 'bg-slate-400'}`} />{translateText('Espelho operacional do Protheus')}</div>
-            <p className="mt-2 text-xs leading-relaxed text-slate-300">{error ? translateText('Não foi possível consultar o espelho neste momento.') : stats ? translateText('Resumo baseado nas cargas e registros disponíveis no banco da aplicação.') : translateText('A consulta usa os dados recebidos no espelho; não representa uma conexão ativa ao Protheus.')}</p>
-            {stats && <div className="mt-4 grid grid-cols-2 gap-2"><div className="rounded-lg bg-white/5 p-2.5"><span className="block text-[10px] text-slate-400">{translateText('OPs no espelho')}</span><strong className="mt-1 block text-lg">{stats.totalProtheusOp.toLocaleString()}</strong></div><div className="rounded-lg bg-white/5 p-2.5"><span className="block text-[10px] text-slate-400">{translateText('Pedidos no espelho')}</span><strong className="mt-1 block text-lg">{stats.totalProtheusPv.toLocaleString()}</strong></div></div>}
+            {error ? <DataUnavailableState compact tone="dark" title="Resumo indisponível" description="O sistema não conseguiu consultar os dados do espelho." onRetry={onRetry} retrying={loading} /> : <>
+              <p className="mt-2 text-xs leading-relaxed text-slate-300">{stats ? translateText('Resumo baseado nas cargas e registros disponíveis no banco da aplicação.') : translateText('A consulta usa os dados recebidos no espelho; não representa uma conexão ativa ao Protheus.')}</p>
+              {stats && <div className="mt-4 grid grid-cols-2 gap-2"><div className="rounded-lg bg-white/5 p-2.5"><span className="block text-[10px] text-slate-400">{translateText('OPs no espelho')}</span><strong className="mt-1 block text-lg">{stats.totalProtheusOp.toLocaleString()}</strong></div><div className="rounded-lg bg-white/5 p-2.5"><span className="block text-[10px] text-slate-400">{translateText('Pedidos no espelho')}</span><strong className="mt-1 block text-lg">{stats.totalProtheusPv.toLocaleString()}</strong></div></div>}
+            </>}
             <button type="button" onClick={onOpenConnectors} className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-amber-200 hover:text-amber-100">{translateText('Ver conectores e cargas') }<ArrowRight className="h-3.5 w-3.5" /></button>
           </aside>
         </div>

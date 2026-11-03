@@ -195,6 +195,16 @@ export const ProtheusSyncView: React.FC<ProtheusSyncViewProps> = ({
     setLoading(true);
     try {
       const parsed = JSON.parse(restJsonText);
+      const isArrayWithItems = Array.isArray(parsed) && parsed.length > 0;
+      const isBundleWithItems = parsed && typeof parsed === 'object' && !Array.isArray(parsed) && (
+        (parsed.bundle && typeof parsed.bundle === 'object' && Object.values(parsed.bundle).some((v: any) => Array.isArray(v) && v.length > 0)) ||
+        Object.values(parsed).some((v: any) => Array.isArray(v) && v.length > 0)
+      );
+      if (!isArrayWithItems && !isBundleWithItems) {
+        onError('O lote não contém registros para importar. Adicione ao menos um registro no array ou pacote de entidades.');
+        setLoading(false);
+        return;
+      }
       const res = await api.syncProtheusRest(parsed);
       setUploadResult(res);
       if (res.errors.length > 0) onError('A carga foi processada parcialmente. Confira os registros sinalizados em Conectores Protheus.');
@@ -416,12 +426,31 @@ export const ProtheusSyncView: React.FC<ProtheusSyncViewProps> = ({
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
-                  Payload JSON (Pacote de Entidades ou Array)
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-slate-300">
+                    Payload JSON (Pacote de Entidades ou Array)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setRestJsonText(JSON.stringify({
+                      products: [
+                        {
+                          codigoProduto: 'PROD-EXEMPLO-01',
+                          descricao: 'Produto de Demonstração',
+                          tipo: 'PA',
+                          unidadeMedida: 'UN'
+                        }
+                      ]
+                    }, null, 2))}
+                    className="text-[11px] text-cyan-400 hover:text-cyan-300 underline font-mono"
+                  >
+                    Carregar Exemplo
+                  </button>
+                </div>
                 <textarea
                   value={restJsonText}
                   onChange={(e) => setRestJsonText(e.target.value)}
+                  placeholder={'{\n  "products": [\n    {\n      "codigoProduto": "PROD-01",\n      "descricao": "Item 1",\n      "tipo": "PA",\n      "unidadeMedida": "UN"\n    }\n  ]\n}'}
                   rows={8}
                   className="w-full bg-[#1C2532] border border-[#263342] rounded-lg p-3 text-xs font-mono text-slate-200 focus:outline-none focus:border-[#FFAA00]"
                 />

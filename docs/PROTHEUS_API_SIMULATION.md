@@ -29,7 +29,7 @@ As respostas de dados incluem paginação, nome do arquivo, aba, quantidade de l
 
 ## Executar no Windows
 
-Use Python 3 com `openpyxl` disponível. Informe a pasta original dos arquivos, sem copiá-los para o repositório:
+Use Python 3 com `openpyxl` disponível. Informe a pasta original dos arquivos, sem copiá-los para o repositório. O mock pode iniciar com relatórios parciais: `GET /v1/health` informa `availableEntities` e `missingReports`; consultas a uma origem ausente respondem `503 SOURCE_REPORT_MISSING`, sem fabricar dados.
 
 ```powershell
 $env:PROTHEUS_MOCK_DATA_DIR = 'C:\caminho\para\Dados Estruturais'

@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { check, index, integer, numeric, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { check, index, integer, numeric, pgTable, serial, text, timestamp, uniqueIndex, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 // Organizations own accounts, employee records, and operational data.
 export const organizations = pgTable("organizations", {
@@ -156,6 +156,27 @@ export const auditLogs = pgTable("audit_logs", {
   status: text("status").notNull().default("SUCCESS"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+export const feedbackSubmissions = pgTable("feedback_submissions", {
+  id: serial("id").primaryKey(),
+  category: text("category").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  sourceScreen: text("source_screen"),
+  status: text("status").notNull().default("NEW"),
+  submitterUid: text("submitter_uid").notNull(),
+  submitterName: text("submitter_name").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("feedback_submissions_status_created_idx").on(table.status, table.createdAt),
+  index("feedback_submissions_submitter_idx").on(table.submitterUid, table.createdAt),
+  check("feedback_submissions_category_check", sql`${table.category} IN ('IDEA', 'BUG', 'QUESTION', 'OTHER')`),
+  check("feedback_submissions_status_check", sql`${table.status} IN ('NEW', 'IN_REVIEW', 'PLANNED', 'COMPLETED', 'DECLINED')`),
+  check("feedback_submissions_title_length_check", sql`length(btrim(${table.title})) BETWEEN 1 AND 120`),
+  check("feedback_submissions_description_length_check", sql`length(btrim(${table.description})) BETWEEN 1 AND 3000`),
+  check("feedback_submissions_source_length_check", sql`${table.sourceScreen} IS NULL OR length(${table.sourceScreen}) <= 120`),
+]);
 
 // ==========================================
 // TOTVS PROTHEUS NORMALIZED CORE MODULE (Módulo 1)
@@ -379,14 +400,61 @@ export const communicationGroups = pgTable("communication_groups", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [index("communication_groups_sector_idx").on(table.sector)]);
 
+export const communicationGroupMembers = pgTable("communication_group_members", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id").notNull().references(() => communicationGroups.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  addedByUid: text("added_by_uid").notNull(),
+  addedAt: timestamp("added_at").defaultNow().notNull(),
+  lastReadAt: timestamp("last_read_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("communication_group_members_unique").on(table.groupId, table.userId),
+  index("communication_group_members_user_idx").on(table.userId, table.groupId),
+]);
+
 export const communicationMessages = pgTable("communication_messages", {
   id: serial("id").primaryKey(),
   groupId: integer("group_id").notNull().references(() => communicationGroups.id, { onDelete: "cascade" }),
   authorUid: text("author_uid").notNull(),
   authorName: text("author_name").notNull(),
   body: text("body").notNull(),
+  replyToMessageId: integer("reply_to_message_id").references((): AnyPgColumn => communicationMessages.id, { onDelete: "set null" }),
+  audioStoragePath: text("audio_storage_path"),
+  audioMimeType: text("audio_mime_type"),
+  audioDurationMs: integer("audio_duration_ms"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [index("communication_messages_group_idx").on(table.groupId, table.createdAt)]);
+
+export const communicationDirectConversations = pgTable("communication_direct_conversations", {
+  id: serial("id").primaryKey(),
+  directKey: text("direct_key").notNull(),
+  createdByUid: text("created_by_uid").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [uniqueIndex("communication_direct_conversations_key_unique").on(table.directKey)]);
+
+export const communicationDirectMembers = pgTable("communication_direct_members", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").notNull().references(() => communicationDirectConversations.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  addedAt: timestamp("added_at").defaultNow().notNull(),
+  lastReadAt: timestamp("last_read_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("communication_direct_members_unique").on(table.conversationId, table.userId),
+  index("communication_direct_members_user_idx").on(table.userId, table.conversationId),
+]);
+
+export const communicationDirectMessages = pgTable("communication_direct_messages", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").notNull().references(() => communicationDirectConversations.id, { onDelete: "cascade" }),
+  authorUid: text("author_uid").notNull(),
+  authorName: text("author_name").notNull(),
+  body: text("body").notNull(),
+  replyToMessageId: integer("reply_to_message_id").references((): AnyPgColumn => communicationDirectMessages.id, { onDelete: "set null" }),
+  audioStoragePath: text("audio_storage_path"),
+  audioMimeType: text("audio_mime_type"),
+  audioDurationMs: integer("audio_duration_ms"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [index("communication_direct_messages_conversation_idx").on(table.conversationId, table.createdAt)]);
 
 // Relations
 export const productionOrdersRelations = relations(productionOrders, ({ one, many }) => ({

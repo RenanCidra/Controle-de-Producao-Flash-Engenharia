@@ -45,6 +45,37 @@ export async function handleCopilotChat(req: AuthenticatedRequest, res: Response
   }
 }
 
+export async function handleCopilotAudio(req: AuthenticatedRequest, res: Response) {
+  const mimeType = (req.get('content-type') || '').split(';', 1)[0].trim().toLowerCase();
+  const allowedTypes = new Set(['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg']);
+  if (!allowedTypes.has(mimeType)) return res.status(415).json({ error: 'Formato de áudio não suportado.' });
+  if (!Buffer.isBuffer(req.body) || req.body.length < 1 || req.body.length > 5 * 1024 * 1024) return res.status(400).json({ error: 'Áudio inválido ou acima de 5 MB.' });
+  try {
+    let history: unknown = [];
+    try { history = JSON.parse(req.get('x-copilot-history') || '[]'); } catch { return res.status(400).json({ error: 'Histórico da conversa inválido.' }); }
+    if (!Array.isArray(history)) return res.status(400).json({ error: 'Histórico da conversa inválido.' });
+    const safeHistory = history.slice(-6).flatMap((turn) => {
+      if (!turn || (turn.role !== 'user' && turn.role !== 'model') || typeof turn.text !== 'string') return [];
+      const text = turn.text.trim().slice(0, 1000); return text ? [{ role: turn.role as 'user' | 'model', text }] : [];
+    });
+    const language = req.get('x-copilot-language');
+    const personality = req.get('x-copilot-personality');
+    const user = req.user!;
+    const response = await copilotService.chat({
+      message: 'O usuário enviou uma mensagem de voz. Responda ao que foi dito no áudio.',
+      audio: { data: req.body.toString('base64'), mimeType },
+      history: safeHistory,
+      language: language === 'en-US' || language === 'es-ES' ? language : 'pt-BR',
+      personality: personality === 'direct' || personality === 'formal' ? personality : 'casual',
+      user: { uid: user.uid, name: user.name, role: user.role, department: user.department },
+    });
+    return res.json(response);
+  } catch (error) {
+    console.error('Erro ao processar áudio no Assistente Flash.');
+    return res.status(500).json({ error: 'Falha ao processar áudio no Assistente Flash.' });
+  }
+}
+
 export async function handleCopilotBriefing(req: AuthenticatedRequest, res: Response) {
   try {
     const user = req.user!;

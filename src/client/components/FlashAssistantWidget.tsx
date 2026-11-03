@@ -1,8 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Briefcase, Coffee, History, LoaderCircle, Maximize2, MessageSquarePlus, Mic, MicOff, Minimize2, Send, Settings2, Sparkles, Trash2, X, Zap } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import { ArrowRight, Briefcase, Coffee, History, LoaderCircle, Maximize2, MessageSquarePlus, Mic, MicOff, Minimize2, Phone, Send, Settings2, Sparkles, Trash2, X, Zap } from 'lucide-react';
 import { api } from '../api.ts';
-import type { AuthUser } from '../api.ts';
+import type { AuthUser, FeedbackCategory } from '../api.ts';
 import { getAppLanguage, getIntlLocale, translateText } from '../i18n/index.ts';
+import { UserAccountMenu } from './UserAccountMenu.tsx';
+import { AudioRecorderButton } from './AudioRecorderButton.tsx';
+import { EmojiPicker } from './EmojiPicker.tsx';
 
 export type PersonalityMode = 'direct' | 'casual' | 'formal';
 export type TypingDisplayMode = 'realtime' | 'instant';
@@ -15,6 +19,7 @@ interface Message {
   actions?: Array<{ type: string; target: string; label: string }>;
   mode?: 'gemini' | 'data_fallback';
   error?: boolean;
+  audioUrl?: string;
 }
 
 interface Conversation {
@@ -28,6 +33,13 @@ interface FlashAssistantWidgetProps {
   currentUser: AuthUser | null;
   isOpen: boolean;
   onToggle: () => void;
+  onOpenProfile: () => void;
+  onOpenSettings: () => void;
+  onOpenFeedback: (initialTab?: 'submit' | 'inbox', initialCategory?: FeedbackCategory) => void;
+  onOpenHelpInfo: (mode: 'help' | 'release' | 'shortcuts') => void;
+  onOpenShortcuts: () => void;
+  onLogout: () => void;
+  showFloatingActions?: boolean;
   onNavigate: (tab: string, options?: { op?: string; subTab?: string }) => void;
 }
 
@@ -137,6 +149,13 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
   currentUser,
   isOpen,
   onToggle,
+  onOpenProfile,
+  onOpenSettings,
+  onOpenFeedback,
+  onOpenHelpInfo,
+  onOpenShortcuts,
+  onLogout,
+  showFloatingActions = true,
   onNavigate,
 }) => {
   const [personality, setPersonality] = useState<PersonalityMode>(() => {
@@ -172,6 +191,20 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
   const speechRecognitionRef = useRef<any>(null);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+  const [editingText, setEditingText] = useState(false);
+
+  useEffect(() => {
+    const isTextControl = (target: EventTarget | null) => target instanceof HTMLElement
+      && Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
+    const handleFocusIn = (event: FocusEvent) => setEditingText(isTextControl(event.target));
+    const handleFocusOut = () => window.setTimeout(() => setEditingText(isTextControl(document.activeElement)), 0);
+    document.addEventListener('focusin', handleFocusIn);
+    document.addEventListener('focusout', handleFocusOut);
+    return () => {
+      document.removeEventListener('focusin', handleFocusIn);
+      document.removeEventListener('focusout', handleFocusOut);
+    };
+  }, []);
 
   // Monitor visualViewport so mobile virtual keyboard resizes the container and scrolls text
   useEffect(() => {
@@ -223,7 +256,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
         id: activeConversationId,
         title,
         updatedAt: new Date().toISOString(),
-        messages: messages.slice(-MAX_SAVED_MESSAGES),
+        messages: messages.slice(-MAX_SAVED_MESSAGES).map(({ audioUrl: _audioUrl, ...message }) => message),
       };
       const updated = existing
         ? previous.map((conversation) => conversation.id === activeConversationId ? nextConversation : conversation)
@@ -315,9 +348,9 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
     };
   }, []);
 
-  const handleSendMessage = async (suggestedText?: string) => {
+  const handleSendMessage = async (suggestedText?: string, audioBlob?: Blob) => {
     const text = (suggestedText ?? inputValue).trim();
-    if (!text || loading) return;
+    if ((!text && !audioBlob) || loading) return;
 
     if (streamingAbortRef.current) {
       streamingAbortRef.current();
@@ -328,57 +361,73 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
       .filter((item) => item.id !== 'welcome' && !item.error)
       .slice(-10)
       .map((item) => ({ role: item.sender === 'user' ? 'user' as const : 'model' as const, text: item.text }));
-    const userMessage: Message = { id: `user-${Date.now()}`, sender: 'user', text, timestamp: currentTime() };
+    const userMessage: Message = { id: `user-${Date.now()}`, sender: 'user', text: text || 'Mensagem de áudio', timestamp: currentTime(), audioUrl: audioBlob ? URL.createObjectURL(audioBlob) : undefined };
     setMessages((previous) => [...previous, userMessage]);
     setInputValue('');
     setLoading(true);
 
     try {
-      const response = await api.sendCopilotMessage(text, history, getAppLanguage(), personality);
+      const response = audioBlob
+        ? await api.sendCopilotAudio(audioBlob, history, getAppLanguage(), personality)
+        : await api.sendCopilotMessage(text, history, getAppLanguage(), personality);
       const assistantMessageId = `assistant-${Date.now()}`;
       const fullText = response.reply;
 
       if (displayMode === 'realtime') {
-        setMessages((previous) => [...previous, {
-          id: assistantMessageId,
-          sender: 'assistant',
-          text: '',
-          timestamp: currentTime(),
-          mode: response.mode,
-          actions: response.actions,
-        }]);
-        setLoading(false);
-        setStreamingMessageId(assistantMessageId);
+        // Respostas curtas (ex: saudações, status de OP, navegações) ou do modo rápido exibem instantaneamente sem delay!
+        if (fullText.length <= 160 || response.mode === 'data_fallback') {
+          setMessages((previous) => [...previous, {
+            id: assistantMessageId,
+            sender: 'assistant',
+            text: fullText,
+            timestamp: currentTime(),
+            mode: response.mode,
+            actions: response.actions,
+          }]);
+          setLoading(false);
+        } else {
+          // Para respostas mais longas, revelação ultra-rápida e fluida (~150-200ms no total, sem travar o usuário)
+          setMessages((previous) => [...previous, {
+            id: assistantMessageId,
+            sender: 'assistant',
+            text: '',
+            timestamp: currentTime(),
+            mode: response.mode,
+            actions: response.actions,
+          }]);
+          setLoading(false);
+          setStreamingMessageId(assistantMessageId);
 
-        await new Promise<void>((resolve) => {
-          let currentIndex = 0;
-          const totalLength = fullText.length;
-          const stepSize = Math.max(3, Math.ceil(totalLength / 60));
-          const interval = setInterval(() => {
-            currentIndex = Math.min(totalLength, currentIndex + stepSize);
-            const currentSlice = fullText.slice(0, currentIndex);
-            setMessages((previous) =>
-              previous.map((m) => (m.id === assistantMessageId ? { ...m, text: currentSlice } : m))
-            );
-            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+          await new Promise<void>((resolve) => {
+            let currentIndex = 0;
+            const totalLength = fullText.length;
+            const stepSize = Math.max(18, Math.ceil(totalLength / 14));
+            const interval = setInterval(() => {
+              currentIndex = Math.min(totalLength, currentIndex + stepSize);
+              const currentSlice = fullText.slice(0, currentIndex);
+              setMessages((previous) =>
+                previous.map((m) => (m.id === assistantMessageId ? { ...m, text: currentSlice } : m))
+              );
+              messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
 
-            if (currentIndex >= totalLength) {
+              if (currentIndex >= totalLength) {
+                clearInterval(interval);
+                streamingAbortRef.current = null;
+                setStreamingMessageId(null);
+                resolve();
+              }
+            }, 10);
+
+            streamingAbortRef.current = () => {
               clearInterval(interval);
-              streamingAbortRef.current = null;
+              setMessages((previous) =>
+                previous.map((m) => (m.id === assistantMessageId ? { ...m, text: fullText } : m))
+              );
               setStreamingMessageId(null);
               resolve();
-            }
-          }, 16);
-
-          streamingAbortRef.current = () => {
-            clearInterval(interval);
-            setMessages((previous) =>
-              previous.map((m) => (m.id === assistantMessageId ? { ...m, text: fullText } : m))
-            );
-            setStreamingMessageId(null);
-            resolve();
-          };
-        });
+            };
+          });
+        }
       } else {
         setMessages((previous) => [...previous, {
           id: assistantMessageId,
@@ -460,35 +509,96 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
 
   return (
     <>
-      {!isOpen && (
-        <button
-          type="button"
-          onClick={onToggle}
-          title={`${t('Abrir Assistente Flash')} · Ctrl+K`}
-          aria-label={`${t('Abrir Assistente Flash')} (Ctrl+K)`}
-          className="flash-assistant-float fixed bottom-4 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full border border-amber-300 bg-slate-900 shadow-lg shadow-slate-950/20 ring-2 ring-white transition-colors hover:bg-slate-800 hover:shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 sm:bottom-5 sm:right-5"
-        >
-          <img src="/assets/flash-symbol.png" alt="" aria-hidden="true" className="h-7 w-7 object-contain" />
-        </button>
-      )}
+      <AnimatePresence>
+        {!isOpen && showFloatingActions && !editingText && (
+          <motion.div
+            key="flash-float-actions"
+            initial={{ opacity: 0, scale: 0.75, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.75, y: 16 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-2.5 sm:bottom-5 sm:right-5"
+          >
+            {['ADMIN', 'SUPERVISOR', 'OPERATOR'].includes(currentUser?.role || '') && (
+              <button
+                type="button"
+                onClick={() => onNavigate('communications')}
+                title="Central de comunicação"
+                aria-label="Abrir central de comunicação"
+                className="flex h-12 w-12 items-center justify-center rounded-full border border-[#DCE3EB] bg-white text-[#263548] shadow-lg shadow-slate-950/20 ring-2 ring-white transition hover:scale-105 hover:border-[#FFAA00] hover:bg-[#F8FAFC] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#FFAA00]"
+              >
+                <Phone className="h-5 w-5" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onToggle}
+              title={`${t('Abrir Assistente Flash')} · Ctrl+K`}
+              aria-label={`${t('Abrir Assistente Flash')} (Ctrl+K)`}
+              className="flash-assistant-float flex h-14 w-14 items-center justify-center rounded-full border border-amber-300 bg-slate-900 shadow-lg shadow-slate-950/20 ring-2 ring-white transition hover:scale-105 hover:bg-slate-800 hover:shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300"
+            >
+              <img src="/assets/flash-symbol.png" alt="" aria-hidden="true" className="h-7 w-7 object-contain" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {isOpen && (
-        <section
-          role="dialog"
-          aria-modal="true"
-          aria-label={t('Assistente Flash')}
-          style={
-            !fullScreen && typeof window !== 'undefined' && window.innerWidth < 640
-              ? {
-                  bottom: keyboardOffset > 0 ? `${keyboardOffset + 6}px` : undefined,
-                  maxHeight: viewportHeight ? `${viewportHeight - 12}px` : undefined,
-                }
-              : undefined
-          }
-          className={fullScreen
-            ? 'fixed inset-0 z-50 flex min-h-0 flex-col overflow-hidden bg-[#F1F4F7] text-[#263548] md:flex-row'
-            : 'fixed inset-x-2 bottom-2 top-2 z-50 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[#DCE3EB] bg-white text-[#263548] shadow-2xl shadow-slate-950/25 transition-[bottom,max-height] duration-150 ease-out sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-auto sm:h-[min(680px,calc(100dvh-32px))] sm:w-[420px]'}
-        >
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            {!fullScreen && (
+              <motion.button
+                key="assistant-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.28, ease: 'easeOut' }}
+                type="button"
+                aria-label={t('Fechar Assistente Flash')}
+                onClick={onToggle}
+                className="fixed inset-0 z-40 cursor-default bg-slate-950/25 backdrop-blur-[2px]"
+              />
+            )}
+
+            <motion.section
+              key="assistant-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-label={t('Assistente Flash')}
+              initial={
+                fullScreen
+                  ? { opacity: 0, scale: 0.94 }
+                  : { opacity: 0, scale: 0.85, y: 36 }
+              }
+              animate={
+                fullScreen
+                  ? { opacity: 1, scale: 1 }
+                  : { opacity: 1, scale: 1, y: 0 }
+              }
+              exit={
+                fullScreen
+                  ? { opacity: 0, scale: 0.94 }
+                  : { opacity: 0, scale: 0.85, y: 28 }
+              }
+              transition={{
+                duration: 0.35,
+                ease: [0.16, 1, 0.3, 1],
+              }}
+              style={{
+                transformOrigin: fullScreen ? 'center' : 'bottom right',
+                ...(!fullScreen && typeof window !== 'undefined' && window.innerWidth < 640
+                  ? {
+                      bottom: keyboardOffset > 0 ? `${keyboardOffset + 6}px` : undefined,
+                      maxHeight: viewportHeight ? `${viewportHeight - 12}px` : undefined,
+                    }
+                  : undefined),
+              }}
+              className={
+                fullScreen
+                  ? 'fixed inset-0 z-50 flex min-h-0 flex-col overflow-hidden bg-[#F1F4F7] text-[#263548] md:flex-row'
+                  : 'fixed inset-x-2 bottom-2 top-2 z-50 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[#DCE3EB] bg-white text-[#263548] shadow-2xl shadow-slate-950/25 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-auto sm:h-[min(680px,calc(100dvh-32px))] sm:w-[420px]'
+              }
+            >
           {fullScreen && (
             <aside className="hidden w-64 shrink-0 flex-col border-r border-[#263548] bg-[#151C25] text-white md:flex lg:w-72">
               <div className="flex items-center gap-3 border-b border-white/10 px-5 py-5">
@@ -520,6 +630,9 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
                   ))}
                 </div>
               </div>
+              <div className="border-t border-white/10 bg-[#151C25] p-3">
+                <UserAccountMenu currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={() => { setFullScreen(false); onOpenSettings(); }} onOpenFeedback={onOpenFeedback} onOpenHelpInfo={onOpenHelpInfo} onOpenShortcuts={onOpenShortcuts} onLogout={onLogout}/>
+              </div>
             </aside>
           )}
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -534,6 +647,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
               </div>
             </div>
             <div className="ml-3 flex shrink-0 items-center gap-1">
+              {fullScreen && <div className="md:hidden"><UserAccountMenu compact currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={() => { setFullScreen(false); onOpenSettings(); }} onOpenFeedback={onOpenFeedback} onOpenHelpInfo={onOpenHelpInfo} onOpenShortcuts={onOpenShortcuts} onLogout={onLogout}/></div>}
               <button type="button" onClick={startNewConversation} disabled={loading} title={t('Nova conversa')} aria-label={t('Nova conversa')} className={`rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 ${fullScreen ? 'md:hidden' : ''}`}>
                 <MessageSquarePlus className="h-4 w-4" />
               </button>
@@ -670,6 +784,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
                       : 'rounded-tl-sm border border-[#E7ECF1] bg-white text-[#263548]'}`}>
                     <div className="space-y-1">
                       {renderMessageText(message.text)}
+                      {message.audioUrl && <audio controls preload="metadata" src={message.audioUrl} className="mt-2 max-w-full" />}
                       {streamingMessageId === message.id && (
                         <span className="inline-block h-3.5 w-1.5 ml-0.5 rounded-[1px] bg-amber-500 animate-pulse align-middle" aria-hidden="true" />
                       )}
@@ -725,6 +840,8 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
               <div className="mb-2 text-[10px] text-slate-500" aria-live="polite">{isListening ? t('Ouvindo... Fale agora') : ''}</div>
             )}
             <form onSubmit={(event) => { event.preventDefault(); void handleSendMessage(); }} className={`mx-auto flex w-full items-center gap-2 ${fullScreen ? 'max-w-4xl' : ''}`}>
+              <EmojiPicker onSelect={emoji => setInputValue(value => `${value}${emoji}`.slice(0, 2000))} label={t('Inserir emoji')} />
+              <AudioRecorderButton onRecorded={async (audio) => { await handleSendMessage(undefined, audio); }} disabled={loading} label={t('Gravar áudio')} />
               {speechSupported && (
                 <button type="button" onClick={toggleListening} disabled={loading} title={t(isListening ? 'Parar ditado' : 'Ditar pergunta por voz')} aria-label={t(isListening ? 'Parar ditado' : 'Ditar pergunta por voz')} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition disabled:opacity-40 ${isListening ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-[#DCE3EB] bg-white text-slate-500 hover:border-amber-300 hover:text-slate-900'}`}>
                   {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
@@ -753,9 +870,11 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
             <p className="mt-2 text-center text-[10px] text-slate-400">{t('Confira informações críticas na tela de origem antes de agir.')}</p>
           </footer>}
           </div>
-        </section>
-      )}
-    </>
+        </motion.section>
+      </>
+    )}
+  </AnimatePresence>
+</>
   );
 };
 

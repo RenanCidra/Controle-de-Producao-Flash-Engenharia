@@ -66,7 +66,14 @@ export class ProtheusSyncController {
       const result = await ProtheusSyncService.processBundle(bundle, 'REST_API', userIdentifier);
       res.status(201).json(result);
     } catch (error: any) {
-      console.error('Protheus REST sync failed:', error);
+      const isValidationError = error?.message?.includes('não contém registros') ||
+        error?.message?.includes('campos obrigatórios ausentes') ||
+        error?.message?.includes('A carga deve ser um objeto');
+      if (isValidationError) {
+        console.warn('Protheus REST sync validation error:', error.message);
+      } else {
+        console.error('Protheus REST sync failed:', error);
+      }
       res.status(400).json({ error: error.message || 'Falha ao sincronizar dados via API Protheus.' });
     }
   }

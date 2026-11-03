@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import { desc, eq, inArray, lte, sql } from 'drizzle-orm';
 import { db } from '../../db/index.ts';
 import {
@@ -16,6 +16,7 @@ export type CopilotPersonality = 'direct' | 'casual' | 'formal';
 
 export interface CopilotChatOptions {
   message: string;
+  audio?: { data: string; mimeType: string };
   history?: Array<{ role: 'user' | 'model'; text: string }>;
   language?: 'pt-BR' | 'en-US' | 'es-ES';
   personality?: CopilotPersonality;
@@ -82,10 +83,23 @@ export class CopilotService {
   private readonly CONTEXT_TTL_MS = 25_000;
 
   constructor() {
+    this.getAI();
+  }
+
+  private getAI(): GoogleGenAI | null {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
-    const approvedForProduction = process.env.NODE_ENV !== 'production'
-      || process.env.COPILOT_EXTERNAL_DATA_ENABLED === 'true';
-    if (apiKey && approvedForProduction) this.ai = new GoogleGenAI({ apiKey });
+    if (!apiKey) return null;
+    if (!this.ai) {
+      this.ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          },
+        },
+      });
+    }
+    return this.ai;
   }
 
   private async safeSelect<T>(source: SourceName, query: PromiseLike<T[]>): Promise<QueryResult<T>> {
@@ -219,18 +233,13 @@ export class CopilotService {
   }
 
   private isDirectOperationalQuery(message: string): boolean {
-    const norm = message.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
-    return (
-      norm === 'resumo do turno' ||
-      norm === 'quais ops estao atrasadas?' ||
-      norm === 'quais ocorrencias estao abertas?' ||
-      norm === 'quais itens de estoque estao abaixo do minimo?' ||
-      norm === 'ops atrasadas' ||
-      norm === 'ocorrencias abertas' ||
-      norm === 'estoque critico' ||
-      norm === 'turno' ||
-      /^op\s*[0-9a-z._/-]+$/i.test(norm)
-    );
+    const norm = message.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/[?!.,;:]+$/, '');
+    if (/^op\s*[0-9a-z._/-]+$/i.test(norm)) return true;
+    if (/^(resumo(\s+do)?\s+turno|turno|briefing|panorama|visao\s+geral|shift\s+summary)$/i.test(norm)) return true;
+    if (/^(quais\s+)?ops?(\s+estao)?\s+atrasadas?$/i.test(norm) || /^(ops?\s+em\s+atraso|atrasos?)$/i.test(norm)) return true;
+    if (/^(quais\s+)?ocorrencias?(\s+estao)?\s+abertas?$/i.test(norm) || /^(paradas?\s+abertas?|ocorrencias?|problemas?\s+abertos?)$/i.test(norm)) return true;
+    if (/^(quais\s+itens\s+de\s+)?estoque(\s+esta)?\s+(critico|abaixo\s+do\s+minimo)$/i.test(norm) || /^(estoque\s+baixo|estoque\s+critico|insumos\s+criticos)$/i.test(norm)) return true;
+    return false;
   }
 
   private isAuthorshipQuestion(message: string): boolean {
@@ -262,7 +271,18 @@ export class CopilotService {
     const language = options.language || 'pt-BR';
     const personality = options.personality || 'casual';
 
-    if (this.isAuthorshipQuestion(message)) {
+    const aiClient = this.getAI();
+
+    if (options.audio && !aiClient) {
+      const reply = language === 'en-US'
+        ? 'Voice messages are unavailable because the AI service is not enabled for this environment.'
+        : language === 'es-ES'
+          ? 'Los mensajes de voz no están disponibles porque el servicio de IA no está habilitado en este entorno.'
+          : 'O envio de áudio ao Assistente está indisponível porque o serviço de IA não está habilitado neste ambiente.';
+      return { reply, actions: [], mode: 'data_fallback' };
+    }
+
+    if (!options.audio && this.isAuthorshipQuestion(message)) {
       return { reply: this.authorshipReply(language, personality), actions: [], mode: 'data_fallback' };
     }
 
@@ -272,11 +292,11 @@ export class CopilotService {
 
     // Fast-path: Common operational prompts and specific OP lookups return immediately (< 30ms)
     // with exact, real-time factory data from the operational cache.
-    if (this.isDirectOperationalQuery(message) || specificOp?.status === 'found') {
+    if (!options.audio && (this.isDirectOperationalQuery(message) || specificOp?.status === 'found')) {
       return { ...this.generateDataFallback(message, context, specificOp, language, personality), mode: 'data_fallback' };
     }
 
-    if (this.ai) {
+    if (aiClient) {
       try {
         const personalityInstruction = {
           direct: `DIRETRIZ DE PERSONALIDADE - DIRETO E OBJETIVO (PRIORIDADE MÁXIMA):
@@ -299,8 +319,9 @@ ${personalityInstruction}
 
 DIRETRIZES DE ATUAÇÃO:
 - Autoria confirmada: ${appAuthorship.name} foi responsável pela idealização e pelo desenvolvimento deste sistema. Ao perguntarem quem criou, idealizou ou desenvolveu o sistema, responda com esse crédito de forma breve e não invente outros autores.
-- Compreensão aberta: Você é flexível e preparado para qualquer tipo de pergunta ou interação. Responda com simpatia e pertinência a saudações ("olá", "bom dia", "como vai?"), perguntas sobre o dia a dia da fábrica ("o que você sugere olhar agora?", "como está a produção?"), dúvidas de processos industriais (balanceamento, apontamentos SH6 no Protheus, controle de refugo, estruturas SG1, OEE) e navegação no NexusPCP.
-- Seja ágil: Formatação limpa, sem enrolação.
+- Compreensão aberta: Você é flexível, inteligente e preparado para qualquer tipo de pergunta ou interação. Responda com simpatia, naturalidade e pertinência a qualquer assunto fabril, saudações, conversas ou questionamentos do usuário.
+- NUNCA repita respostas genéricas de erro, mensagens prontas ou a mesma lista padronizada de comandos a cada turno. Entenda o que o usuário está dizendo e responda especificamente à mensagem dele.
+- Seja ágil e conciso: Formatação limpa, sem enrolação.
 - Atalhos de navegação: Sempre que for útil direcionar o usuário para uma tela ou para uma OP específica, inclua no final da mensagem uma tag de navegação:
   [[ACTION:NAVIGATE:dashboard]], [[ACTION:NAVIGATE:traceability]], [[ACTION:NAVIGATE:traceability?op=NUMERO]], [[ACTION:NAVIGATE:occurrences]], [[ACTION:NAVIGATE:occurrences?op=NUMERO]], [[ACTION:NAVIGATE:inventory]], [[ACTION:NAVIGATE:production-lines]], [[ACTION:NAVIGATE:production-orders]], ou [[ACTION:NAVIGATE:settings?sub=protheus-sync]].`;
 
@@ -347,18 +368,49 @@ DIRETRIZES DE ATUAÇÃO:
         }));
         const currentTurn = `SNAPSHOT RESUMIDO:\n${JSON.stringify(compactSnapshot)}\n\nPERGUNTA:\n${message}`;
 
-        const modelName = process.env.GEMINI_MODEL?.trim() || 'gemini-3.5-flash-lite';
+        const candidateModels = [
+          process.env.GEMINI_MODEL?.trim(),
+          'gemini-3.8-flash',
+          'gemini-flash-latest',
+          'gemini-3.1-flash-lite',
+        ].filter((m): m is string => Boolean(m && !m.includes('gemini-2.5') && !m.includes('gemini-1.5') && !m.includes('gemini-2.0')));
+
         const callGemini = async (): Promise<string | null> => {
-          const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 7500));
-          const generatePromise = (async () => {
-            const res = await this.ai!.models.generateContent({
-              model: modelName,
-              contents: [...history, { role: 'user', parts: [{ text: currentTurn }] }],
-              config: { systemInstruction, maxOutputTokens: 700 },
-            });
-            return res.text?.trim() || null;
-          })();
-          return Promise.race([generatePromise, timeoutPromise]);
+          for (const model of candidateModels) {
+            try {
+              const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000));
+              const isGemini38 = model.includes('3.8') || model.includes('flash-latest');
+              const config: any = {
+                systemInstruction,
+                ...(isGemini38 ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {}),
+              };
+
+              const generatePromise = (async () => {
+                const res = await aiClient.models.generateContent({
+                  model,
+                  contents: [
+                    ...history,
+                    {
+                      role: 'user',
+                      parts: options.audio
+                        ? [
+                            { text: `Responda ao áudio enviado pelo usuário de forma ágil, natural e contextualizada. Contexto operacional: ${JSON.stringify(compactSnapshot)}` },
+                            { inlineData: options.audio },
+                          ]
+                        : [{ text: currentTurn }],
+                    },
+                  ],
+                  config,
+                });
+                return res.text?.trim() || null;
+              })();
+              const result = await Promise.race([generatePromise, timeoutPromise]);
+              if (result) return result;
+            } catch (err: any) {
+              console.warn(`Tentativa Gemini com modelo '${model}' falhou:`, err?.message || err);
+            }
+          }
+          return null;
         };
 
         const rawText = await callGemini();
@@ -387,6 +439,7 @@ DIRETRIZES DE ATUAÇÃO:
       const target = rawTarget.trim();
       const allowed = target === 'dashboard' || target === 'traceability' || target === 'occurrences'
         || target === 'inventory' || target === 'production-lines' || target === 'production-orders'
+        || target === 'communications' || target === 'quality'
         || target === 'settings?sub=protheus-sync'
         || /^(traceability|occurrences)\?op=[A-Za-z0-9._/-]{1,32}$/.test(target);
       if (!allowed || actions.some((action) => action.target === target)) return '';
@@ -415,6 +468,8 @@ DIRETRIZES DE ATUAÇÃO:
       inventory: { 'pt-BR': 'Abrir estoque', 'en-US': 'Open inventory', 'es-ES': 'Abrir inventario' },
       'production-lines': { 'pt-BR': 'Abrir linhas e postos', 'en-US': 'Open lines and workstations', 'es-ES': 'Abrir líneas y puestos' },
       'production-orders': { 'pt-BR': 'Abrir ordens de produção', 'en-US': 'Open production orders', 'es-ES': 'Abrir órdenes de producción' },
+      communications: { 'pt-BR': 'Abrir central de comunicações', 'en-US': 'Open communications center', 'es-ES': 'Abrir central de comunicaciones' },
+      quality: { 'pt-BR': 'Abrir controle de qualidade', 'en-US': 'Open quality control', 'es-ES': 'Abrir control de calidad' },
       'settings?sub=protheus-sync': { 'pt-BR': 'Ver integração Protheus', 'en-US': 'View Protheus integration', 'es-ES': 'Ver integración de Protheus' },
     };
     return labels[target]?.[language] || (language === 'en-US' ? 'Open screen' : language === 'es-ES' ? 'Abrir pantalla' : 'Abrir tela');
@@ -808,6 +863,87 @@ DIRETRIZES DE ATUAÇÃO:
       };
     }
 
+    // Agradecimentos
+    const saysThanks = /^(obrigad[oa]|valeu|agradecid[oa]|grato|valeuu+|thanks|thank you|gracias)\b/i.test(lower);
+    if (saysThanks) {
+      return {
+        reply: copy(
+          personality === 'direct'
+            ? 'À disposição.'
+            : personality === 'formal'
+              ? 'Permaneço à inteira disposição para o acompanhamento dos indicadores industriais.'
+              : 'Por nada! Sempre que precisar de apoio no PCP ou chão de fábrica, é só chamar.',
+          'You are welcome! Let me know whenever you need operational insights.',
+          '¡De nada! Siempre a la orden para lo que necesites en la planta.'
+        ),
+        actions: [],
+      };
+    }
+
+    // Confirmações / OKs
+    const saysAck = /^(ok|beleza|show|perfeito|certo|entendi|combinado|fechado|legal|joia|maravilha|tranquilo|sim|yes|si)\b/i.test(lower);
+    if (saysAck) {
+      return {
+        reply: copy(
+          personality === 'direct'
+            ? 'Certo. Qual dado deseja consultar agora?'
+            : personality === 'formal'
+              ? 'Entendido. Indique a ordem de produção ou o módulo que requer averiguação.'
+              : 'Beleza! Quando quiser checar alguma OP, linha ou ocorrência, estou por aqui.',
+          'Understood. What would you like to review next?',
+          'Comprendido. ¿Qué te gustaría consultar a continuación?'
+        ),
+        actions: [
+          nav('dashboard', copy('Painel Geral', 'Dashboard', 'Panel General')),
+          nav('traceability', copy('Pedidos e OPs', 'Orders and WOs', 'Pedidos y OP')),
+        ],
+      };
+    }
+
+    // Navegações diretas solicitadas pelo usuário
+    const saysNavComm = /comunicac|central|mensagen|chat|conversa/i.test(lower);
+    if (saysNavComm) {
+      actions.push(nav('communications', copy('Central de Comunicações', 'Communications Center', 'Central de Comunicaciones')));
+      return {
+        reply: copy(
+          'Aqui está o atalho para a Central de Comunicações da fábrica.',
+          'Here is the direct shortcut to the Communications Center.',
+          'Aquí tienes el acceso directo a la Central de Comunicaciones.'
+        ),
+        actions,
+      };
+    }
+
+    const saysNavQuality = /qualidade|inspec|laudo|nao conform/i.test(lower);
+    if (saysNavQuality) {
+      actions.push(nav('quality', copy('Inspeções de Qualidade', 'Quality Inspections', 'Inspecciones de Calidad')));
+      return {
+        reply: copy(
+          'Você pode consultar as inspeções e apontamentos de qualidade pelo atalho abaixo.',
+          'You can inspect quality audits in the Quality module below.',
+          'Puedes consultar las inspecciones en el módulo de Calidad abajo.'
+        ),
+        actions,
+      };
+    }
+
+    const saysRepetition = /repet|generico|robo|mesma coisa|sempre a mesma|parar de falar|engessado|canned/i.test(lower);
+    if (saysRepetition) {
+      actions.push(
+        nav('dashboard', copy('Painel Geral', 'Dashboard', 'Panel General')),
+        nav('traceability', copy('Pedidos e OPs', 'Orders & WOs', 'Pedidos y OP')),
+        nav('occurrences', copy('Ocorrências', 'Occurrences', 'Incidencias')),
+      );
+      return {
+        reply: copy(
+          `Compreendido! Nada de respostas genéricas por aqui. No chão de fábrica neste momento temos **${context.ordersTotal ?? 'várias'} ordens de produção** ativas no espelho Protheus, **${context.delayedOrdersInSample.length} OPs com atraso** na amostragem e **${context.activeOccurrencesTotal ?? 0} ocorrência(s)** em andamento.\n\nVocê pode me fazer qualquer pergunta direta sobre um produto, OP, estoque ou pedir uma análise específica. O que você gostaria de ver agora?`,
+          `Understood! No generic answers here. We currently have **${context.ordersTotal ?? 'several'} active work orders**, **${context.delayedOrdersInSample.length} delayed** in sample, and **${context.activeOccurrencesTotal ?? 0} open issue(s)**. What specific data would you like to review?`,
+          `¡Comprendido! Nada de respuestas genéricas. Actualmente tenemos **${context.ordersTotal ?? 'varias'} órdenes de producción** activas, **${context.delayedOrdersInSample.length} retrasadas** y **${context.activeOccurrencesTotal ?? 0} incidencia(s)**. ¿Qué dato específico deseas consultar?`
+        ),
+        actions,
+      };
+    }
+
     actions.push(
       nav('traceability', copy('Pedidos e OPs', 'Orders & WOs', 'Pedidos y OP')),
       nav('occurrences', copy('Ocorrências', 'Occurrences', 'Incidencias')),
@@ -817,9 +953,9 @@ DIRETRIZES DE ATUAÇÃO:
     if (personality === 'direct') {
       return {
         reply: copy(
-          `Pronto para responder. Digite o número de uma OP, consulte atrasos, ocorrências ou estoques, ou selecione um atalho abaixo:`,
-          `Ready to assist. Enter a work order number, query overdue items, occurrences, or inventory, or use the shortcuts below:`,
-          `Listo para responder. Ingrese el número de una OP, consulte atrasos o inventarios, o use los accesos directos abajo:`
+          `Operação em andamento: **${context.ordersTotal ?? 0} OPs** no espelho (${context.delayedOrdersInSample.length} com atraso) e **${context.activeOccurrencesTotal ?? 0} ocorrência(s)** ativas. Digite o número de uma OP, peça o resumo do turno ou selecione um módulo:`,
+          `Operation active: **${context.ordersTotal ?? 0} WOs** in mirror (${context.delayedOrdersInSample.length} delayed) and **${context.activeOccurrencesTotal ?? 0} active occurrence(s)**. Enter a WO number or select a shortcut:`,
+          `Operación activa: **${context.ordersTotal ?? 0} OP** en espejo y **${context.activeOccurrencesTotal ?? 0} incidencia(s)** activas. Ingrese una OP o seleccione un módulo:`
         ),
         actions,
       };
@@ -828,9 +964,9 @@ DIRETRIZES DE ATUAÇÃO:
     if (personality === 'formal') {
       return {
         reply: copy(
-          `O Assistente Flash permanece à disposição para o fornecimento de dados consolidados e suporte à tomada de decisão no ambiente de manufatura.\n\nSugestões de consulta institucional:\n- Análise de OPs específicas pelo número identificador\n- Avaliação de conformidade temporal de ordens em andamento\n- Auditoria de ocorrências ativas e estoque de segurança\n\nIndique a consulta desejada para prosseguirmos.`,
-          `Flash Assistant remains at your disposal for consolidated operational data and manufacturing decision support.\n\nSuggested inquiries:\n- Specific work order analysis by number\n- Schedule compliance audit on open orders\n- Review of active shop floor occurrences and safety stock\n\nPlease indicate your inquiry to proceed.`,
-          `El Asistente Flash queda a su disposición para la provisión de información operativa consolidada y soporte a la toma de decisiones fabriles.`
+          `O monitoramento operacional computa atualmente **${context.ordersTotal ?? 0} ordens de produção** e **${context.activeOccurrencesTotal ?? 0} ocorrência(s)** fabris sob acompanhamento. Indique o número da ordem de produção, solicite o briefing do turno ou acesse um dos módulos correspondentes:`,
+          `Operational monitoring currently records **${context.ordersTotal ?? 0} production orders** and **${context.activeOccurrencesTotal ?? 0} active occurrences**. Please specify a work order number, request a shift briefing, or select a module below:`,
+          `El monitoreo operativo registra actualmente **${context.ordersTotal ?? 0} órdenes de producción** y **${context.activeOccurrencesTotal ?? 0} incidencias** activas. Indique la OP o seleccione un módulo:`
         ),
         actions,
       };
@@ -838,9 +974,9 @@ DIRETRIZES DE ATUAÇÃO:
 
     return {
       reply: copy(
-        `Com certeza! Estou à disposição para conversar sobre qualquer aspecto da fábrica e do PCP.\n\nVocê pode me perguntar, por exemplo:\n* *"Como está o andamento da produção hoje?"*\n* *"Quais OPs estão atrasadas?"*\n* *"Ver status da OP 000101"*\n* *"Quais ocorrências estão em aberto?"*\n* Ou me pedir para navegar para qualquer área do sistema.\n\nO que você gostaria de ver agora?`,
-        `Certainly! I am here to chat and help with any aspect of factory operations and production control.\n\nYou can ask me things like:\n* *"How is production going today?"*\n* *"Which work orders are overdue?"*\n* *"Check status of WO 000101"*\n* *"Are there open occurrences?"*\n* Or ask me to take you to any section of the app.\n\nWhat would you like to explore?`,
-        `¡Por supuesto! Estoy a tu disposición para ayudarte con qualquer aspecto de la fábrica y del PCP.\n\nPuedes preguntarme por el estado de producción, consultar una OP, revisar incidencias o pedirme que te lleve a cualquier pantalla. ¿Qué te gustaría ver ahora?`
+        `Estou acompanhando a fábrica em tempo real. No momento temos **${context.ordersTotal ?? 0} ordens de produção** rodando no espelho Protheus (${context.delayedOrdersInSample.length} com atraso na amostra recente) e **${context.activeOccurrencesTotal ?? 0} ocorrência(s)** em aberto.\n\nVocê pode me fazer qualquer pergunta sobre a produção, passar o número de uma OP ou navegar pelos atalhos abaixo:`,
+        `I am monitoring the factory floor in real time. We currently have **${context.ordersTotal ?? 0} work orders** in the Protheus mirror and **${context.activeOccurrencesTotal ?? 0} open occurrences**.\n\nYou can ask any question about production, look up a specific work order, or navigate using the shortcuts below:`,
+        `Estoy siguiendo la planta en tiempo real. Actualmente tenemos **${context.ordersTotal ?? 0} órdenes de producción** en Protheus y **${context.activeOccurrencesTotal ?? 0} incidencias** abiertas.\n\nPuedes hacerme cualquier consulta o usar los accesos directos abajo:`
       ),
       actions,
     };
