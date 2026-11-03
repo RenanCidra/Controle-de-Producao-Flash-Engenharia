@@ -1943,4 +1943,42 @@ Object.assign(es, {
   'Selecione uma conversa': 'Seleccione una conversación',
 });
 
+Object.assign(en, {
+  'Carregando dados…': 'Loading data…',
+  'Serviço temporariamente indisponível': 'Service temporarily unavailable',
+  'Não foi possível obter resposta do sistema. Verifique sua conexão e tente novamente.': 'The system did not respond. Check your connection and try again.',
+  'Tentando novamente…': 'Trying again…',
+  'Carregando conversas e grupos…': 'Loading conversations and groups…',
+  'Conversas indisponíveis': 'Conversations unavailable',
+  'Não foi possível carregar suas conversas e grupos. Confira a conexão com o sistema e tente novamente.': 'Your conversations and groups could not be loaded. Check the system connection and try again.',
+  'Carregando mensagens…': 'Loading messages…',
+  'Mensagens indisponíveis': 'Messages unavailable',
+  'Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente.': 'This conversation could not be loaded. Check your connection and try again.',
+  'Carregando central de comunicação…': 'Loading communication center…',
+  'Atualizando painel geral…': 'Updating dashboard…',
+  'Dados do painel indisponíveis': 'Dashboard data unavailable',
+  'Não foi possível consultar os dados necessários para montar os indicadores. Verifique a conexão do sistema e tente novamente.': 'The data needed to build these indicators could not be retrieved. Check the system connection and try again.',
+  'Resumo indisponível': 'Summary unavailable',
+  'O sistema não conseguiu consultar os dados do espelho.': 'The system could not retrieve the mirrored data.',
+});
+
+Object.assign(es, {
+  'Carregando dados…': 'Cargando datos…',
+  'Serviço temporariamente indisponível': 'Servicio temporalmente no disponible',
+  'Não foi possível obter resposta do sistema. Verifique sua conexão e tente novamente.': 'El sistema no respondió. Compruebe su conexión e inténtelo de nuevo.',
+  'Tentando novamente…': 'Intentando de nuevo…',
+  'Carregando conversas e grupos…': 'Cargando conversaciones y grupos…',
+  'Conversas indisponíveis': 'Conversaciones no disponibles',
+  'Não foi possível carregar suas conversas e grupos. Confira a conexão com o sistema e tente novamente.': 'No se pudieron cargar sus conversaciones y grupos. Compruebe la conexión con el sistema e inténtelo de nuevo.',
+  'Carregando mensagens…': 'Cargando mensajes…',
+  'Mensagens indisponíveis': 'Mensajes no disponibles',
+  'Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente.': 'No se pudo cargar esta conversación. Compruebe su conexión e inténtelo de nuevo.',
+  'Carregando central de comunicação…': 'Cargando el centro de comunicación…',
+  'Atualizando painel geral…': 'Actualizando el panel general…',
+  'Dados do painel indisponíveis': 'Datos del panel no disponibles',
+  'Não foi possível consultar os dados necessários para montar os indicadores. Verifique a conexão do sistema e tente novamente.': 'No se pudieron consultar los datos necesarios para generar los indicadores. Compruebe la conexión del sistema e inténtelo de nuevo.',
+  'Resumo indisponível': 'Resumen no disponible',
+  'O sistema não conseguiu consultar os dados do espelho.': 'El sistema no pudo consultar los datos del espejo.',
+});
+
 export const catalogs: Record<Exclude<AppLanguage, 'pt-BR'>, Record<string, string>> = { 'en-US': en, 'es-ES': es };

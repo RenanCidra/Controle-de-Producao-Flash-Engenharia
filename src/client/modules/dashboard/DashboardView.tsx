@@ -6,6 +6,7 @@ import {
 import { ActiveTab } from '../../components/Sidebar.tsx';
 import { api } from '../../api.ts';
 import { translateText } from '../../i18n/index.ts';
+import { DataUnavailableState } from '../../components/DataStatus.tsx';
 
 interface DashboardStats {
   totalProtheusPv: number;
@@ -46,6 +47,8 @@ interface DashboardViewProps {
   onRefresh: () => void;
   onNavigate: (tab: ActiveTab) => void;
   onNavigateToConnectors: () => void;
+  onDataRequestSettled: () => void;
+  localPreview: boolean;
 }
 
 const formatDateTime = (date: string | null | undefined) => {
@@ -62,7 +65,7 @@ const situationColors: Record<string, string> = {
   ATRASADO: '#DC2626', RISCO_ATRASO: '#D97706', NO_PRAZO: '#0284C7', CONCLUIDO: '#159B72', SEM_PREVISAO: '#64748B',
 };
 
-export const DashboardView: React.FC<DashboardViewProps> = ({ stats, refreshing, refreshError, statsUpdatedAt, onRefresh, onNavigate, onNavigateToConnectors }) => {
+export const DashboardView: React.FC<DashboardViewProps> = ({ stats, refreshing, refreshError, statsUpdatedAt, onRefresh, onNavigate, onNavigateToConnectors, onDataRequestSettled, localPreview }) => {
   const [draft, setDraft] = useState<Filters>(emptyFilters);
   const [applied, setApplied] = useState<Filters>(emptyFilters);
   const [showFilters, setShowFilters] = useState(false);
@@ -74,6 +77,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ stats, refreshing,
     setLoading(true);
     setError(null);
     try {
+      if (localPreview) {
+        await new Promise(resolve => window.setTimeout(resolve, 450));
+        const items = [
+          { idOp: 1001, numeroOp: 'OP-260184', statusProtheusOp: 'Em produção', codigoProduto: 'SINAL-LED-01', descricaoProduto: 'Conjunto sinalizador LED', clienteNome: 'Cliente demonstração', numeroPv: 'PV-00842', quantidadePlanejada: 120, quantidadeProduzida: 78, statusPrazo: 'RISCO_ATRASO' },
+          { idOp: 1002, numeroOp: 'OP-260185', statusProtheusOp: 'Liberada', codigoProduto: 'LUM-AUX-04', descricaoProduto: 'Luminária auxiliar', clienteNome: 'Cliente demonstração', numeroPv: 'PV-00843', quantidadePlanejada: 60, quantidadeProduzida: 24, statusPrazo: 'NO_PRAZO' },
+          { idOp: 1003, numeroOp: 'OP-260176', statusProtheusOp: 'Em produção', codigoProduto: 'PAINEL-IND-02', descricaoProduto: 'Painel de sinalização industrial', clienteNome: 'Cliente demonstração', numeroPv: 'PV-00821', quantidadePlanejada: 35, quantidadeProduzida: 17, statusPrazo: 'ATRASADO' },
+          { idOp: 1004, numeroOp: 'OP-260160', statusProtheusOp: 'Encerrada', codigoProduto: 'SUPORTE-INOX', descricaoProduto: 'Suporte inox', clienteNome: 'Cliente demonstração', numeroPv: 'PV-00805', quantidadePlanejada: 90, quantidadeProduzida: 90, statusPrazo: 'CONCLUIDO' },
+        ].filter(item => !filters.search || `${item.numeroOp} ${item.codigoProduto} ${item.descricaoProduto} ${item.numeroPv}`.toLowerCase().includes(filters.search.toLowerCase()));
+        setData({
+          total: items.length,
+          items,
+          summary: { totalOps: 4, totalPlanejado: 305, totalProduzido: 209, totalRefugo: 7, percentualProduzido: 68.5, porSituacao: { ATRASADO: 1, RISCO_ATRASO: 1, NO_PRAZO: 1, CONCLUIDO: 1, SEM_PREVISAO: 0 }, principaisProdutos: [{ codigoProduto: 'SINAL-LED-01', descricaoProduto: 'Conjunto sinalizador LED', quantidadeProduzida: 78 }, { codigoProduto: 'LUM-AUX-04', descricaoProduto: 'Luminária auxiliar', quantidadeProduzida: 24 }, { codigoProduto: 'PAINEL-IND-02', descricaoProduto: 'Painel industrial', quantidadeProduzida: 17 }] },
+        });
+        return;
+      }
       const result = await api.getTraceabilityMatrix({ ...filters, situacaoPrazo: (filters.situacaoPrazo || undefined) as any, page: 1, limit: 10 });
       setData(result);
     } catch (err: any) {
@@ -82,9 +100,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ stats, refreshing,
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [localPreview]);
 
-  useEffect(() => { void loadProduction(applied); }, [applied, loadProduction]);
+  useEffect(() => {
+    void loadProduction(applied).finally(onDataRequestSettled);
+  }, [applied, loadProduction, onDataRequestSettled]);
 
   const applyFilters = (event?: React.FormEvent) => {
     event?.preventDefault();
@@ -108,8 +128,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ stats, refreshing,
   const maxStatusCount = Math.max(1, ...Object.values(summary?.porSituacao || {}).map(Number));
   const maxProductQty = Math.max(1, ...(summary?.principaisProdutos || []).map((product: any) => product.quantidadeProduzida));
 
+  if (!localPreview && (refreshError || error)) {
+    return <div className="mx-auto max-w-[1520px] space-y-5">
+      <section className="rounded-lg border border-[#DCE3EB] bg-white p-4 shadow-xs">
+        <h3 className="text-sm font-semibold text-[#263548]">Atualização do espelho</h3>
+        <p className="mt-1 text-xs text-[#64748B]">Os gráficos e indicadores dependem dos dados consultados no sistema.</p>
+      </section>
+      <DataUnavailableState
+        title="Dados do painel indisponíveis"
+        description="Não foi possível consultar os dados necessários para montar os indicadores. Verifique a conexão do sistema e tente novamente."
+        onRetry={() => { onRefresh(); void loadProduction(applied); }}
+        retrying={refreshing || loading}
+      />
+      <div className="text-center"><button type="button" onClick={onNavigateToConnectors} className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#9A5B00] hover:underline">Ver conectores e cargas <ChevronRight className="h-3.5 w-3.5" /></button></div>
+    </div>;
+  }
+
   return (
     <div className="mx-auto max-w-[1520px] space-y-5 select-none">
+      {localPreview && <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">Prévia local: indicadores e OPs demonstrativos, sem consulta ao banco.</p>}
       <section className="rounded-lg border border-[#DCE3EB] bg-white p-4 shadow-xs">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>

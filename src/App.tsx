@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { api, AuthUser } from './client/api.ts';
 import { Sidebar, ActiveTab } from './client/components/Sidebar.tsx';
@@ -19,6 +19,7 @@ import { UserProfileModal } from './client/modules/auth/UserProfileModal.tsx';
 import { FlashAssistantWidget } from './client/components/FlashAssistantWidget.tsx';
 import { WelcomeView } from './client/modules/home/WelcomeView.tsx';
 import { CommunicationsView } from './client/modules/communications/CommunicationsView.tsx';
+import { LoadingState } from './client/components/DataStatus.tsx';
 
 const DEV_PREVIEW_AUTH = import.meta.env.DEV && import.meta.env.VITE_DEV_PREVIEW_AUTH === 'true';
 const DEV_PREVIEW_USER: AuthUser = {
@@ -54,6 +55,36 @@ export default function App() {
   const [setupStatusError, setSetupStatusError] = useState('');
   const [languageRevision, setLanguageRevision] = useState(0);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [communicationsTransitionLoading, setCommunicationsTransitionLoading] = useState(false);
+  const [communicationsTransitionFading, setCommunicationsTransitionFading] = useState(false);
+  const transitionStartedAtRef = useRef(0);
+  const transitionTimerRef = useRef<number | null>(null);
+  const pendingDashboardDataRef = useRef(false);
+  const pendingDashboardStatsRef = useRef(false);
+  const beginCommunicationsTransition = () => {
+    if (transitionTimerRef.current !== null) window.clearTimeout(transitionTimerRef.current);
+    transitionStartedAtRef.current = Date.now();
+    setCommunicationsTransitionFading(false);
+    setCommunicationsTransitionLoading(true);
+  };
+  const finishCommunicationsTransition = useCallback(() => {
+    const minimumVisibleMs = 500;
+    const remainingMs = Math.max(0, minimumVisibleMs - (Date.now() - transitionStartedAtRef.current));
+    if (transitionTimerRef.current !== null) window.clearTimeout(transitionTimerRef.current);
+    transitionTimerRef.current = window.setTimeout(() => {
+      setCommunicationsTransitionFading(true);
+      transitionTimerRef.current = window.setTimeout(() => setCommunicationsTransitionLoading(false), 300);
+    }, remainingMs);
+  }, []);
+  const navigateToCommunications = () => {
+    beginCommunicationsTransition();
+    setActiveTab('communications');
+  };
+  const onCommunicationsInitialLoadComplete = finishCommunicationsTransition;
+  const onDashboardDataRequestSettled = useCallback(() => {
+    if (!pendingDashboardStatsRef.current) finishCommunicationsTransition();
+    pendingDashboardDataRef.current = false;
+  }, [finishCommunicationsTransition]);
 
   // Hotkey global (Ctrl+K ou Cmd+K) para alternar o Assistente Flash
   useEffect(() => {
@@ -135,6 +166,24 @@ export default function App() {
 
   const loadStats = useCallback(async () => {
     setStatsLoading(true);
+    if (DEV_PREVIEW_AUTH) {
+      await new Promise(resolve => window.setTimeout(resolve, 350));
+      setStats({
+        totalProtheusPv: 42,
+        totalProtheusOp: 68,
+        totalProtheusProducts: 126,
+        totalProtheusBatches: 12,
+        totalProtheusStructures: 84,
+        totalProtheusRoutings: 57,
+        totalProtheusAppointments: 214,
+        latestProtheusImport: { batchCode: 'PREVIEW-LOCAL', sourceType: 'DEMONSTRAÇÃO', entityType: 'PRODUÇÃO', recordsCount: 214, status: 'PREVIEW', createdAt: new Date().toISOString() },
+        organization: { id: 1, name: 'Flash Engenharia', tradeName: 'Flash Engenharia', plantCode: 'PLANTA DEMONSTRAÇÃO', timezone: 'America/Sao_Paulo' },
+      });
+      setStatsError(null);
+      setStatsUpdatedAt(new Date().toISOString());
+      setStatsLoading(false);
+      return;
+    }
     try {
       const data = await api.getStats();
       if (data) {
@@ -282,7 +331,7 @@ export default function App() {
     <div key={languageRevision} className="flex h-screen w-screen overflow-hidden bg-[#F1F4F7] font-sans text-[#263548] antialiased">
       {DEV_PREVIEW_AUTH && (
         <div className="fixed left-1/2 top-2 z-[60] -translate-x-1/2 rounded-full border border-amber-400/40 bg-slate-950/90 px-4 py-2 text-xs font-semibold text-amber-200 shadow-lg">
-          Prévia local autenticada · conta ADMIN simulada · alterações bloqueadas
+          Prévia local · dados demonstrativos · nenhuma alteração persistida
         </div>
       )}
       {message && (
@@ -305,7 +354,17 @@ export default function App() {
       {activeTab === 'communications' ? (
         <CommunicationsView
           currentUser={currentUser}
-          onBack={() => setActiveTab('dashboard')}
+          localPreview={DEV_PREVIEW_AUTH}
+          onInitialLoadComplete={onCommunicationsInitialLoadComplete}
+          onBack={async () => {
+            beginCommunicationsTransition();
+            pendingDashboardDataRef.current = true;
+            pendingDashboardStatsRef.current = true;
+            setActiveTab('dashboard');
+            await loadStats();
+            pendingDashboardStatsRef.current = false;
+            if (!pendingDashboardDataRef.current) finishCommunicationsTransition();
+          }}
           onOpenProfile={() => setProfileModalOpen(true)}
           onOpenSettings={() => {
             setAssistantOpen(false);
@@ -348,7 +407,7 @@ export default function App() {
         <div className="flex h-[100dvh] w-full min-w-0 overflow-hidden bg-[#F1F4F7]">
           <Sidebar
             activeTab={activeTab}
-            setActiveTab={setActiveTab}
+            setActiveTab={(tab) => tab === 'communications' ? navigateToCommunications() : setActiveTab(tab)}
             currentUser={currentUser}
             onOpenAuth={() => setAuthModalOpen(true)}
             onOpenProfile={() => setProfileModalOpen(true)}
@@ -384,7 +443,7 @@ export default function App() {
             />
 
             <div className="min-w-0 flex-1 overflow-y-auto bg-transparent p-3 sm:p-4 lg:p-6">
-              {activeTab === 'home' && <WelcomeView stats={stats} loading={statsLoading} error={statsError} onNavigate={setActiveTab} onOpenConnectors={() => handleNavigateToSettings('connectors')} />}
+              {activeTab === 'home' && <WelcomeView stats={stats} loading={statsLoading} error={statsError} onNavigate={(tab) => tab === 'communications' ? navigateToCommunications() : setActiveTab(tab)} onOpenConnectors={() => handleNavigateToSettings('connectors')} onRetry={() => void loadStats()} />}
 
               {activeTab === 'dashboard' && (
                 <DashboardView
@@ -393,8 +452,10 @@ export default function App() {
                   refreshError={statsError}
                   statsUpdatedAt={statsUpdatedAt}
                   onRefresh={() => void loadStats()}
-                  onNavigate={(tab) => setActiveTab(tab)}
+                  onNavigate={(tab) => tab === 'communications' ? navigateToCommunications() : setActiveTab(tab)}
                   onNavigateToConnectors={() => handleNavigateToSettings('connectors')}
+                  onDataRequestSettled={onDashboardDataRequestSettled}
+                  localPreview={DEV_PREVIEW_AUTH}
                 />
               )}
 
@@ -532,7 +593,7 @@ export default function App() {
               setAssistantOpen(false);
               handleNavigateToSettings((options?.subTab as SettingsSubTab) || 'general');
             } else if (targetTab === 'communications') {
-              setActiveTab('communications');
+              navigateToCommunications();
             } else if (
               [
                 'dashboard',
@@ -547,6 +608,13 @@ export default function App() {
             }
           }}
         />
+      )}
+      {communicationsTransitionLoading && (
+        <div className={`fixed inset-0 z-[70] flex items-center justify-center bg-[#F1F4F7]/90 px-4 backdrop-blur-sm transition-opacity duration-300 ease-out ${communicationsTransitionFading ? 'opacity-0' : 'opacity-100'}`} role="status" aria-live="polite">
+          <div className="w-full max-w-md rounded-2xl border border-[#DCE3EB] bg-white p-6 shadow-xl">
+            <LoadingState compact label={activeTab === 'communications' ? 'Carregando central de comunicação…' : 'Atualizando painel geral…'} />
+          </div>
+        </div>
       )}
       <UserProfileModal isOpen={profileModalOpen} user={currentUser} onClose={() => setProfileModalOpen(false)} />
     </div>

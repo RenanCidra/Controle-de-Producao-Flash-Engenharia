@@ -1,14 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, Copy, Forward, Info, Lock, MessageCircle, MessageSquarePlus, MoreVertical, Plus, Reply, Search, Send, UserRound, Users, X } from 'lucide-react';
+import { ArrowLeft, Copy, Forward, Info, MessageCircle, MessageSquarePlus, MoreVertical, Plus, Reply, Search, Send, UserRound, Users, X } from 'lucide-react';
 import { api, type AuthUser } from '../../api.ts';
 import { UserAccountMenu } from '../../components/UserAccountMenu.tsx';
 import { AudioRecorderButton } from '../../components/AudioRecorderButton.tsx';
 import { EmojiPicker } from '../../components/EmojiPicker.tsx';
 import { translateText } from '../../i18n/index.ts';
+import { DataUnavailableState, LoadingState } from '../../components/DataStatus.tsx';
 
 type Group = { id: number; name: string; sector: string; createdAt: string; unreadCount: number; lastMessage: Pick<Message, 'body' | 'authorUid' | 'authorName' | 'createdAt'> | null };
-type Message = { id: number; body: string; authorUid: string; authorName: string; createdAt: string; replyToMessageId?: number | null; hasAudio?: boolean; audioDurationMs?: number | null };
+type Message = { id: number; body: string; authorUid: string; authorName: string; createdAt: string; replyToMessageId?: number | null; hasAudio?: boolean; audioDurationMs?: number | null; audioPreviewUrl?: string };
 type DirectoryUser = { id: number; name: string; department: string | null; role?: string };
 type DirectConversation = {
   conversationId: number;
@@ -22,8 +22,30 @@ type DirectConversation = {
 };
 
 const formatMessageTime = (date: string) => new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const waitForPreview = (ms = 450) => new Promise(resolve => window.setTimeout(resolve, ms));
+const previewDirectory: DirectoryUser[] = [
+  { id: 2, name: 'Marcos Oliveira', department: 'Sinalização', role: 'MONITOR' },
+  { id: 3, name: 'Juliana Santos', department: 'Luz auxiliar', role: 'SUPERVISOR' },
+  { id: 4, name: 'Rafael Costa', department: 'Teste e inspeção', role: 'OPERATOR' },
+];
+const previewConversationMessages = (conversationKey: string, currentUser: AuthUser | null): Message[] => {
+  const now = Date.now();
+  const own = { authorUid: currentUser?.uid || 'dev-preview-admin', authorName: currentUser?.name || 'Administrador local' };
+  const other = { authorUid: 'preview-marcos', authorName: 'Marcos Oliveira' };
+  const messages = conversationKey === 'group:1'
+    ? [
+      { id: 101, body: 'Bom dia, equipe. A OP-260184 está priorizada para hoje.', ...other, createdAt: new Date(now - 25 * 60000).toISOString() },
+      { id: 102, body: 'Recebido. Estamos finalizando a montagem do conjunto sinalizador.', ...own, createdAt: new Date(now - 18 * 60000).toISOString() },
+      { id: 103, body: 'Assim que concluir, aviso por aqui para atualizar o próximo setor.', ...other, createdAt: new Date(now - 6 * 60000).toISOString() },
+    ]
+    : [
+      { id: 201, body: 'Oi! Você consegue confirmar o andamento da OP-260185?', ...other, createdAt: new Date(now - 14 * 60000).toISOString() },
+      { id: 202, body: 'Sim. A luminária auxiliar está em montagem e segue no prazo.', ...own, createdAt: new Date(now - 9 * 60000).toISOString() },
+    ];
+  return messages;
+};
 
-export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack: () => void; onOpenProfile: () => void; onOpenSettings: () => void; onLogout: () => void }> = ({ currentUser, onBack, onOpenProfile, onOpenSettings, onLogout }) => {
+export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localPreview: boolean; onBack: () => void; onInitialLoadComplete: () => void; onOpenProfile: () => void; onOpenSettings: () => void; onLogout: () => void }> = ({ currentUser, localPreview, onBack, onInitialLoadComplete, onOpenProfile, onOpenSettings, onLogout }) => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [directs, setDirects] = useState<DirectConversation[]>([]);
   const [directory, setDirectory] = useState<DirectoryUser[]>([]);
@@ -32,8 +54,13 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
   const [draftRecipient, setDraftRecipient] = useState<DirectoryUser | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const messagesRef = useRef<Message[]>([]);
+  const previewAudioUrlsRef = useRef<string[]>([]);
   const [body, setBody] = useState('');
   const [error, setError] = useState('');
+  const [listsLoading, setListsLoading] = useState(true);
+  const [listsError, setListsError] = useState(false);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [messagesError, setMessagesError] = useState(false);
   const [newGroup, setNewGroup] = useState(false);
   const [newConversation, setNewConversation] = useState(false);
   const [name, setName] = useState('');
@@ -49,77 +76,51 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
   const [search, setSearch] = useState('');
   const [userSearch, setUserSearch] = useState('');
   const [section, setSection] = useState<'conversations' | 'groups'>('conversations');
-  const [showIntro, setShowIntro] = useState(true);
-  const [progress, setProgress] = useState(0);
-  const [leavingSystem, setLeavingSystem] = useState(false);
-  const [leavingProgress, setLeavingProgress] = useState(0);
   const lastSeenMessageRef = useRef<{ conversationKey: string; messageId: number } | null>(null);
   const loadedConversationRef = useRef<string | null>(null);
+  const activeConversationRef = useRef<string | null>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
   const loadingOlderRef = useRef(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlderMessages, setHasOlderMessages] = useState(true);
   const canCreateGroups = ['ADMIN', 'SUPERVISOR'].includes(api.getUser()?.role || '');
   const selectedConversation = selectedGroupId !== null || selectedDirectId !== null || draftRecipient !== null;
-
-  // Transições suaves de entrada na Central de Comunicações
-  useEffect(() => {
-    const progressTimer = window.setTimeout(() => {
-      setProgress(100);
-    }, 40);
-
-    const removeTimer = window.setTimeout(() => {
-      setShowIntro(false);
-    }, 1450);
-
-    return () => {
-      window.clearTimeout(progressTimer);
-      window.clearTimeout(removeTimer);
-    };
-  }, []);
-
-  const handleDismissIntro = () => {
-    setShowIntro(false);
-  };
-
-  // Transição suave ao voltar da central para o sistema
-  const handleBackToSystem = () => {
-    if (leavingSystem) return;
-    setLeavingSystem(true);
-    setLeavingProgress(0);
-
-    window.setTimeout(() => {
-      setLeavingProgress(100);
-    }, 30);
-
-    window.setTimeout(() => {
-      onBack();
-    }, 1050);
-  };
-
-  const handleSkipLeaving = () => {
-    onBack();
-  };
+  activeConversationRef.current = selectedGroupId !== null ? `group:${selectedGroupId}` : selectedDirectId !== null ? `direct:${selectedDirectId}` : null;
 
   const loadGroups = useCallback(async () => {
+    if (localPreview) {
+      await waitForPreview();
+      setGroups([{ id: 1, name: 'Comunicação da Produção', sector: 'Sinalização', createdAt: new Date().toISOString(), unreadCount: 2, lastMessage: { body: 'Assim que concluir, aviso por aqui para atualizar o próximo setor.', authorUid: 'preview-marcos', authorName: 'Marcos Oliveira', createdAt: new Date(Date.now() - 6 * 60000).toISOString() } }]);
+      return true;
+    }
     try {
       const data = await api.getCommunicationGroups();
       setGroups(Array.isArray(data) ? data : []);
+      return true;
     } catch (e: any) {
       setGroups([]);
       setError(e.message);
+      return false;
     }
-  }, []);
+  }, [localPreview]);
   const loadDirects = useCallback(async () => {
+    if (localPreview) {
+      await waitForPreview();
+      setDirects([{ conversationId: 11, userId: 2, name: 'Marcos Oliveira', department: 'Sinalização', role: 'MONITOR', createdAt: new Date().toISOString(), lastMessage: { body: 'Sim. A luminária auxiliar está em montagem e segue no prazo.', authorUid: currentUser?.uid || 'dev-preview-admin', authorName: currentUser?.name || 'Administrador local', createdAt: new Date(Date.now() - 9 * 60000).toISOString() }, unreadCount: 0 }]);
+      return true;
+    }
     try {
       const data = await api.getCommunicationDirectConversations();
       setDirects(Array.isArray(data) ? data : []);
+      return true;
     } catch (e: any) {
       setDirects([]);
       setError(e.message);
+      return false;
     }
-  }, []);
+  }, [currentUser, localPreview]);
   const loadDirectory = async () => {
+    if (localPreview) { await waitForPreview(250); setDirectory(previewDirectory); return; }
     try {
       const data = await api.getCommunicationDirectory();
       setDirectory(Array.isArray(data) ? data : []);
@@ -133,9 +134,21 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
       const conversationKey = selectedGroupId !== null ? `group:${selectedGroupId}` : selectedDirectId !== null ? `direct:${selectedDirectId}` : null;
       if (!conversationKey) { setMessages([]); loadedConversationRef.current = null; return; }
       const initial = loadedConversationRef.current !== conversationKey;
+      if (initial) { setMessagesLoading(true); setMessagesError(false); }
+      if (localPreview) {
+        await waitForPreview();
+        if (activeConversationRef.current !== conversationKey) return;
+        if (!initial) return;
+        const previewMessages = previewConversationMessages(conversationKey, currentUser);
+        setMessages(previewMessages);
+        loadedConversationRef.current = conversationKey;
+        setHasOlderMessages(false);
+        return;
+      }
       const latestLoadedId = messagesRef.current.at(-1)?.id;
       if (selectedGroupId !== null) {
         const data = await api.getCommunicationMessages(selectedGroupId, initial ? { limit: 30 } : latestLoadedId ? { afterId: latestLoadedId, limit: 30 } : { limit: 30 });
+        if (activeConversationRef.current !== conversationKey) return;
         const loaded = Array.isArray(data) ? data : [];
         if (initial) { setMessages(loaded); loadedConversationRef.current = conversationKey; setHasOlderMessages(loaded.length === 30); }
         else if (loaded.length) setMessages(previous => [...previous, ...loaded.filter(item => !previous.some(existing => existing.id === item.id))]);
@@ -147,6 +160,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
         if (latest) lastSeenMessageRef.current = { conversationKey: key, messageId: latest.id };
       } else if (selectedDirectId !== null) {
         const data = await api.getCommunicationDirectMessages(selectedDirectId, initial ? { limit: 30 } : latestLoadedId ? { afterId: latestLoadedId, limit: 30 } : { limit: 30 });
+        if (activeConversationRef.current !== conversationKey) return;
         const loaded = Array.isArray(data) ? data : [];
         if (initial) { setMessages(loaded); loadedConversationRef.current = conversationKey; setHasOlderMessages(loaded.length === 30); }
         else if (loaded.length) setMessages(previous => [...previous, ...loaded.filter(item => !previous.some(existing => existing.id === item.id))]);
@@ -160,12 +174,17 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
         setMessages([]);
       }
     } catch (e: any) {
+      if (activeConversationRef.current !== (selectedGroupId !== null ? `group:${selectedGroupId}` : selectedDirectId !== null ? `direct:${selectedDirectId}` : null)) return;
       setMessages([]);
       setError(e.message);
+      setMessagesError(true);
+    } finally {
+      if (activeConversationRef.current === (selectedGroupId !== null ? `group:${selectedGroupId}` : selectedDirectId !== null ? `direct:${selectedDirectId}` : null)) setMessagesLoading(false);
     }
-  }, [selectedGroupId, selectedDirectId, loadGroups, loadDirects]);
+  }, [selectedGroupId, selectedDirectId, loadGroups, loadDirects, currentUser, localPreview]);
 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+  useEffect(() => () => previewAudioUrlsRef.current.forEach(URL.revokeObjectURL), []);
 
   const loadOlderMessages = async () => {
     if (!hasOlderMessages || loadingOlderRef.current || !messagesRef.current.length) return;
@@ -187,16 +206,23 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
   };
 
   useEffect(() => {
-    void loadGroups();
-    void loadDirects();
-    const timer = window.setInterval(() => { void loadGroups(); void loadDirects(); }, 10000);
-    return () => window.clearInterval(timer);
-  }, [loadGroups, loadDirects]);
+    setListsLoading(true);
+    setListsError(false);
+    Promise.all([loadGroups(), loadDirects()]).then(results => setListsError(results.some(result => !result))).finally(() => {
+      setListsLoading(false);
+      onInitialLoadComplete();
+    });
+    const timer = localPreview ? null : window.setInterval(() => {
+      void Promise.all([loadGroups(), loadDirects()]).then(results => setListsError(results.some(result => !result)));
+    }, 10000);
+    return () => { if (timer !== null) window.clearInterval(timer); };
+  }, [loadGroups, loadDirects, onInitialLoadComplete, localPreview]);
   useEffect(() => {
     void loadMessages();
+    if (localPreview) return;
     const timer = window.setInterval(() => void loadMessages(), 10000);
     return () => window.clearInterval(timer);
-  }, [loadMessages]);
+  }, [loadMessages, localPreview]);
 
   const visibleGroups = useMemo(
     () => (Array.isArray(groups) ? groups : []).filter(group => group && `${group.name || ''} ${group.sector || ''} ${group.lastMessage?.body || ''}`.toLowerCase().includes((search || '').toLowerCase())),
@@ -210,10 +236,18 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
     () => (Array.isArray(directory) ? directory : []).filter(user => user && `${user.name || ''} ${user.department || ''}`.toLowerCase().includes((userSearch || '').toLowerCase())),
     [directory, userSearch],
   );
+  const retryLists = async () => {
+    setListsLoading(true);
+    setListsError(false);
+    const results = await Promise.all([loadGroups(), loadDirects()]);
+    setListsError(results.some(result => !result));
+    setListsLoading(false);
+  };
   const openConversationInfo = async () => {
     setError('');
     setProfileUser(null);
     if (selectedGroupId !== null) {
+      if (localPreview) { setGroupMembers(previewDirectory); setConversationInfoOpen(true); return; }
       try { setGroupMembers(await api.getCommunicationGroupMembers(selectedGroupId)); }
       catch (e: any) { setError(e.message); return; }
     } else if (selectedDirectId !== null) {
@@ -231,6 +265,15 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
     try {
       const [kind, rawId] = forwardTarget.split(':');
       const targetId = Number(rawId);
+      if (localPreview) {
+        const forwarded: Message = { id: Date.now(), body: forwardedBody, authorUid: currentUser?.uid || 'dev-preview-admin', authorName: currentUser?.name || 'Administrador local', createdAt: new Date().toISOString() };
+        if (kind === 'group') setGroups(previous => previous.map(group => group.id === targetId ? { ...group, lastMessage: forwarded } : group));
+        else if (kind === 'direct') setDirects(previous => previous.map(conversation => conversation.conversationId === targetId ? { ...conversation, lastMessage: forwarded } : conversation));
+        if (kind === 'group' && selectedGroupId === targetId || kind === 'direct' && selectedDirectId === targetId) setMessages(previous => [...previous, forwarded]);
+        setForwardingMessage(null);
+        setForwardTarget('');
+        return;
+      }
       if (kind === 'group') await api.sendCommunicationMessage(targetId, forwardedBody);
       else if (kind === 'direct') await api.sendCommunicationDirectMessage(targetId, forwardedBody);
       setForwardingMessage(null);
@@ -266,6 +309,15 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
     event.preventDefault();
     setError('');
     try {
+      if (localPreview) {
+        const created: Group = { id: Date.now(), name, sector, createdAt: new Date().toISOString(), unreadCount: 0, lastMessage: null };
+        setGroups(previous => [created, ...previous]);
+        setNewGroup(false);
+        setSection('groups');
+        clearSelection();
+        setSelectedGroupId(created.id);
+        return;
+      }
       const group = await api.createCommunicationGroup(name, sector, memberIds);
       setNewGroup(false);
       setSection('groups');
@@ -274,13 +326,26 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
       await loadGroups();
     } catch (e: any) { setError(e.message); }
   };
+  const sendAudioMessage = async (audio: Blob, duration: number) => {
+    if (localPreview) {
+      const audioPreviewUrl = URL.createObjectURL(audio);
+      previewAudioUrlsRef.current.push(audioPreviewUrl);
+      const message: Message = { id: Date.now(), body: 'Áudio', authorUid: currentUser?.uid || 'dev-preview-admin', authorName: currentUser?.name || 'Administrador local', createdAt: new Date().toISOString(), hasAudio: true, audioDurationMs: duration, audioPreviewUrl };
+      setMessages(previous => [...previous, message]);
+      if (selectedGroupId !== null) setGroups(previous => previous.map(group => group.id === selectedGroupId ? { ...group, lastMessage: message } : group));
+      if (selectedDirectId !== null) setDirects(previous => previous.map(conversation => conversation.conversationId === selectedDirectId ? { ...conversation, lastMessage: message } : conversation));
+      return;
+    }
+    if (selectedGroupId !== null) { const created = await api.sendCommunicationGroupAudio(selectedGroupId, audio, duration); setMessages(previous => [...previous, created]); await loadGroups(); }
+    else if (selectedDirectId !== null) { const created = await api.sendCommunicationDirectAudio(selectedDirectId, audio, duration); setMessages(previous => [...previous, created]); await loadDirects(); }
+  };
   const startConversation = (user: DirectoryUser) => {
     const existing = directs.find(conversation => conversation.userId === user.id);
     const existingId = existing ? (existing.conversationId || (existing as any).id) : null;
     setSection('conversations');
     setSelectedGroupId(null);
     setSelectedDirectId(existingId);
-    if (existingId) void api.markCommunicationDirectRead(existingId).then(loadDirects).catch(() => undefined);
+    if (existingId && !localPreview) void api.markCommunicationDirectRead(existingId).then(loadDirects).catch(() => undefined);
     setDraftRecipient(existing ? null : user);
     setMessages([]);
     setBody('');
@@ -293,6 +358,23 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
     if (!messageBody) return;
     setError('');
     try {
+      if (localPreview) {
+        const created: Message = { id: Date.now(), body: messageBody, authorUid: currentUser?.uid || 'dev-preview-admin', authorName: currentUser?.name || 'Administrador local', createdAt: new Date().toISOString(), replyToMessageId: replyingTo?.id };
+        let targetDirectId = selectedDirectId;
+        if (draftRecipient) {
+          targetDirectId = Date.now();
+          loadedConversationRef.current = `direct:${targetDirectId}`;
+          setSelectedDirectId(targetDirectId);
+          setDirects(previous => [{ conversationId: targetDirectId!, userId: draftRecipient.id, name: draftRecipient.name, department: draftRecipient.department, role: draftRecipient.role, createdAt: created.createdAt, lastMessage: created, unreadCount: 0 }, ...previous]);
+          setDraftRecipient(null);
+        }
+        setMessages(previous => [...previous, created]);
+        if (selectedGroupId !== null) setGroups(previous => previous.map(group => group.id === selectedGroupId ? { ...group, lastMessage: created } : group));
+        else if (targetDirectId !== null) setDirects(previous => previous.map(conversation => conversation.conversationId === targetDirectId ? { ...conversation, lastMessage: created } : conversation));
+        setBody('');
+        setReplyingTo(null);
+        return;
+      }
       let directConversationId = selectedDirectId;
       if (selectedGroupId !== null) {
         await api.sendCommunicationMessage(selectedGroupId, messageBody, replyingTo?.id);
@@ -322,172 +404,6 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
   const unreadDirectTotal = directs.reduce((total, conversation) => total + (conversation.unreadCount || 0), 0);
 
   return <section className="relative flex h-[100dvh] w-full min-w-0 flex-col overflow-hidden bg-white text-[#263548]">
-    <AnimatePresence>
-      {showIntro && (
-        <motion.div
-          key="comm-loading-screen"
-          role="status"
-          aria-live="polite"
-          aria-label="Carregando Central de Comunicações"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0, scale: 1.02 }}
-          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-          onClick={handleDismissIntro}
-          className="fixed inset-0 z-50 flex cursor-pointer flex-col items-center justify-center bg-[#0C1118]/96 backdrop-blur-xl px-4 py-8 text-white select-none"
-        >
-          <div className="flex flex-col items-center justify-center text-center">
-            {/* Badge circular central com anel dourado animado */}
-            <div className="relative mb-6 flex h-28 w-28 items-center justify-center sm:h-32 sm:w-32">
-              {/* Trilha do anel */}
-              <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 100 100">
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="44"
-                  className="stroke-white/10"
-                  strokeWidth="3"
-                  fill="none"
-                />
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="44"
-                  stroke="url(#comm-gold-gradient)"
-                  strokeWidth="3.5"
-                  strokeLinecap="round"
-                  fill="none"
-                  strokeDasharray="276"
-                  strokeDashoffset={276 - (276 * progress) / 100}
-                  className="transition-all duration-[1150ms] ease-out drop-shadow-[0_0_10px_rgba(255,170,0,0.5)]"
-                />
-                <defs>
-                  <linearGradient id="comm-gold-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#FFAA00" />
-                    <stop offset="100%" stopColor="#FFD15C" />
-                  </linearGradient>
-                </defs>
-              </svg>
-
-              {/* Anel giratório sutil externo (spinner halo) */}
-              <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-[#FFAA00] opacity-70 [animation-duration:1.8s]" />
-
-              {/* Disco escuro central */}
-              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#161E28] border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.6)] sm:h-24 sm:w-24">
-                {/* Ícone de balão com 3 pontinhos idêntico ao modelo */}
-                <svg
-                  className="h-9 w-9 text-[#FFAA00] sm:h-11 sm:w-11 drop-shadow-[0_0_6px_rgba(255,170,0,0.35)]"
-                  viewBox="0 0 48 48"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M12 36l-4 4V12a4 4 0 0 1 4-4h24a4 4 0 0 1 4 4v18a4 4 0 0 1-4 4H12z" />
-                  <circle cx="18" cy="21" r="1.6" fill="currentColor" stroke="none" />
-                  <circle cx="24" cy="21" r="1.6" fill="currentColor" stroke="none" />
-                  <circle cx="30" cy="21" r="1.6" fill="currentColor" stroke="none" />
-                </svg>
-              </div>
-            </div>
-
-            {/* Título: "Carregando Central de Comunicações" */}
-            <h2 className="text-xl font-medium tracking-tight text-white sm:text-2xl">
-              Carregando <span className="font-bold text-[#FFAA00]">Central de Comunicações</span>
-            </h2>
-
-            {/* Subtítulo: "Inicializando conversas, grupos e participantes..." */}
-            <p className="mt-2 text-xs text-slate-300 sm:text-sm">
-              Inicializando conversas, grupos e participantes...
-            </p>
-
-            {/* Barra de progresso com gradiente e brilho dourado */}
-            <div className="mt-6 h-2 w-64 overflow-hidden rounded-full bg-white/10 sm:w-80">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-[#FFAA00] via-[#FFB82E] to-[#FFAA00] shadow-[0_0_12px_rgba(255,170,0,0.6)] transition-all duration-[1150ms] ease-out"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-      {leavingSystem && (
-        <motion.div
-          key="comm-leaving-screen"
-          role="status"
-          aria-live="polite"
-          aria-label="Retornando ao Sistema"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.35, ease: 'easeInOut' }}
-          onClick={handleSkipLeaving}
-          className="fixed inset-0 z-50 flex cursor-pointer flex-col items-center justify-center bg-[#0C1118]/96 backdrop-blur-xl px-4 py-8 text-white select-none"
-        >
-          <div className="flex flex-col items-center justify-center text-center">
-            {/* Badge circular central com anel dourado animado e símbolo da Flash */}
-            <div className="relative mb-6 flex h-28 w-28 items-center justify-center sm:h-32 sm:w-32">
-              <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 100 100">
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="44"
-                  className="stroke-white/10"
-                  strokeWidth="3"
-                  fill="none"
-                />
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="44"
-                  stroke="url(#leaving-gold-gradient)"
-                  strokeWidth="3.5"
-                  strokeLinecap="round"
-                  fill="none"
-                  strokeDasharray="276"
-                  strokeDashoffset={276 - (276 * leavingProgress) / 100}
-                  className="transition-all duration-[950ms] ease-out drop-shadow-[0_0_10px_rgba(255,170,0,0.5)]"
-                />
-                <defs>
-                  <linearGradient id="leaving-gold-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#FFAA00" />
-                    <stop offset="100%" stopColor="#FFD15C" />
-                  </linearGradient>
-                </defs>
-              </svg>
-
-              <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-[#FFAA00] opacity-70 [animation-duration:1.6s]" />
-
-              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#161E28] border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.6)] sm:h-24 sm:w-24">
-                <img
-                  src="/assets/flash-symbol.png"
-                  alt="Flash"
-                  className="h-9 w-9 object-contain drop-shadow-[0_0_8px_rgba(255,170,0,0.5)] sm:h-11 sm:w-11"
-                />
-              </div>
-            </div>
-
-            <h2 className="text-xl font-medium tracking-tight text-white sm:text-2xl">
-              Retornando ao <span className="font-bold text-[#FFAA00]">Sistema</span>
-            </h2>
-
-            <p className="mt-2 text-xs text-slate-300 sm:text-sm">
-              Sincronizando painel, OPs e chão de fábrica...
-            </p>
-
-            <div className="mt-6 h-2 w-64 overflow-hidden rounded-full bg-white/10 sm:w-80">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-[#FFAA00] via-[#FFB82E] to-[#FFAA00] shadow-[0_0_12px_rgba(255,170,0,0.6)] transition-all duration-[950ms] ease-out"
-                style={{ width: `${leavingProgress}%` }}
-              />
-            </div>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#263548] bg-[#151C25] px-3 text-white sm:px-6">
       <div className="flex min-w-0 items-center gap-3">
         <img src="/assets/flash-brand.svg" alt="Flash Engenharia" className="h-8 w-[132px] shrink-0 object-contain object-left md:hidden" />
@@ -496,7 +412,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
       </div>
       <div className="flex shrink-0 items-center gap-1">
         <div className="md:hidden"><UserAccountMenu compact currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onLogout={onLogout}/></div>
-        <button type="button" onClick={handleBackToSystem} className="inline-flex items-center gap-2 rounded-lg px-2 py-2 text-xs font-semibold text-slate-200 transition hover:bg-[#263548] hover:text-white sm:px-3"><ArrowLeft size={15}/><span className="hidden sm:inline">Voltar ao sistema</span><span className="sm:hidden">Voltar</span></button>
+        <button type="button" onClick={onBack} className="inline-flex items-center gap-2 rounded-lg px-2 py-2 text-xs font-semibold text-slate-200 transition hover:bg-[#263548] hover:text-white sm:px-3"><ArrowLeft size={15}/><span className="hidden sm:inline">Voltar ao sistema</span><span className="sm:hidden">Voltar</span></button>
       </div>
     </header>
 
@@ -519,13 +435,13 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {section === 'groups' ? (
+          {listsLoading ? <LoadingState compact label="Carregando conversas e grupos…" /> : listsError ? <DataUnavailableState compact title="Conversas indisponíveis" description="Não foi possível carregar suas conversas e grupos. Confira a conexão com o sistema e tente novamente." onRetry={() => void retryLists()} retrying={listsLoading} /> : section === 'groups' ? (
             visibleGroups.length ? (
               visibleGroups.map((group, index) => (
                 <button
                   key={`group-${group.id || index}`}
                   type="button"
-                  onClick={() => { setSelectedGroupId(group.id); setSelectedDirectId(null); setDraftRecipient(null); setMessages([]); setReplyingTo(null); lastSeenMessageRef.current = null; void api.markCommunicationGroupRead(group.id).then(loadGroups).catch(() => undefined); }}
+                  onClick={() => { setSelectedGroupId(group.id); setSelectedDirectId(null); setDraftRecipient(null); setMessages([]); setMessagesLoading(true); setMessagesError(false); setReplyingTo(null); lastSeenMessageRef.current = null; if (!localPreview) void api.markCommunicationGroupRead(group.id).then(loadGroups).catch(() => undefined); }}
                   className={`flex w-full items-center gap-3 border-b border-[#F1F4F7] px-4 py-3.5 text-left ${selectedGroupId === group.id ? 'bg-[#F1F4F7]' : 'hover:bg-slate-50'}`}
                 >
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]">
@@ -549,7 +465,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
                   <button
                     key={`direct-${directId}`}
                     type="button"
-                    onClick={() => { setSelectedGroupId(null); setSelectedDirectId(directId); setDraftRecipient(null); setMessages([]); setReplyingTo(null); lastSeenMessageRef.current = null; void api.markCommunicationDirectRead(directId).then(loadDirects).catch(() => undefined); }}
+                    onClick={() => { setSelectedGroupId(null); setSelectedDirectId(directId); setDraftRecipient(null); setMessages([]); setMessagesLoading(true); setMessagesError(false); setReplyingTo(null); lastSeenMessageRef.current = null; if (!localPreview) void api.markCommunicationDirectRead(directId).then(loadDirects).catch(() => undefined); }}
                     className={`flex w-full items-center gap-3 border-b border-[#F1F4F7] px-4 py-3.5 text-left ${selectedDirectId === directId ? 'bg-[#F1F4F7]' : 'hover:bg-slate-50'}`}
                   >
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]">
@@ -580,12 +496,12 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; onBack
       <main className={`${selectedConversation ? 'flex' : 'hidden md:flex'} min-w-0 flex-1 flex-col bg-[#F1F4F7]`}>
         {selectedGroup ? <>
           <header className="flex items-center gap-3 border-b border-[#DCE3EB] bg-white px-4 py-3.5 sm:px-5"><button type="button" onClick={clearSelection} aria-label="Voltar à lista" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7] md:hidden"><ArrowLeft size={18}/></button><span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]"><Users size={18}/></span><button type="button" onClick={() => void openConversationInfo()} className="min-w-0 flex-1 text-left"><h2 className="truncate text-sm font-semibold text-[#263548]">{selectedGroup.name}</h2><p className="text-xs text-slate-500">{selectedGroup.sector} · {groupMembers.length || 'Ver'} participantes</p></button><button type="button" onClick={() => void openConversationInfo()} title="Dados do grupo" aria-label="Dados do grupo" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7]"><Info size={18}/></button></header>
-          <MessageList messages={messages} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={hasOlderMessages} loadingOlder={loadingOlder} groupId={selectedGroupId} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={setMessageDetails}/>
-          <MessageComposer body={body} setBody={setBody} send={send} onSendAudio={async (audio, duration) => { const created = await api.sendCommunicationGroupAudio(selectedGroup.id, audio, duration); setMessages(previous => [...previous, created]); await loadGroups(); }} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
+          {messagesLoading ? <LoadingState compact label="Carregando mensagens…" /> : messagesError ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <MessageList messages={messages} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={hasOlderMessages} loadingOlder={loadingOlder} groupId={selectedGroupId} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={setMessageDetails}/>}
+          <MessageComposer body={body} setBody={setBody} send={send} onSendAudio={sendAudioMessage} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
         </> : directTitle ? <>
           <header className="flex items-center gap-3 border-b border-[#DCE3EB] bg-white px-4 py-3.5 sm:px-5"><button type="button" onClick={clearSelection} aria-label="Voltar à lista" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7] md:hidden"><ArrowLeft size={18}/></button><span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]"><MessageCircle size={18}/></span><button type="button" onClick={() => void openConversationInfo()} className="min-w-0 flex-1 text-left"><h2 className="truncate text-sm font-semibold text-[#263548]">{directTitle}</h2><p className="text-xs text-slate-500">{draftRecipient ? 'Nova conversa · será criada ao enviar a primeira mensagem' : directDepartment || 'Conversa direta'}</p></button><button type="button" onClick={() => void openConversationInfo()} title="Ver perfil" aria-label="Ver perfil" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7]"><Info size={18}/></button></header>
-          <MessageList messages={messages} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={hasOlderMessages} loadingOlder={loadingOlder} directId={selectedDirectId} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={setMessageDetails}/>
-          <MessageComposer body={body} setBody={setBody} send={send} onSendAudio={async (audio, duration) => { if (selectedDirectId !== null) { const created = await api.sendCommunicationDirectAudio(selectedDirectId, audio, duration); setMessages(previous => [...previous, created]); await loadDirects(); } }} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
+          {messagesLoading ? <LoadingState compact label="Carregando mensagens…" /> : messagesError ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <MessageList messages={messages} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={hasOlderMessages} loadingOlder={loadingOlder} directId={selectedDirectId} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={setMessageDetails}/>}
+          <MessageComposer body={body} setBody={setBody} send={send} onSendAudio={sendAudioMessage} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
         </> : <div className="m-auto max-w-md px-6 text-center"><div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white text-[#916B19] shadow-sm"><MessageCircle size={28}/></div><h2 className="text-lg font-semibold text-[#263548]">Sua comunicação de produção</h2><p className="mt-2 text-sm leading-6 text-slate-500">Selecione uma conversa ou grupo. As mensagens ficam visíveis apenas para seus participantes.</p></div>}
         {error && <p role="alert" className="border-t border-rose-100 bg-rose-50 px-4 py-2 text-xs text-rose-700">{error}</p>}
       </main>
@@ -636,7 +552,7 @@ const MessageList: React.FC<{ messages: Message[]; scrollerRef: React.RefObject<
       {openMenuId === message.id && <div className={`absolute ${own ? 'right-1' : 'left-1'} top-8 z-30 w-44 overflow-hidden rounded-xl border border-[#DCE3EB] bg-white py-1 shadow-xl`}><button type="button" onClick={() => { onDetails(message); setOpenMenuId(null); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Info size={14}/>Dados da mensagem</button><button type="button" onClick={() => { onReply(message); setOpenMenuId(null); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Reply size={14}/>Responder</button><button type="button" onClick={() => void copyMessage(message)} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Copy size={14}/>Copiar</button><button type="button" onClick={() => { onForward(message); setOpenMenuId(null); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Forward size={14}/>Encaminhar</button></div>}
       <p className="mb-1 text-[10px] font-semibold text-[#916B19]">{message.authorName}</p>
       {message.replyToMessageId && <div className="mb-2 border-l-2 border-[#FFAA00] bg-[#F1F4F7]/80 px-2.5 py-1.5"><p className="text-[10px] font-semibold text-[#916B19]">{quoted?.authorName || 'Mensagem anterior'}</p><p className="line-clamp-2 whitespace-pre-wrap break-words text-xs text-slate-600">{quoted?.body || 'Conteúdo fora do histórico carregado'}</p></div>}
-      {message.hasAudio && groupId !== undefined && groupId !== null ? <PrivateAudioPlayer message={message} load={() => api.getCommunicationGroupAudio(groupId, message.id)}/> : message.hasAudio && directId !== undefined && directId !== null ? <PrivateAudioPlayer message={message} load={() => api.getCommunicationDirectAudio(directId, message.id)}/> : <p className="whitespace-pre-wrap break-words text-sm text-[#263548]">{message.body}</p>}{message.hasAudio && <p className="mt-1 text-[10px] text-slate-500">Áudio · {Math.max(1, Math.round((message.audioDurationMs || 0) / 1000))}s</p>}<time className="mt-1 block text-right text-[10px] text-slate-400">{formatMessageTime(message.createdAt)}</time>
+      {message.audioPreviewUrl ? <audio controls preload="metadata" src={message.audioPreviewUrl} className="max-w-full"/> : message.hasAudio && groupId !== undefined && groupId !== null ? <PrivateAudioPlayer message={message} load={() => api.getCommunicationGroupAudio(groupId, message.id)}/> : message.hasAudio && directId !== undefined && directId !== null ? <PrivateAudioPlayer message={message} load={() => api.getCommunicationDirectAudio(directId, message.id)}/> : <p className="whitespace-pre-wrap break-words text-sm text-[#263548]">{message.body}</p>}{message.hasAudio && <p className="mt-1 text-[10px] text-slate-500">Áudio · {Math.max(1, Math.round((message.audioDurationMs || 0) / 1000))}s</p>}<time className="mt-1 block text-right text-[10px] text-slate-400">{formatMessageTime(message.createdAt)}</time>
     </article>;
   })}</div>;
 };
