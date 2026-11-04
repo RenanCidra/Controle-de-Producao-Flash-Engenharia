@@ -1548,6 +1548,7 @@ Object.assign(en, {
 	"Acesso e histórico controlados": "Controlled access and history",
 	"Use contas individuais, perfis de acesso e trilha de auditoria.": "Use individual accounts, access profiles, and an audit trail.",
 	"Acesso interno protegido por autenticação": "Internal access protected by authentication",
+	"Prévia local · usuário ADMIN simulado · conexão do banco e Protheus verificada separadamente · alterações bloqueadas": "Local preview · simulated ADMIN user · database and Protheus connectivity checked separately · changes disabled",
 	"Acesso interno protegido.": "Protected internal access.",
 	"Primeiro acesso": "First access",
 	"Acesso ao sistema": "System access",
@@ -1581,6 +1582,7 @@ Object.assign(es, {
 	"Acesso e histórico controlados": "Acceso e historial controlados",
 	"Use contas individuais, perfis de acesso e trilha de auditoria.": "Use cuentas individuales, perfiles de acceso y un registro de auditoría.",
 	"Acesso interno protegido por autenticação": "Acceso interno protegido por autenticación",
+	"Prévia local · usuário ADMIN simulado · conexão do banco e Protheus verificada separadamente · alterações bloqueadas": "Vista previa local · usuario ADMIN simulado · conexión de la base de datos y Protheus verificada por separado · cambios deshabilitados",
 	"Acesso interno protegido.": "Acceso interno protegido.",
 	"Primeiro acesso": "Primer acceso",
 	"Acesso ao sistema": "Acceso al sistema",
@@ -2049,6 +2051,22 @@ Object.assign(es, {
   'Abrindo Central de Comunicação…': 'Abriendo el centro de comunicación…', 'Abrindo configurações…': 'Abriendo configuración…', 'Abrindo módulo…': 'Abriendo módulo…',
   'Não foi possível abrir este módulo': 'No se pudo abrir este módulo', 'O restante do sistema continua disponível. Tente abrir o módulo novamente ou volte ao painel inicial.': 'El resto del sistema sigue disponible. Intente abrir el módulo de nuevo o vuelva a la pantalla de inicio.',
   'Recarregar sistema': 'Recargar el sistema', 'Voltar ao painel': 'Volver al panel',
+});
+
+Object.assign(en, {
+  'Tema da interface': 'Interface theme', 'Mesclado (atual)': 'Mixed (current)', 'Claro': 'Light', 'Escuro': 'Dark',
+  'Padrão do sistema': 'System default', 'O padrão do sistema acompanha a preferência de aparência do dispositivo.': 'System default follows this device’s appearance preference.',
+  'Tema atualizado e salvo neste dispositivo.': 'Theme updated and saved on this device.',
+  'Tema aplicado, mas não foi possível salvá-lo neste dispositivo.': 'Theme applied, but could not be saved on this device.',
+  'Não foi possível salvar as preferências neste dispositivo.': 'Could not save preferences on this device.',
+});
+
+Object.assign(es, {
+  'Tema da interface': 'Tema de la interfaz', 'Mesclado (atual)': 'Combinado (actual)', 'Claro': 'Claro', 'Escuro': 'Oscuro',
+  'Padrão do sistema': 'Predeterminado del sistema', 'O padrão do sistema acompanha a preferência de aparência do dispositivo.': 'El modo predeterminado sigue la apariencia preferida de este dispositivo.',
+  'Tema atualizado e salvo neste dispositivo.': 'Tema actualizado y guardado en este dispositivo.',
+  'Tema aplicado, mas não foi possível salvá-lo neste dispositivo.': 'Tema aplicado, pero no se pudo guardar en este dispositivo.',
+  'Não foi possível salvar as preferências neste dispositivo.': 'No se pudieron guardar las preferencias en este dispositivo.',
 });
 
 export const catalogs: Record<Exclude<AppLanguage, 'pt-BR'>, Record<string, string>> = { 'en-US': en, 'es-ES': es };

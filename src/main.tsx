@@ -1,6 +1,11 @@
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import { api } from './client/api.ts';
+import { applyThemePreference, readUserPreferences } from './client/modules/auth/user-preferences.ts';
+
+const initialUser = api.getUser();
+if (initialUser) applyThemePreference(readUserPreferences(initialUser.uid).theme);
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

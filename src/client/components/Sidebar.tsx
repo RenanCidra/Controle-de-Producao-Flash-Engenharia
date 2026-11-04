@@ -69,7 +69,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <>
     {mobileOpen && <button type="button" aria-label="Fechar menu" onClick={onCloseMobile} className="fixed inset-0 z-30 bg-black/55 md:hidden" />}
-    <aside className={`fixed inset-y-0 left-0 z-40 flex h-[100dvh] w-72 shrink-0 flex-col border-r border-[#202936] bg-[#151C25] text-slate-300 transition-[width,transform] duration-200 md:relative md:z-20 md:translate-x-0 ${collapsed ? 'md:w-[76px]' : 'md:w-64'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+    <aside data-theme-surface="sidebar" className={`fixed inset-y-0 left-0 z-40 flex h-[100dvh] w-72 shrink-0 flex-col border-r border-[#202936] bg-[#151C25] text-slate-300 transition-[width,transform] duration-200 md:relative md:z-20 md:translate-x-0 ${collapsed ? 'md:w-[76px]' : 'md:w-64'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
       {/* Brand Header */}
       <div className={`h-16 border-b border-[#202936] flex items-center ${collapsed ? 'justify-center px-2' : 'justify-between px-5'}`}>
         <button type="button" onClick={() => { setActiveTab('home'); onCloseMobile(); }} className={`flex items-center rounded-md focus:outline-none focus:ring-2 focus:ring-[#FFAA00] ${collapsed ? '' : 'gap-3'}`} title={translateText('Início')} aria-label={translateText('Ir para a página inicial')}>

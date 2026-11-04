@@ -4,7 +4,7 @@ import { api, AuthUser } from '../../api.ts';
 import { AppLanguage } from '../../i18n/catalog.ts';
 import { getAppLanguage, setAppLanguage, translateText } from '../../i18n/index.ts';
 import { Modal } from '../../components/Modal.tsx';
-import { readUserPreferences, saveUserPreferences } from './user-preferences.ts';
+import { applyThemePreference, readUserPreferences, saveUserPreferences, type ThemePreference } from './user-preferences.ts';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -15,6 +15,7 @@ interface UserProfileModalProps {
 export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, user, onClose }) => {
   const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
   const [language, setLanguage] = useState<AppLanguage>('pt-BR');
+  const [theme, setTheme] = useState<ThemePreference>('mixed');
   const [message, setMessage] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -28,6 +29,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, user
     const preferences = readUserPreferences(user?.uid);
     setAvatarDataUrl(preferences.avatarDataUrl);
     setLanguage(preferences.language || getAppLanguage() as AppLanguage);
+    setTheme(preferences.theme);
     setMessage('');
     setCurrentPassword('');
     setNewPassword('');
@@ -85,9 +87,18 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, user
       setMessage('Entre com sua conta para salvar suas preferências.');
       return;
     }
-    saveUserPreferences(user.uid, { avatarDataUrl, language });
+    const saved = saveUserPreferences(user.uid, { avatarDataUrl, language, theme });
     setAppLanguage(language);
-    setMessage('Preferências salvas neste dispositivo.');
+    setMessage(saved ? 'Preferências salvas neste dispositivo.' : 'Não foi possível salvar as preferências neste dispositivo.');
+  };
+
+  const handleThemeChange = (nextTheme: ThemePreference) => {
+    setTheme(nextTheme);
+    applyThemePreference(nextTheme);
+    if (user?.uid) {
+      const saved = saveUserPreferences(user.uid, { theme: nextTheme });
+      setMessage(saved ? 'Tema atualizado e salvo neste dispositivo.' : 'Tema aplicado, mas não foi possível salvá-lo neste dispositivo.');
+    }
   };
 
   const initials = (user?.name || '?').trim().split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase();
@@ -107,6 +118,14 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, user
 
         <section className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
           <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">Personalização</h4>
+          <label htmlFor="profile-theme" className="mt-3 block text-xs font-semibold text-slate-300">{translateText('Tema da interface')}</label>
+          <select id="profile-theme" value={theme} onChange={(event) => handleThemeChange(event.target.value as ThemePreference)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white">
+            <option value="mixed">{translateText('Mesclado (atual)')}</option>
+            <option value="light">{translateText('Claro')}</option>
+            <option value="dark">{translateText('Escuro')}</option>
+            <option value="system">{translateText('Padrão do sistema')}</option>
+          </select>
+          <p className="mt-1 text-[11px] text-slate-500">{translateText('O padrão do sistema acompanha a preferência de aparência do dispositivo.')}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">
               <ImagePlus className="h-4 w-4 text-amber-400" /> {translateText('Escolher foto')}

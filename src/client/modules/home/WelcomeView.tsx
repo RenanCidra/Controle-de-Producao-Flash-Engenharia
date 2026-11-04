@@ -22,7 +22,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ stats, loading, error,
 
   return (
     <div className="mx-auto max-w-[1520px] space-y-5 pb-8">
-      <section className="relative isolate overflow-hidden rounded-2xl border border-[#202936] bg-[#111923] shadow-sm">
+      <section data-theme-preserve="dark" className="relative isolate overflow-hidden rounded-2xl border border-[#202936] bg-[#111923] shadow-sm">
         <div className="absolute inset-0 z-0 bg-cover bg-right bg-no-repeat opacity-55" style={{ backgroundImage: "url('/assets/industrial_banner.png')" }} />
         <div className="absolute inset-0 z-[1] bg-gradient-to-r from-[#111923] via-[#111923]/95 to-[#111923]/55" />
         <div className="relative z-10 grid gap-6 p-6 sm:p-8 lg:grid-cols-[1.35fr_.65fr] lg:items-end lg:p-10">

@@ -6,7 +6,7 @@ import { Sidebar, ActiveTab } from './client/components/Sidebar.tsx';
 import { Header } from './client/components/Header.tsx';
 import { AuthModal } from './client/modules/auth/AuthModal.tsx';
 import type { SettingsSubTab } from './client/modules/settings/SettingsView.tsx';
-import { subscribeToLanguageChange } from './client/i18n/index.ts';
+import { subscribeToLanguageChange, translateText } from './client/i18n/index.ts';
 import { AuthPage } from './client/modules/auth/AuthPage.tsx';
 import { UserProfileModal } from './client/modules/auth/UserProfileModal.tsx';
 import { FlashAssistantWidget } from './client/components/FlashAssistantWidget.tsx';
@@ -16,6 +16,7 @@ import { HelpInfoDialog, type HelpInfoMode } from './client/components/HelpInfoD
 import { LogoutConfirmDialog } from './client/components/LogoutConfirmDialog.tsx';
 import { LoadingState } from './client/components/DataStatus.tsx';
 import { ModuleErrorBoundary } from './client/components/ModuleErrorBoundary.tsx';
+import { applyThemePreference, readUserPreferences, subscribeToUserPreferences } from './client/modules/auth/user-preferences.ts';
 
 const DashboardView = lazy(() => import('./client/modules/dashboard/DashboardView.tsx').then(module => ({ default: module.DashboardView })));
 const TraceabilityView = lazy(() => import('./client/modules/traceability/TraceabilityView.tsx').then(module => ({ default: module.TraceabilityView })));
@@ -78,6 +79,24 @@ export default function App() {
   const transitionTimerRef = useRef<number | null>(null);
   const pendingDashboardDataRef = useRef(false);
   const pendingDashboardStatsRef = useRef(false);
+
+  useEffect(() => {
+    if (!currentUser) {
+      applyThemePreference('mixed');
+      return;
+    }
+    let stopSystemSync: () => void = () => {};
+    const syncTheme = () => {
+      stopSystemSync();
+      stopSystemSync = applyThemePreference(readUserPreferences(currentUser.uid).theme);
+    };
+    syncTheme();
+    const unsubscribe = subscribeToUserPreferences(syncTheme);
+    return () => {
+      unsubscribe();
+      stopSystemSync();
+    };
+  }, [currentUser?.uid]);
   const beginSystemEntryTransition = () => {
     if (systemEntryTimerRef.current !== null) window.clearTimeout(systemEntryTimerRef.current);
     systemEntryStartedAtRef.current = Date.now();
@@ -401,7 +420,7 @@ export default function App() {
     <div key={languageRevision} className="flex h-screen w-screen overflow-hidden bg-[#F1F4F7] font-sans text-[#263548] antialiased">
       {DEV_PREVIEW_AUTH && (
         <div className="fixed left-1/2 top-2 z-[60] -translate-x-1/2 rounded-full border border-amber-400/40 bg-slate-950/90 px-4 py-2 text-xs font-semibold text-amber-200 shadow-lg">
-          Prévia local · dados demonstrativos · nenhuma alteração persistida
+          {translateText('Prévia local · usuário ADMIN simulado · conexão do banco e Protheus verificada separadamente · alterações bloqueadas')}
         </div>
       )}
       {message && (
@@ -496,6 +515,7 @@ export default function App() {
           />
 
           <main
+            data-theme-wallpaper="app"
             className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#F1F4F7]"
             style={{
               backgroundImage: "linear-gradient(rgba(241,244,247,0.91), rgba(241,244,247,0.91)), url('/assets/login-production.webp')",

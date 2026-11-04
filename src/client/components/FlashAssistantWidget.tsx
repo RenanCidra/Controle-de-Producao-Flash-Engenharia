@@ -525,7 +525,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
                 onClick={() => onNavigate('communications')}
                 title="Central de comunicação"
                 aria-label="Abrir central de comunicação"
-                className="flex h-12 w-12 items-center justify-center rounded-full border border-[#DCE3EB] bg-white text-[#263548] shadow-lg shadow-slate-950/20 ring-2 ring-white transition hover:scale-105 hover:border-[#FFAA00] hover:bg-[#F8FAFC] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#FFAA00]"
+                className="floating-communication-control flex h-12 w-12 items-center justify-center rounded-full border border-[#DCE3EB] bg-white text-[#263548] shadow-md shadow-slate-950/15 ring-1 ring-slate-400/50 transition hover:scale-105 hover:border-[#FFAA00] hover:bg-[#F8FAFC] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#FFAA00]"
               >
                 <Phone className="h-5 w-5" />
               </button>
@@ -535,7 +535,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
               onClick={onToggle}
               title={`${t('Abrir Assistente Flash')} · Ctrl+K`}
               aria-label={`${t('Abrir Assistente Flash')} (Ctrl+K)`}
-              className="flash-assistant-float flex h-14 w-14 items-center justify-center rounded-full border border-amber-300 bg-slate-900 shadow-lg shadow-slate-950/20 ring-2 ring-white transition hover:scale-105 hover:bg-slate-800 hover:shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300"
+              className="floating-assistant-control flash-assistant-float flex h-14 w-14 items-center justify-center rounded-full border border-amber-500/70 bg-slate-900 shadow-md shadow-slate-950/20 ring-1 ring-amber-700/50 transition hover:scale-105 hover:bg-slate-800 hover:shadow-lg focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300"
             >
               <img src="/assets/flash-symbol.png" alt="" aria-hidden="true" className="h-7 w-7 object-contain" />
             </button>
