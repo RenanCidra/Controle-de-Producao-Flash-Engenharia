@@ -22,6 +22,7 @@ import { WelcomeView } from './client/modules/home/WelcomeView.tsx';
 import { CommunicationsView } from './client/modules/communications/CommunicationsView.tsx';
 import { FeedbackDialog } from './client/modules/feedback/FeedbackDialog.tsx';
 import { HelpInfoDialog, type HelpInfoMode } from './client/components/HelpInfoDialog.tsx';
+import { LogoutConfirmDialog } from './client/components/LogoutConfirmDialog.tsx';
 
 const DEV_PREVIEW_AUTH = import.meta.env.DEV && import.meta.env.VITE_DEV_PREVIEW_AUTH === 'true';
 const DEV_PREVIEW_USER: AuthUser = {
@@ -51,6 +52,8 @@ export default function App() {
   const [loading, setLoading] = useState<boolean>(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [logoutSubmitting, setLogoutSubmitting] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [feedbackDialog, setFeedbackDialog] = useState<'submit' | 'inbox' | null>(null);
   const [feedbackInitialCategory, setFeedbackInitialCategory] = useState<FeedbackCategory>('IDEA');
@@ -358,12 +361,18 @@ export default function App() {
     return () => window.clearInterval(interval);
   }, [activeTab, currentUser, loadStats]);
 
-  const handleLogout = async () => {
+  const handleLogout = () => setLogoutConfirmOpen(true);
+
+  const confirmLogout = async () => {
+    if (logoutSubmitting) return;
+    setLogoutSubmitting(true);
     try {
       await api.logout();
     } catch {}
     api.clearSession();
     setCurrentUser(null);
+    setLogoutConfirmOpen(false);
+    setLogoutSubmitting(false);
     showToast('Sessão encerrada.');
   };
 
@@ -733,6 +742,7 @@ export default function App() {
         </div>
       )}
       <UserProfileModal isOpen={profileModalOpen} user={currentUser} onClose={() => setProfileModalOpen(false)} />
+      <LogoutConfirmDialog isOpen={logoutConfirmOpen} userName={currentUser?.name} busy={logoutSubmitting} onCancel={() => setLogoutConfirmOpen(false)} onConfirm={() => void confirmLogout()} />
       {currentUser && feedbackDialog && <FeedbackDialog key={`${feedbackDialog}:${feedbackInitialCategory}`} user={currentUser} localPreview={DEV_PREVIEW_AUTH} initialTab={feedbackDialog} initialCategory={feedbackInitialCategory} onClose={() => setFeedbackDialog(null)} onToast={showToast} />}
       {helpInfoDialog && <HelpInfoDialog mode={helpInfoDialog} onClose={() => setHelpInfoDialog(null)} />}
     </div>
