@@ -40,9 +40,19 @@ async function startServer() {
     .filter((origin) => {
       try { return new URL(origin).origin === origin; } catch { return false; }
     }));
+  if (process.env.APP_URL) {
+    try {
+      allowedOrigins.add(new URL(process.env.APP_URL).origin);
+    } catch { /* ignore invalid URL */ }
+  }
   app.use(cors({
     origin(origin, callback) {
-      callback(null, !origin || allowedOrigins.has(origin));
+      if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+      try {
+        const originUrl = new URL(origin);
+        if (originUrl.host.endsWith('.run.app')) return callback(null, true);
+      } catch { /* ignore */ }
+      return callback(null, false);
     },
   }));
   app.use((req, res, next) => {

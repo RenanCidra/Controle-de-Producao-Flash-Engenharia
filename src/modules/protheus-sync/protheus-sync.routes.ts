@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { ProtheusSyncController } from './protheus-sync.controller.ts';
-import { requirePermission } from '../../middleware/access-control.ts';
+import { requirePermission, requireAnyPermission } from '../../middleware/access-control.ts';
 import { allowBodyFields } from '../../middleware/request-protection.ts';
 
 const protheusRouter = Router();
@@ -16,8 +16,8 @@ protheusRouter.get('/mock/data', requirePermission('protheus-data:read'), Prothe
 protheusRouter.get('/pv', requirePermission('protheus-data:read'), ProtheusSyncController.getSalesOrders);
 protheusRouter.get('/pv/:numeroPv', requirePermission('protheus-data:read'), ProtheusSyncController.getSalesOrderDetail);
 
-protheusRouter.get('/op', requirePermission('protheus-data:read'), ProtheusSyncController.getProductionOrders);
-protheusRouter.get('/op/:numeroOp', requirePermission('protheus-data:read'), ProtheusSyncController.getProductionOrderDetail);
+protheusRouter.get('/op', requireAnyPermission('protheus-data:read', 'production-orders:read'), ProtheusSyncController.getProductionOrders);
+protheusRouter.get('/op/:numeroOp', requireAnyPermission('protheus-data:read', 'production-orders:read'), ProtheusSyncController.getProductionOrderDetail);
 
 protheusRouter.get('/products', requirePermission('protheus-data:read'), ProtheusSyncController.getProducts);
 protheusRouter.get('/batches', requirePermission('protheus-data:read'), ProtheusSyncController.getBatches);

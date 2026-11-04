@@ -27,6 +27,7 @@ const ROLE_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>> = {
     'occurrences:read', 'occurrences:create', 'occurrences:comment',
     'communications:read', 'communications:write',
     'feedback:create',
+    'protheus-data:read',
   ]),
   AUDITOR: new Set([
     'audit:read', 'integrations:read', 'organization:read', 'production-lines:read',
@@ -43,6 +44,18 @@ export function requirePermission(permission: Permission) {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     if (!req.user) return res.status(401).json({ error: 'Usuário não autenticado.' });
     if (!hasPermission(req.user.role, permission)) {
+      return res.status(403).json({ error: 'Acesso negado: permissão insuficiente.' });
+    }
+    return next();
+  };
+}
+
+export function requireAnyPermission(...permissions: Permission[]) {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    if (!req.user) return res.status(401).json({ error: 'Usuário não autenticado.' });
+    const userRole = req.user.role;
+    const allowed = permissions.some((permission) => hasPermission(userRole, permission));
+    if (!allowed) {
       return res.status(403).json({ error: 'Acesso negado: permissão insuficiente.' });
     }
     return next();
