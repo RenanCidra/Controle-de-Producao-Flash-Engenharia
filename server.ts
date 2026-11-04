@@ -15,8 +15,9 @@ async function startServer() {
   if (localPreviewAuth && process.env.NODE_ENV === 'production') {
     throw new Error('DEV_PREVIEW_AUTH não pode ser habilitado em produção.');
   }
-  const PORT = process.env.NODE_ENV === 'production' && process.env.PORT
-    ? parseInt(process.env.PORT, 10)
+  const configuredPort = Number.parseInt(process.env.PORT || '', 10);
+  const PORT = Number.isInteger(configuredPort) && configuredPort > 0 && configuredPort <= 65535
+    ? configuredPort
     : 3000;
   const frameAncestors = new Set(["'self'", 'https://aistudio.google.com']);
   for (const origin of (process.env.CSP_FRAME_ANCESTORS || '').split(/\s+/).filter(Boolean)) {
@@ -101,7 +102,7 @@ async function startServer() {
   const bindAddress = localPreviewAuth ? '127.0.0.1' : '0.0.0.0';
   app.listen(PORT, bindAddress, () => {
     console.log(`🚀 NexusERP Fullstack Server running at http://${bindAddress}:${PORT}`);
-    console.log(`📦 Database: PostgreSQL Cloud SQL connected`);
+    console.log('📦 Database connectivity is reported by GET /api/health.');
   });
 }
 

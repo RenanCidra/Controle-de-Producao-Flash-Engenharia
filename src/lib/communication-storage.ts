@@ -1,6 +1,6 @@
 import { getStorage } from 'firebase-admin/storage';
 import './firebase-admin.ts';
-import firebaseConfig from '../../firebase-applet-config.json';
+import firebaseConfig from '../../firebase-applet-config.json' with { type: 'json' };
 
 const configuredBucket = (
   process.env.COMMUNICATIONS_STORAGE_BUCKET?.trim() ||
