@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, type Request, type Response } from 'express';
 import authRoutes from './modules/auth/auth.routes.ts';
 import usersRoutes from './modules/users/users.routes.ts';
 import orgRoutes from './modules/org/org.routes.ts';

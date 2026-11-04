@@ -1,6 +1,6 @@
-import { Response } from 'express';
+import type { Response } from 'express';
 import { OrgService } from './org.service.ts';
-import { AuthenticatedRequest } from '../../middleware/auth.middleware.ts';
+import type { AuthenticatedRequest } from '../../middleware/auth.middleware.ts';
 
 export class OrgController {
   public static async get(req: AuthenticatedRequest, res: Response) {

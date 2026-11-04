@@ -1,7 +1,7 @@
-import { Response, NextFunction } from 'express';
-import { AuthenticatedRequest } from './auth.middleware.ts';
+import type { Response, NextFunction } from 'express';
+import type { AuthenticatedRequest } from './auth.middleware.ts';
 import { AuditService } from '../services/audit.service.ts';
-import { AuditAction, AuditEntity } from '../types/index.ts';
+import type { AuditAction, AuditEntity } from '../types/index.ts';
 
 function inferEntityFromPath(path: string): AuditEntity {
   if (path.includes('/communications')) return 'COMMUNICATION';

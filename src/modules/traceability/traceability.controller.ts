@@ -1,6 +1,6 @@
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { TraceabilityService } from './traceability.service.ts';
-import { TraceabilityFilterParams } from './traceability.types.ts';
+import type { TraceabilityFilterParams } from './traceability.types.ts';
 
 export class TraceabilityController {
   public static async getMatrix(req: Request, res: Response): Promise<void> {

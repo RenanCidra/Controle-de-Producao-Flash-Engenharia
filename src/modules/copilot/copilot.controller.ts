@@ -1,5 +1,5 @@
-import { Response } from 'express';
-import { AuthenticatedRequest } from '../../middleware/auth.middleware.ts';
+import type { Response } from 'express';
+import type { AuthenticatedRequest } from '../../middleware/auth.middleware.ts';
 import { copilotService } from './copilot.service.ts';
 
 export async function handleCopilotChat(req: AuthenticatedRequest, res: Response) {

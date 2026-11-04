@@ -1,7 +1,7 @@
 import { db } from '../../db/index.ts';
 import { users } from '../../db/schema.ts';
 import { and, eq, desc, sql } from 'drizzle-orm';
-import { UserRole, UserStatus } from '../../types/index.ts';
+import type { UserRole, UserStatus } from '../../types/index.ts';
 
 export class UsersRepository {
   public static async countActiveAdmins(): Promise<number> {

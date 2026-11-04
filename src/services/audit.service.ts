@@ -1,6 +1,6 @@
 import { db } from '../db/index.ts';
 import { auditLogs } from '../db/schema.ts';
-import { AuditLogEntry } from '../types/index.ts';
+import type { AuditLogEntry } from '../types/index.ts';
 
 export class AuditService {
   public static async record(entry: AuditLogEntry, req?: any): Promise<void> {

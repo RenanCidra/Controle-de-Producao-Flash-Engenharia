@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { TokenService } from '../services/token.service.ts';
 import { AuthRepository } from '../modules/auth/auth.repository.ts';
 import { AuthSessionsRepository } from '../modules/auth/auth-sessions.repository.ts';

@@ -9,7 +9,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "start": "tsx server.ts",
+    "start": "node server.ts",
     "build": "vite build",
     "test": "tsx --test src/middleware/request-protection.test.ts",
     "preview": "vite preview",

@@ -1,5 +1,5 @@
 import { TraceabilityRepository } from './traceability.repository.ts';
-import {
+import type {
   TraceabilityDetail,
   TraceabilityFilterParams,
   TraceabilityMatrixItem,

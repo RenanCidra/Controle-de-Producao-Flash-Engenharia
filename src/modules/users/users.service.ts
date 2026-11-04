@@ -2,7 +2,7 @@ import { UsersRepository } from './users.repository.ts';
 import { AuthRepository } from '../auth/auth.repository.ts';
 import { AuthSessionsRepository } from '../auth/auth-sessions.repository.ts';
 import { AuditService } from '../../services/audit.service.ts';
-import { USER_ROLES, USER_STATUSES, UserRole, UserStatus } from '../../types/index.ts';
+import { USER_ROLES, USER_STATUSES, type UserRole, type UserStatus } from '../../types/index.ts';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { formatProperName, validateLoginName, validatePassword } from '../auth/credentials.ts';

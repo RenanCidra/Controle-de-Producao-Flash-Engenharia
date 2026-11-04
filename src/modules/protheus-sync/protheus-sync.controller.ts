@@ -1,8 +1,8 @@
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { ProtheusSyncService } from './protheus-sync.service.ts';
 import { ProtheusSyncRepository } from './protheus-sync.repository.ts';
 import { ProtheusMockValidationService } from './protheus-mock-validation.service.ts';
-import { ProtheusSyncBundle, ProtheusEntityType } from './protheus-sync.types.ts';
+import type { ProtheusSyncBundle, ProtheusEntityType } from './protheus-sync.types.ts';
 
 export class ProtheusSyncController {
   public static async validateMock(_req: Request, res: Response): Promise<void> {

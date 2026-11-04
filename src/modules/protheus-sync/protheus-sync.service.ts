@@ -1,6 +1,6 @@
 import { ProtheusNormalizer } from './protheus-sync.normalizer.ts';
 import { ProtheusSyncRepository } from './protheus-sync.repository.ts';
-import {
+import type {
   IngestionResult,
   ProtheusEntityType,
   ProtheusSourceType,

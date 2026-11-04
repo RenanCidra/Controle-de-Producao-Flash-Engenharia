@@ -1,7 +1,7 @@
 import { db } from '../../db/index.ts';
 import { users } from '../../db/schema.ts';
 import { and, eq, isNotNull, or, sql } from 'drizzle-orm';
-import { UserRole } from '../../types/index.ts';
+import type { UserRole } from '../../types/index.ts';
 
 export class AuthRepository {
   public static async findByEmail(email: string) {

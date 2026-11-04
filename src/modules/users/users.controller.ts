@@ -1,6 +1,6 @@
-import { Response } from 'express';
+import type { Response } from 'express';
 import { UsersService } from './users.service.ts';
-import { AuthenticatedRequest } from '../../middleware/auth.middleware.ts';
+import type { AuthenticatedRequest } from '../../middleware/auth.middleware.ts';
 
 export class UsersController {
   public static async list(req: AuthenticatedRequest, res: Response) {

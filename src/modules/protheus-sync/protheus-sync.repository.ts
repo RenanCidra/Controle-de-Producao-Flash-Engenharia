@@ -11,7 +11,7 @@ import {
   protheusCommitments,
 } from '../../db/schema.ts';
 import { sql, eq, desc, and, ilike, or } from 'drizzle-orm';
-import {
+import type {
   NormalizedProduct,
   NormalizedStructure,
   NormalizedRouting,

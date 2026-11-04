@@ -1,6 +1,6 @@
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { AuthService } from './auth.service.ts';
-import { AuthenticatedRequest } from '../../middleware/auth.middleware.ts';
+import type { AuthenticatedRequest } from '../../middleware/auth.middleware.ts';
 import { AuditService } from '../../services/audit.service.ts';
 import { AuthSessionsRepository } from './auth-sessions.repository.ts';
 

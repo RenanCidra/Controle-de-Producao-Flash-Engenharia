@@ -8,7 +8,7 @@ import {
   protheusRoutings,
   protheusSalesOrders,
 } from '../../db/schema.ts';
-import {
+import type {
   OperationProgress,
   PrazoStatus,
   TraceabilityDetail,
