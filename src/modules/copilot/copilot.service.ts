@@ -286,9 +286,13 @@ export class CopilotService {
       return { reply: this.authorshipReply(language, personality), actions: [], mode: 'data_fallback' };
     }
 
-    const context = await this.getOperationalContext();
     const opNumber = this.extractOpNumber(message);
-    const specificOp = opNumber ? await this.searchSpecificOpData(opNumber) : null;
+    // The operational snapshot and an optional exact OP lookup are independent reads.
+    // Start them together so a specific-order question does not wait for the whole snapshot first.
+    const [context, specificOp] = await Promise.all([
+      this.getOperationalContext(),
+      opNumber ? this.searchSpecificOpData(opNumber) : Promise.resolve(null),
+    ]);
 
     // Fast-path: Common operational prompts and specific OP lookups return immediately (< 30ms)
     // with exact, real-time factory data from the operational cache.
@@ -376,12 +380,27 @@ DIRETRIZES DE ATUAÇÃO:
         ].filter((m): m is string => Boolean(m && !m.includes('gemini-2.5') && !m.includes('gemini-1.5') && !m.includes('gemini-2.0')));
 
         const callGemini = async (): Promise<string | null> => {
+          // Keep the fallback-model chain within one total budget instead of spending
+          // a fresh eight-second timeout on every candidate model.
+          const deadline = Date.now() + 8000;
           for (const model of candidateModels) {
+            const remainingMs = deadline - Date.now();
+            if (remainingMs <= 0) break;
+            const abortController = new AbortController();
+            let timedOut = false;
+            let timeoutId: ReturnType<typeof setTimeout> | undefined;
             try {
-              const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000));
+              const timeoutPromise = new Promise<null>((resolve) => {
+                timeoutId = setTimeout(() => {
+                  timedOut = true;
+                  abortController.abort();
+                  resolve(null);
+                }, remainingMs);
+              });
               const isGemini38 = model.includes('3.8') || model.includes('flash-latest');
               const config: any = {
                 systemInstruction,
+                abortSignal: abortController.signal,
                 ...(isGemini38 ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {}),
               };
 
@@ -406,8 +425,11 @@ DIRETRIZES DE ATUAÇÃO:
               })();
               const result = await Promise.race([generatePromise, timeoutPromise]);
               if (result) return result;
+              if (timedOut) break;
             } catch (err: any) {
               console.warn(`Tentativa Gemini com modelo '${model}' falhou:`, err?.message || err);
+            } finally {
+              if (timeoutId) clearTimeout(timeoutId);
             }
           }
           return null;

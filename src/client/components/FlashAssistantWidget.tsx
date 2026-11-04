@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowRight, Briefcase, Coffee, History, LoaderCircle, Maximize2, MessageSquarePlus, Mic, MicOff, Minimize2, Phone, Send, Settings2, Sparkles, Trash2, X, Zap } from 'lucide-react';
+import { ArrowRight, Briefcase, Coffee, History, Maximize2, MessageSquarePlus, Mic, MicOff, Minimize2, Phone, Send, Settings2, Sparkles, Trash2, X, Zap } from 'lucide-react';
 import { api } from '../api.ts';
 import type { AuthUser, FeedbackCategory } from '../api.ts';
 import { getAppLanguage, getIntlLocale, translateText } from '../i18n/index.ts';
@@ -119,6 +119,37 @@ const quickQuestions = [
   { label: 'Estoque crítico', prompt: 'Quais itens de estoque estão abaixo do mínimo?' },
 ];
 
+function getAssistantActivityStages(message: string, isAudio: boolean): string[] {
+  if (isAudio) {
+    return [t('Ouvindo seu áudio…'), t('Interpretando sua mensagem de voz…'), t('Preparando uma resposta…')];
+  }
+
+  const normalized = message.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const opMatch = normalized.match(/\b(?:op|ordem(?:\s+de)?\s+producao)\s*(?:n[º°.]?\s*)?[:#-]?\s*([a-z0-9][a-z0-9._/-]{2,19})\b/i);
+  if (opMatch) {
+    const op = opMatch[1].toUpperCase();
+    return [
+      t('Localizando a OP {op}…').replace('{op}', op),
+      t('Conferindo os dados disponíveis da OP {op}…').replace('{op}', op),
+      t('Organizando o resumo da OP {op}…').replace('{op}', op),
+    ];
+  }
+
+  if (/\b(calcul[ae]|quanto|total|som[ae]|diferenca|percentual|porcentagem)\b/.test(normalized)) {
+    return [t('Reunindo os dados necessários…'), t('Conferindo os valores informados…'), t('Calculando a resposta…')];
+  }
+
+  if (/\b(resumo|turno|produc|ordens?|ops?|atras|ocorr|estoque|insumos?|saldo|apontamentos?|protheus|espelho|sincroniz|linhas?)\b/.test(normalized)) {
+    return [t('Flash de Dados: consultando o espelho…'), t('Reunindo os dados da produção…'), t('Organizando as informações disponíveis…')];
+  }
+
+  if (/\b(como|onde|qual tela|me ajude|ajuda|configur|naveg|usar|acessar)\b/.test(normalized)) {
+    return [t('Entendendo o que você precisa…'), t('Preparando uma orientação prática…')];
+  }
+
+  return [t('Pensando na melhor resposta…'), t('Organizando as informações…'), t('Preparando a resposta…')];
+}
+
 function renderMessageText(text: string): React.ReactNode {
   const renderInline = (value: string, lineIndex: number) => value.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, partIndex) => {
     const key = `${lineIndex}-${partIndex}`;
@@ -184,6 +215,10 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
   const [fullScreen, setFullScreen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showAssistantActivity, setShowAssistantActivity] = useState(false);
+  const [assistantActivity, setAssistantActivity] = useState(t('Assistente Flash digitando…'));
+  const activityTimerRef = useRef<number | null>(null);
+  const activityVisibilityTimerRef = useRef<number | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -245,6 +280,8 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
   useEffect(() => {
     return () => {
       streamingAbortRef.current?.();
+      if (activityTimerRef.current !== null) window.clearInterval(activityTimerRef.current);
+      if (activityVisibilityTimerRef.current !== null) window.clearTimeout(activityVisibilityTimerRef.current);
     };
   }, []);
 
@@ -364,6 +401,25 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
     const userMessage: Message = { id: `user-${Date.now()}`, sender: 'user', text: text || 'Mensagem de áudio', timestamp: currentTime(), audioUrl: audioBlob ? URL.createObjectURL(audioBlob) : undefined };
     setMessages((previous) => [...previous, userMessage]);
     setInputValue('');
+    const activityStages = getAssistantActivityStages(text, Boolean(audioBlob));
+    let activityIndex = 0;
+    setShowAssistantActivity(false);
+    if (activityVisibilityTimerRef.current !== null) window.clearTimeout(activityVisibilityTimerRef.current);
+    activityVisibilityTimerRef.current = window.setTimeout(() => {
+      setShowAssistantActivity(true);
+      activityVisibilityTimerRef.current = null;
+    }, 120);
+    setAssistantActivity(activityStages[0]);
+    if (activityTimerRef.current !== null) window.clearInterval(activityTimerRef.current);
+    activityTimerRef.current = window.setInterval(() => {
+      if (activityIndex >= activityStages.length - 1) {
+        if (activityTimerRef.current !== null) window.clearInterval(activityTimerRef.current);
+        activityTimerRef.current = null;
+        return;
+      }
+      activityIndex += 1;
+      setAssistantActivity(activityStages[activityIndex]);
+    }, 2200);
     setLoading(true);
 
     try {
@@ -447,6 +503,11 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
         error: true,
       }]);
     } finally {
+      if (activityVisibilityTimerRef.current !== null) window.clearTimeout(activityVisibilityTimerRef.current);
+      activityVisibilityTimerRef.current = null;
+      setShowAssistantActivity(false);
+      if (activityTimerRef.current !== null) window.clearInterval(activityTimerRef.current);
+      activityTimerRef.current = null;
       setLoading(false);
       setStreamingMessageId(null);
     }
@@ -822,13 +883,14 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
               </div>
             )}
 
-            {loading && (
-              <div className="flex items-center gap-2 pl-10 text-xs text-slate-500">
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75"></span>
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500"></span>
+            {loading && showAssistantActivity && (
+              <div className="flex items-center gap-2 pl-10 text-xs text-slate-500" role="status" aria-live="polite">
+                <span className="flex items-center gap-1" aria-hidden="true">
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-amber-500 [animation-delay:-0.24s]" />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-amber-500 [animation-delay:-0.12s]" />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-amber-500" />
                 </span>
-                <span className="text-[12px] font-medium text-slate-600">{t('Assistente Flash digitando…')}</span>
+                <span className="text-[12px] font-medium text-slate-600">{assistantActivity}</span>
               </div>
             )}
             <div ref={messagesEndRef} />
