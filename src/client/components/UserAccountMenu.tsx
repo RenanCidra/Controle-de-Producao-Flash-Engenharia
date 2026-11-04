@@ -169,6 +169,12 @@ export const UserAccountMenu: React.FC<UserAccountMenuProps> = ({
     if (compact || !window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
     hoverCloseTimerRef.current = window.setTimeout(() => close(), 220);
   };
+  const handleHelpMouseEnter = () => {
+    if (!compact && window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+      setPrivacyOpen(false);
+      setHelpOpen(true);
+    }
+  };
 
   return <>
     <div ref={rootRef} data-user-account-menu onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} className={`relative z-[60] ${compact ? 'inline-flex' : 'w-full'}`}>
@@ -188,7 +194,7 @@ export const UserAccountMenu: React.FC<UserAccountMenuProps> = ({
           <button type="button" onClick={() => { close(); onOpenProfile(); }} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-slate-300 transition hover:bg-[#1C2532] hover:text-white"><UserRound className="h-4 w-4 text-slate-400" /><span className="font-medium">{t('Meu perfil')}</span></button>
           <button type="button" onClick={() => { close(); onCloseMobile?.(); onOpenSettings(); }} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-slate-300 transition hover:bg-[#1C2532] hover:text-white"><Settings className="h-4 w-4 text-[#FFAA00]" /><span className="font-medium">{t('Configurações')}</span></button>
           <div className="my-1 h-px bg-[#263342]" />
-          <button type="button" onClick={() => { setHelpOpen(true); setPrivacyOpen(false); }} className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left transition hover:bg-[#1C2532] hover:text-white ${helpOpen ? 'bg-[#263342] text-white' : 'text-slate-300'}`}><span className="flex items-center gap-2.5"><Lightbulb className="h-4 w-4 text-slate-400" /><span className="font-medium">{t('Ajuda')}</span></span><ChevronRight className="h-4 w-4 text-slate-500" /></button>
+          <button type="button" onMouseEnter={handleHelpMouseEnter} onClick={() => { setHelpOpen(true); setPrivacyOpen(false); }} aria-haspopup="menu" aria-expanded={helpOpen} className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left transition hover:bg-[#1C2532] hover:text-white ${helpOpen ? 'bg-[#263342] text-white' : 'text-slate-300'}`}><span className="flex items-center gap-2.5"><Lightbulb className="h-4 w-4 text-slate-400" /><span className="font-medium">{t('Ajuda')}</span></span><ChevronRight className="h-4 w-4 text-slate-500" /></button>
           <div className="my-1 h-px bg-[#263342]" />
           {currentUser ? <button type="button" onClick={() => { close(); onLogout(); }} className="mt-0.5 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-slate-300 transition hover:bg-rose-500/10 hover:text-rose-300"><LogOut className="h-4 w-4 text-slate-400" /><span className="font-medium">{t('Sair')}</span></button>
             : <button type="button" onClick={() => { close(); onOpenAuth?.(); }} className="mt-0.5 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left font-bold text-[#FFAA00] transition hover:bg-[#FFAA00]/10"><LogIn className="h-4 w-4" /><span>{t('Entrar no Sistema')}</span></button>}
