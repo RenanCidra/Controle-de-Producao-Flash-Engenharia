@@ -2,7 +2,7 @@ import express, { Router, type Request, type RequestHandler, type Response, type
 import { randomUUID } from 'node:crypto';
 import { and, asc, count, desc, eq, gt, inArray, isNull, lt, ne, or } from 'drizzle-orm';
 import { db } from '../../db/index.ts';
-import { communicationDirectConversations, communicationDirectMembers, communicationDirectMessages, communicationGroupMembers, communicationGroups, communicationMessages, users } from '../../db/schema.ts';
+import { communicationDirectConversations, communicationDirectMembers, communicationDirectMessages, communicationGroupMembers, communicationGroups, communicationMessages, communicationMessageReactions, users } from '../../db/schema.ts';
 import { requirePermission } from '../../middleware/access-control.ts';
 import type { AuthenticatedRequest } from '../../middleware/auth.middleware.ts';
 import { allowBodyFields } from '../../middleware/request-protection.ts';
@@ -15,6 +15,7 @@ const MESSAGE_PAGE_SIZE = 30;
 const MAX_AUDIO_BYTES = 5 * 1024 * 1024;
 const MAX_AUDIO_DURATION_MS = 120_000;
 const AUDIO_MIME_TYPES = new Set(['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg']);
+const REACTION_EMOJIS = new Set(['👍', '❤️', '😂', '😮', '😢', '🙏']);
 const asyncHandler = (handler: (req: AuthenticatedRequest, res: Response) => Promise<unknown>): RequestHandler =>
   (req, res, next) => { void handler(req as AuthenticatedRequest, res).catch(next); };
 
@@ -35,6 +36,45 @@ function messagePageOptions(req: Request) {
 function publicMessage<T extends { audioStoragePath?: string | null; audioMimeType?: string | null; audioDurationMs?: number | null }>(message: T) {
   const { audioStoragePath, ...visibleMessage } = message;
   return { ...visibleMessage, hasAudio: Boolean(audioStoragePath) };
+}
+
+async function messagePagePayload<T extends { id: number; authorUid: string; createdAt: Date; audioStoragePath?: string | null; audioMimeType?: string | null; audioDurationMs?: number | null }>(
+  rows: T[], kind: 'group' | 'direct', conversationId: number, currentUserId: number, currentUid: string,
+) {
+  if (!rows.length) return [];
+  const messageIds = rows.map((message) => message.id);
+  const [reactionRows, members] = await Promise.all([
+    kind === 'group'
+      ? db.select({ messageId: communicationMessageReactions.groupMessageId, userId: communicationMessageReactions.userId, emoji: communicationMessageReactions.emoji })
+        .from(communicationMessageReactions).where(inArray(communicationMessageReactions.groupMessageId, messageIds))
+      : db.select({ messageId: communicationMessageReactions.directMessageId, userId: communicationMessageReactions.userId, emoji: communicationMessageReactions.emoji })
+        .from(communicationMessageReactions).where(inArray(communicationMessageReactions.directMessageId, messageIds)),
+    kind === 'group'
+      ? db.select({ userId: communicationGroupMembers.userId, lastReadAt: communicationGroupMembers.lastReadAt })
+        .from(communicationGroupMembers).where(eq(communicationGroupMembers.groupId, conversationId))
+      : db.select({ userId: communicationDirectMembers.userId, lastReadAt: communicationDirectMembers.lastReadAt })
+        .from(communicationDirectMembers).where(eq(communicationDirectMembers.conversationId, conversationId)),
+  ]);
+  const reactionsByMessage = new Map<number, Map<string, Set<number>>>();
+  for (const reaction of reactionRows) {
+    if (reaction.messageId === null) continue;
+    let byEmoji = reactionsByMessage.get(reaction.messageId);
+    if (!byEmoji) reactionsByMessage.set(reaction.messageId, byEmoji = new Map());
+    let usersForEmoji = byEmoji.get(reaction.emoji);
+    if (!usersForEmoji) byEmoji.set(reaction.emoji, usersForEmoji = new Set());
+    usersForEmoji.add(reaction.userId);
+  }
+  const recipients = members.filter((member) => member.userId !== currentUserId);
+  return rows.map((message) => {
+    const reactions = [...(reactionsByMessage.get(message.id)?.entries() || [])]
+      .map(([emoji, reactingUsers]) => ({ emoji, count: reactingUsers.size, reactedByMe: reactingUsers.has(currentUserId) }));
+    const readByCount = recipients.filter((member) => member.lastReadAt >= message.createdAt).length;
+    return {
+      ...publicMessage(message),
+      reactions,
+      ...(message.authorUid === currentUid ? { readByCount, recipientCount: recipients.length } : {}),
+    };
+  });
 }
 
 function normalizedAudioMimeType(req: Request) {
@@ -149,12 +189,38 @@ router.get('/direct/:id/messages', asyncHandler(async (req, res) => {
   if (page.beforeId && page.afterId) return res.status(400).json({ error: 'Use um único cursor de mensagens.' });
   const predicates = [eq(communicationDirectMessages.conversationId, id)];
   if (page.beforeId) predicates.push(lt(communicationDirectMessages.id, page.beforeId));
-  else if (page.afterId && page.changedAfter) predicates.push(or(gt(communicationDirectMessages.id, page.afterId), gt(communicationDirectMessages.deletedAt, page.changedAfter))!);
+  else if (page.afterId && page.changedAfter) predicates.push(or(gt(communicationDirectMessages.id, page.afterId), gt(communicationDirectMessages.updatedAt, page.changedAfter), gt(communicationDirectMessages.deletedAt, page.changedAfter))!);
   else if (page.afterId) predicates.push(gt(communicationDirectMessages.id, page.afterId));
-  else if (page.changedAfter) predicates.push(or(gt(communicationDirectMessages.createdAt, page.changedAfter), gt(communicationDirectMessages.deletedAt, page.changedAfter))!);
+  else if (page.changedAfter) predicates.push(or(gt(communicationDirectMessages.createdAt, page.changedAfter), gt(communicationDirectMessages.updatedAt, page.changedAfter), gt(communicationDirectMessages.deletedAt, page.changedAfter))!);
   const rows = await db.select().from(communicationDirectMessages).where(and(...predicates))
     .orderBy(page.afterId ? asc(communicationDirectMessages.id) : desc(communicationDirectMessages.id)).limit(page.limit);
-  return res.json((page.afterId ? rows : rows.reverse()).map(publicMessage));
+  return res.json(await messagePagePayload(page.afterId ? rows : rows.reverse(), 'direct', id, req.user!.userId, req.user!.uid));
+}));
+
+router.put('/direct/:id/messages/:messageId/reactions', requirePermission('communications:write'), allowBodyFields('emoji'), asyncHandler(async (req, res) => {
+  const conversationId = Number(req.params.id), messageId = Number(req.params.messageId);
+  const emoji = typeof req.body.emoji === 'string' ? req.body.emoji : '';
+  if (!Number.isSafeInteger(conversationId) || conversationId < 1 || !Number.isSafeInteger(messageId) || messageId < 1 || !REACTION_EMOJIS.has(emoji)) return res.status(400).json({ error: 'Reação inválida.' });
+  if (!await isDirectMember(conversationId, req.user!.userId)) return res.status(404).json({ error: 'Conversa não encontrada.' });
+  const [message] = await db.select({ id: communicationDirectMessages.id, deletedAt: communicationDirectMessages.deletedAt }).from(communicationDirectMessages)
+    .where(and(eq(communicationDirectMessages.id, messageId), eq(communicationDirectMessages.conversationId, conversationId))).limit(1);
+  if (!message || message.deletedAt) return res.status(404).json({ error: 'Mensagem não encontrada.' });
+  await db.insert(communicationMessageReactions).values({ directMessageId: messageId, userId: req.user!.userId, emoji }).onConflictDoNothing();
+  await db.update(communicationDirectMessages).set({ updatedAt: new Date() }).where(eq(communicationDirectMessages.id, messageId));
+  return res.json({ success: true });
+}));
+
+router.delete('/direct/:id/messages/:messageId/reactions', requirePermission('communications:write'), allowBodyFields('emoji'), asyncHandler(async (req, res) => {
+  const conversationId = Number(req.params.id), messageId = Number(req.params.messageId);
+  const emoji = typeof req.body.emoji === 'string' ? req.body.emoji : '';
+  if (!Number.isSafeInteger(conversationId) || conversationId < 1 || !Number.isSafeInteger(messageId) || messageId < 1 || !REACTION_EMOJIS.has(emoji)) return res.status(400).json({ error: 'Reação inválida.' });
+  if (!await isDirectMember(conversationId, req.user!.userId)) return res.status(404).json({ error: 'Conversa não encontrada.' });
+  const [message] = await db.select({ id: communicationDirectMessages.id }).from(communicationDirectMessages)
+    .where(and(eq(communicationDirectMessages.id, messageId), eq(communicationDirectMessages.conversationId, conversationId))).limit(1);
+  if (!message) return res.status(404).json({ error: 'Mensagem não encontrada.' });
+  await db.delete(communicationMessageReactions).where(and(eq(communicationMessageReactions.directMessageId, messageId), eq(communicationMessageReactions.userId, req.user!.userId), eq(communicationMessageReactions.emoji, emoji)));
+  await db.update(communicationDirectMessages).set({ updatedAt: new Date() }).where(and(eq(communicationDirectMessages.id, messageId), eq(communicationDirectMessages.conversationId, conversationId)));
+  return res.json({ success: true });
 }));
 
 router.delete('/direct/:id/messages/:messageId', requirePermission('communications:write'), asyncHandler(async (req, res) => {
@@ -165,7 +231,7 @@ router.delete('/direct/:id/messages/:messageId', requirePermission('communicatio
     .from(communicationDirectMessages).where(and(eq(communicationDirectMessages.id, messageId), eq(communicationDirectMessages.conversationId, conversationId))).limit(1);
   if (!message || message.authorUid !== req.user!.uid || message.deletedAt) return res.status(404).json({ error: 'Mensagem não encontrada ou sem permissão para apagá-la.' });
   const deletedAt = new Date();
-  const [deleted] = await db.update(communicationDirectMessages).set({ body: 'Mensagem apagada', deletedAt, deletedByUid: req.user!.uid, audioStoragePath: null, audioMimeType: null, audioDurationMs: null })
+  const [deleted] = await db.update(communicationDirectMessages).set({ body: 'Mensagem apagada', deletedAt, deletedByUid: req.user!.uid, audioStoragePath: null, audioMimeType: null, audioDurationMs: null, updatedAt: deletedAt })
     .where(and(eq(communicationDirectMessages.id, messageId), eq(communicationDirectMessages.conversationId, conversationId), eq(communicationDirectMessages.authorUid, req.user!.uid), isNull(communicationDirectMessages.deletedAt))).returning({ id: communicationDirectMessages.id });
   if (!deleted) return res.status(404).json({ error: 'Mensagem não encontrada ou já apagada.' });
   if (message.audioStoragePath) await communicationStorageBucket().file(message.audioStoragePath).delete().catch((error) => console.error('Failed to remove deleted direct-message audio:', error));
@@ -197,9 +263,19 @@ router.patch('/direct/:id/read', requirePermission('communications:write'), asyn
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Conversa inválida.' });
   if (!await isDirectMember(id, req.user!.userId)) return res.status(404).json({ error: 'Conversa não encontrada.' });
-  await db.update(communicationDirectMembers).set({ lastReadAt: new Date() }).where(and(
+  const [member] = await db.select({ lastReadAt: communicationDirectMembers.lastReadAt }).from(communicationDirectMembers).where(and(
     eq(communicationDirectMembers.conversationId, id),
     eq(communicationDirectMembers.userId, req.user!.userId),
+  )).limit(1);
+  const readAt = new Date();
+  await db.update(communicationDirectMembers).set({ lastReadAt: readAt }).where(and(
+    eq(communicationDirectMembers.conversationId, id),
+    eq(communicationDirectMembers.userId, req.user!.userId),
+  ));
+  if (member) await db.update(communicationDirectMessages).set({ updatedAt: readAt }).where(and(
+    eq(communicationDirectMessages.conversationId, id),
+    ne(communicationDirectMessages.authorUid, req.user!.uid),
+    gt(communicationDirectMessages.createdAt, member.lastReadAt),
   ));
   return res.json({ success: true });
 }));
@@ -315,12 +391,38 @@ router.get('/groups/:id/messages', asyncHandler(async (req, res) => {
   if (page.beforeId && page.afterId) return res.status(400).json({ error: 'Use um único cursor de mensagens.' });
   const predicates = [eq(communicationMessages.groupId, id)];
   if (page.beforeId) predicates.push(lt(communicationMessages.id, page.beforeId));
-  else if (page.afterId && page.changedAfter) predicates.push(or(gt(communicationMessages.id, page.afterId), gt(communicationMessages.deletedAt, page.changedAfter))!);
+  else if (page.afterId && page.changedAfter) predicates.push(or(gt(communicationMessages.id, page.afterId), gt(communicationMessages.updatedAt, page.changedAfter), gt(communicationMessages.deletedAt, page.changedAfter))!);
   else if (page.afterId) predicates.push(gt(communicationMessages.id, page.afterId));
-  else if (page.changedAfter) predicates.push(or(gt(communicationMessages.createdAt, page.changedAfter), gt(communicationMessages.deletedAt, page.changedAfter))!);
+  else if (page.changedAfter) predicates.push(or(gt(communicationMessages.createdAt, page.changedAfter), gt(communicationMessages.updatedAt, page.changedAfter), gt(communicationMessages.deletedAt, page.changedAfter))!);
   const rows = await db.select().from(communicationMessages).where(and(...predicates))
     .orderBy(page.afterId ? asc(communicationMessages.id) : desc(communicationMessages.id)).limit(page.limit);
-  return res.json((page.afterId ? rows : rows.reverse()).map(publicMessage));
+  return res.json(await messagePagePayload(page.afterId ? rows : rows.reverse(), 'group', id, req.user!.userId, req.user!.uid));
+}));
+
+router.put('/groups/:id/messages/:messageId/reactions', requirePermission('communications:write'), allowBodyFields('emoji'), asyncHandler(async (req, res) => {
+  const groupId = Number(req.params.id), messageId = Number(req.params.messageId);
+  const emoji = typeof req.body.emoji === 'string' ? req.body.emoji : '';
+  if (!Number.isSafeInteger(groupId) || groupId < 1 || !Number.isSafeInteger(messageId) || messageId < 1 || !REACTION_EMOJIS.has(emoji)) return res.status(400).json({ error: 'Reação inválida.' });
+  if (!await isGroupMember(groupId, req.user!.userId)) return res.status(404).json({ error: 'Grupo não encontrado.' });
+  const [message] = await db.select({ id: communicationMessages.id, deletedAt: communicationMessages.deletedAt }).from(communicationMessages)
+    .where(and(eq(communicationMessages.id, messageId), eq(communicationMessages.groupId, groupId))).limit(1);
+  if (!message || message.deletedAt) return res.status(404).json({ error: 'Mensagem não encontrada.' });
+  await db.insert(communicationMessageReactions).values({ groupMessageId: messageId, userId: req.user!.userId, emoji }).onConflictDoNothing();
+  await db.update(communicationMessages).set({ updatedAt: new Date() }).where(eq(communicationMessages.id, messageId));
+  return res.json({ success: true });
+}));
+
+router.delete('/groups/:id/messages/:messageId/reactions', requirePermission('communications:write'), allowBodyFields('emoji'), asyncHandler(async (req, res) => {
+  const groupId = Number(req.params.id), messageId = Number(req.params.messageId);
+  const emoji = typeof req.body.emoji === 'string' ? req.body.emoji : '';
+  if (!Number.isSafeInteger(groupId) || groupId < 1 || !Number.isSafeInteger(messageId) || messageId < 1 || !REACTION_EMOJIS.has(emoji)) return res.status(400).json({ error: 'Reação inválida.' });
+  if (!await isGroupMember(groupId, req.user!.userId)) return res.status(404).json({ error: 'Grupo não encontrado.' });
+  const [message] = await db.select({ id: communicationMessages.id }).from(communicationMessages)
+    .where(and(eq(communicationMessages.id, messageId), eq(communicationMessages.groupId, groupId))).limit(1);
+  if (!message) return res.status(404).json({ error: 'Mensagem não encontrada.' });
+  await db.delete(communicationMessageReactions).where(and(eq(communicationMessageReactions.groupMessageId, messageId), eq(communicationMessageReactions.userId, req.user!.userId), eq(communicationMessageReactions.emoji, emoji)));
+  await db.update(communicationMessages).set({ updatedAt: new Date() }).where(and(eq(communicationMessages.id, messageId), eq(communicationMessages.groupId, groupId)));
+  return res.json({ success: true });
 }));
 
 router.delete('/groups/:id/messages/:messageId', requirePermission('communications:write'), asyncHandler(async (req, res) => {
@@ -331,7 +433,7 @@ router.delete('/groups/:id/messages/:messageId', requirePermission('communicatio
     .from(communicationMessages).where(and(eq(communicationMessages.id, messageId), eq(communicationMessages.groupId, groupId))).limit(1);
   if (!message || message.authorUid !== req.user!.uid || message.deletedAt) return res.status(404).json({ error: 'Mensagem não encontrada ou sem permissão para apagá-la.' });
   const deletedAt = new Date();
-  const [deleted] = await db.update(communicationMessages).set({ body: 'Mensagem apagada', deletedAt, deletedByUid: req.user!.uid, audioStoragePath: null, audioMimeType: null, audioDurationMs: null })
+  const [deleted] = await db.update(communicationMessages).set({ body: 'Mensagem apagada', deletedAt, deletedByUid: req.user!.uid, audioStoragePath: null, audioMimeType: null, audioDurationMs: null, updatedAt: deletedAt })
     .where(and(eq(communicationMessages.id, messageId), eq(communicationMessages.groupId, groupId), eq(communicationMessages.authorUid, req.user!.uid), isNull(communicationMessages.deletedAt))).returning({ id: communicationMessages.id });
   if (!deleted) return res.status(404).json({ error: 'Mensagem não encontrada ou já apagada.' });
   if (message.audioStoragePath) await communicationStorageBucket().file(message.audioStoragePath).delete().catch((error) => console.error('Failed to remove deleted group-message audio:', error));
@@ -361,9 +463,19 @@ router.patch('/groups/:id/read', requirePermission('communications:write'), asyn
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Grupo inválido.' });
   if (!await isGroupMember(id, req.user!.userId)) return res.status(404).json({ error: 'Grupo não encontrado.' });
-  await db.update(communicationGroupMembers).set({ lastReadAt: new Date() }).where(and(
+  const [member] = await db.select({ lastReadAt: communicationGroupMembers.lastReadAt }).from(communicationGroupMembers).where(and(
     eq(communicationGroupMembers.groupId, id),
     eq(communicationGroupMembers.userId, req.user!.userId),
+  )).limit(1);
+  const readAt = new Date();
+  await db.update(communicationGroupMembers).set({ lastReadAt: readAt }).where(and(
+    eq(communicationGroupMembers.groupId, id),
+    eq(communicationGroupMembers.userId, req.user!.userId),
+  ));
+  if (member) await db.update(communicationMessages).set({ updatedAt: readAt }).where(and(
+    eq(communicationMessages.groupId, id),
+    ne(communicationMessages.authorUid, req.user!.uid),
+    gt(communicationMessages.createdAt, member.lastReadAt),
   ));
   return res.json({ success: true });
 }));

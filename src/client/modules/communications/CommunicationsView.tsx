@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Copy, Forward, Info, MessageCircle, MessageSquarePlus, MoreVertical, Plus, Reply, Search, Send, Trash2, UserRound, Users, X } from 'lucide-react';
+import { ArrowLeft, Check, CheckCheck, Copy, Forward, Info, MessageCircle, MessageSquarePlus, MoreVertical, Plus, Reply, Search, Send, Trash2, UserRound, Users, X } from 'lucide-react';
 import { api, type AuthUser, type FeedbackCategory } from '../../api.ts';
 import { UserAccountMenu } from '../../components/UserAccountMenu.tsx';
 import { AudioRecorderButton } from '../../components/AudioRecorderButton.tsx';
@@ -8,7 +8,8 @@ import { translateText } from '../../i18n/index.ts';
 import { DataUnavailableState, LoadingState } from '../../components/DataStatus.tsx';
 
 type Group = { id: number; name: string; sector: string; createdAt: string; unreadCount: number; lastMessage: Pick<Message, 'id' | 'body' | 'authorUid' | 'authorName' | 'createdAt' | 'deletedAt'> | null };
-type Message = { id: number; body: string; authorUid: string; authorName: string; createdAt: string; replyToMessageId?: number | null; hasAudio?: boolean; audioDurationMs?: number | null; audioPreviewUrl?: string; deletedAt?: string | null };
+type MessageReaction = { emoji: string; count: number; reactedByMe: boolean };
+type Message = { id: number; body: string; authorUid: string; authorName: string; createdAt: string; replyToMessageId?: number | null; hasAudio?: boolean; audioDurationMs?: number | null; audioPreviewUrl?: string; deletedAt?: string | null; reactions?: MessageReaction[]; readByCount?: number; recipientCount?: number };
 type DirectoryUser = { id: number; name: string; department: string | null; role?: string };
 type DirectConversation = {
   conversationId: number;
@@ -59,8 +60,12 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
   const [draftRecipient, setDraftRecipient] = useState<DirectoryUser | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const messagesRef = useRef<Message[]>([]);
+  const messagesRequestsInFlightRef = useRef(new Set<string>());
+  const listsRequestInFlightRef = useRef(false);
+  const pendingReactionsRef = useRef(new Set<string>());
   const previewAudioUrlsRef = useRef<string[]>([]);
   const [body, setBody] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
   const [error, setError] = useState('');
   const [listsLoading, setListsLoading] = useState(true);
   const [listsError, setListsError] = useState(false);
@@ -106,8 +111,6 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
       setGroups(Array.isArray(data) ? data : []);
       return true;
     } catch (e: any) {
-      setGroups([]);
-      setError(e.message);
       return false;
     }
   }, [localPreview]);
@@ -122,11 +125,20 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
       setDirects(Array.isArray(data) ? data : []);
       return true;
     } catch (e: any) {
-      setDirects([]);
-      setError(e.message);
       return false;
     }
   }, [currentUser, localPreview]);
+  const refreshLists = useCallback(async () => {
+    if (listsRequestInFlightRef.current) return null;
+    listsRequestInFlightRef.current = true;
+    try {
+      const results = await Promise.all([loadGroups(), loadDirects()]);
+      setListsError(results.some(result => !result));
+      return results;
+    } finally {
+      listsRequestInFlightRef.current = false;
+    }
+  }, [loadGroups, loadDirects]);
   const loadDirectory = async () => {
     if (localPreview) { await waitForPreview(250); setDirectory(previewDirectory); return; }
     try {
@@ -138,10 +150,12 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
     }
   };
   const loadMessages = useCallback(async () => {
+    const conversationKey = selectedGroupId !== null ? `group:${selectedGroupId}` : selectedDirectId !== null ? `direct:${selectedDirectId}` : null;
+    if (!conversationKey) { setMessages([]); loadedConversationRef.current = null; return; }
+    if (messagesRequestsInFlightRef.current.has(conversationKey)) return;
+    messagesRequestsInFlightRef.current.add(conversationKey);
+    const initial = loadedConversationRef.current !== conversationKey;
     try {
-      const conversationKey = selectedGroupId !== null ? `group:${selectedGroupId}` : selectedDirectId !== null ? `direct:${selectedDirectId}` : null;
-      if (!conversationKey) { setMessages([]); loadedConversationRef.current = null; return; }
-      const initial = loadedConversationRef.current !== conversationKey;
       if (initial) { setMessagesLoading(true); setMessagesError(false); }
       if (localPreview) {
         await waitForPreview();
@@ -152,6 +166,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
         loadedConversationRef.current = conversationKey;
         messageChangesCursorRef.current = new Date();
         setHasOlderMessages(false);
+        setMessagesError(false);
         return;
       }
       const latestLoadedId = messagesRef.current.at(-1)?.id;
@@ -163,6 +178,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
         const loaded = Array.isArray(data) ? data : [];
         if (initial) { setMessages(loaded); loadedConversationRef.current = conversationKey; setHasOlderMessages(loaded.length === 30); }
         else if (loaded.length) setMessages(previous => mergeMessages(previous, loaded));
+        setMessagesError(false);
         messageChangesCursorRef.current = pollStartedAt;
         const latest = loaded.at(-1);
         const key = `group:${selectedGroupId}`;
@@ -176,6 +192,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
         const loaded = Array.isArray(data) ? data : [];
         if (initial) { setMessages(loaded); loadedConversationRef.current = conversationKey; setHasOlderMessages(loaded.length === 30); }
         else if (loaded.length) setMessages(previous => mergeMessages(previous, loaded));
+        setMessagesError(false);
         messageChangesCursorRef.current = pollStartedAt;
         const latest = loaded.at(-1);
         const key = `direct:${selectedDirectId}`;
@@ -187,12 +204,12 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
         setMessages([]);
       }
     } catch (e: any) {
-      if (activeConversationRef.current !== (selectedGroupId !== null ? `group:${selectedGroupId}` : selectedDirectId !== null ? `direct:${selectedDirectId}` : null)) return;
-      setMessages([]);
-      setError(e.message);
+      if (activeConversationRef.current !== conversationKey) return;
+      if (initial) setMessages([]);
       setMessagesError(true);
     } finally {
-      if (activeConversationRef.current === (selectedGroupId !== null ? `group:${selectedGroupId}` : selectedDirectId !== null ? `direct:${selectedDirectId}` : null)) setMessagesLoading(false);
+      messagesRequestsInFlightRef.current.delete(conversationKey);
+      if (activeConversationRef.current === conversationKey) setMessagesLoading(false);
     }
   }, [selectedGroupId, selectedDirectId, loadGroups, loadDirects, currentUser, localPreview]);
 
@@ -211,6 +228,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
       const page = selectedGroupId !== null
         ? await api.getCommunicationMessages(selectedGroupId, { beforeId: firstId, limit: 30 })
         : await api.getCommunicationDirectMessages(selectedDirectId!, { beforeId: firstId, limit: 30 });
+      if (activeConversationRef.current !== conversationKey) return;
       setMessages(previous => [...page.filter(item => !previous.some(existing => existing.id === item.id)), ...previous]);
       setHasOlderMessages(page.length === 30);
       requestAnimationFrame(() => { if (scroller) scroller.scrollTop += scroller.scrollHeight - oldHeight; });
@@ -221,20 +239,40 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
   useEffect(() => {
     setListsLoading(true);
     setListsError(false);
-    Promise.all([loadGroups(), loadDirects()]).then(results => setListsError(results.some(result => !result))).finally(() => {
+    void refreshLists().finally(() => {
       setListsLoading(false);
       onInitialLoadComplete();
     });
     const timer = localPreview ? null : window.setInterval(() => {
-      void Promise.all([loadGroups(), loadDirects()]).then(results => setListsError(results.some(result => !result)));
+      if (document.visibilityState === 'visible') void refreshLists();
     }, 10000);
-    return () => { if (timer !== null) window.clearInterval(timer); };
-  }, [loadGroups, loadDirects, onInitialLoadComplete, localPreview]);
+    const refreshWhenAvailable = () => {
+      if (document.visibilityState === 'visible') void refreshLists();
+    };
+    document.addEventListener('visibilitychange', refreshWhenAvailable);
+    window.addEventListener('online', refreshWhenAvailable);
+    return () => {
+      if (timer !== null) window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshWhenAvailable);
+      window.removeEventListener('online', refreshWhenAvailable);
+    };
+  }, [refreshLists, onInitialLoadComplete, localPreview]);
   useEffect(() => {
     void loadMessages();
     if (localPreview) return;
-    const timer = window.setInterval(() => void loadMessages(), 10000);
-    return () => window.clearInterval(timer);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void loadMessages();
+    }, 10000);
+    const refreshWhenAvailable = () => {
+      if (document.visibilityState === 'visible') void loadMessages();
+    };
+    document.addEventListener('visibilitychange', refreshWhenAvailable);
+    window.addEventListener('online', refreshWhenAvailable);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshWhenAvailable);
+      window.removeEventListener('online', refreshWhenAvailable);
+    };
   }, [loadMessages, localPreview]);
 
   const visibleGroups = useMemo(
@@ -250,11 +288,10 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
     [directory, userSearch],
   );
   const retryLists = async () => {
-    setListsLoading(true);
     setListsError(false);
-    const results = await Promise.all([loadGroups(), loadDirects()]);
-    setListsError(results.some(result => !result));
-    setListsLoading(false);
+    if (!groups.length && !directs.length) setListsLoading(true);
+    try { await refreshLists(); }
+    finally { setListsLoading(false); }
   };
   const openConversationInfo = async () => {
     setError('');
@@ -394,10 +431,11 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
     setReplyingTo(null);
     setNewConversation(false);
   };
-  const send = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const send = async () => {
+    if (sendingMessage) return;
     const messageBody = body.trim();
     if (!messageBody) return;
+    setSendingMessage(true);
     setError('');
     try {
       if (localPreview) {
@@ -436,6 +474,48 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
         await loadDirects();
       }
     } catch (e: any) { setError(e.message); }
+    finally { setSendingMessage(false); }
+  };
+
+  const toggleMessageReaction = async (message: Message, emoji: string) => {
+    const groupId = selectedGroupId;
+    const directId = selectedDirectId;
+    if (groupId === null && directId === null) return;
+    const reactionKey = `${groupId === null ? `direct:${directId}` : `group:${groupId}`}:${message.id}:${emoji}`;
+    if (pendingReactionsRef.current.has(reactionKey)) return;
+    pendingReactionsRef.current.add(reactionKey);
+    const existing = message.reactions?.find(reaction => reaction.emoji === emoji);
+    const remove = Boolean(existing?.reactedByMe);
+    const updateMessage = (item: Message) => {
+      if (item.id !== message.id) return item;
+      const reactions = [...(item.reactions || [])];
+      const index = reactions.findIndex(reaction => reaction.emoji === emoji);
+      if (remove && index >= 0) {
+        const current = reactions[index];
+        if (current.count <= 1) reactions.splice(index, 1);
+        else reactions[index] = { ...current, count: current.count - 1, reactedByMe: false };
+      } else if (!remove) {
+        if (index >= 0) reactions[index] = { ...reactions[index], count: reactions[index].count + 1, reactedByMe: true };
+        else reactions.push({ emoji, count: 1, reactedByMe: true });
+      }
+      return { ...item, reactions };
+    };
+    try {
+      if (!localPreview) {
+        if (groupId !== null) {
+          if (remove) await api.removeCommunicationGroupReaction(groupId, message.id, emoji);
+          else await api.addCommunicationGroupReaction(groupId, message.id, emoji);
+        } else if (directId !== null) {
+          if (remove) await api.removeCommunicationDirectReaction(directId, message.id, emoji);
+          else await api.addCommunicationDirectReaction(directId, message.id, emoji);
+        }
+      }
+      setMessages(previous => previous.map(updateMessage));
+    } catch (e: any) {
+      setError(e.message || 'Não foi possível atualizar a reação.');
+    } finally {
+      pendingReactionsRef.current.delete(reactionKey);
+    }
   };
 
   const selectedGroup = groups.find(group => group.id === selectedGroupId);
@@ -477,7 +557,9 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {listsLoading ? <LoadingState compact label="Carregando conversas e grupos…" /> : listsError ? <DataUnavailableState compact title="Conversas indisponíveis" description="Não foi possível carregar suas conversas e grupos. Confira a conexão com o sistema e tente novamente." onRetry={() => void retryLists()} retrying={listsLoading} /> : section === 'groups' ? (
+          {listsLoading && !groups.length && !directs.length ? <LoadingState compact label="Carregando conversas e grupos…" /> : listsError && !groups.length && !directs.length ? <DataUnavailableState compact title="Conversas indisponíveis" description="Não foi possível carregar suas conversas e grupos. Confira a conexão com o sistema e tente novamente." onRetry={() => void retryLists()} retrying={listsLoading} /> : <>
+          {listsError && <div role="status" className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50/80 px-4 py-2 text-[11px] text-amber-900"><span>Sem atualização no momento. Mostrando conversas carregadas anteriormente.</span><button type="button" onClick={() => void retryLists()} className="shrink-0 font-semibold underline underline-offset-2">Tentar novamente</button></div>}
+          {section === 'groups' ? (
             visibleGroups.length ? (
               visibleGroups.map((group, index) => (
                 <button
@@ -525,6 +607,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
               <div className="p-6 text-center text-xs leading-5 text-slate-500">Suas conversas individuais aparecerão aqui. Use o botão <b>+</b> para iniciar uma conversa.</div>
             )
           )}
+          </>}
         </div>
         <div className="hidden shrink-0 border-t border-[#202936] bg-[#151C25] p-3 md:block">
           <UserAccountMenu currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenFeedback={onOpenFeedback} onOpenHelpInfo={onOpenHelpInfo} onOpenShortcuts={onOpenShortcuts} onLogout={onLogout}/>
@@ -538,12 +621,12 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
       <main className={`${selectedConversation ? 'flex' : 'hidden md:flex'} min-w-0 flex-1 flex-col bg-[#F1F4F7]`}>
         {selectedGroup ? <>
           <header className="flex items-center gap-3 border-b border-[#DCE3EB] bg-white px-4 py-3.5 sm:px-5"><button type="button" onClick={clearSelection} aria-label="Voltar à lista" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7] md:hidden"><ArrowLeft size={18}/></button><span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]"><Users size={18}/></span><button type="button" onClick={() => void openConversationInfo()} className="min-w-0 flex-1 text-left"><h2 className="truncate text-sm font-semibold text-[#263548]">{selectedGroup.name}</h2><p className="text-xs text-slate-500">{selectedGroup.sector} · {groupMembers.length || 'Ver'} participantes</p></button><button type="button" onClick={() => void openConversationInfo()} title="Dados do grupo" aria-label="Dados do grupo" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7]"><Info size={18}/></button></header>
-          {messagesLoading ? <LoadingState compact label="Carregando mensagens…" /> : messagesError ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <MessageList messages={messages} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={hasOlderMessages} loadingOlder={loadingOlder} groupId={selectedGroupId} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={setMessageDetails} onDelete={setMessageToDelete}/>}
-          <MessageComposer body={body} setBody={setBody} send={send} onSendAudio={sendAudioMessage} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
+          {messagesLoading && !messages.length ? <LoadingState compact label="Carregando mensagens…" /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={messages} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={hasOlderMessages} loadingOlder={loadingOlder} groupId={selectedGroupId} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={setMessageDetails} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}
+          <MessageComposer body={body} setBody={setBody} send={send} sending={sendingMessage} onSendAudio={sendAudioMessage} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
         </> : directTitle ? <>
           <header className="flex items-center gap-3 border-b border-[#DCE3EB] bg-white px-4 py-3.5 sm:px-5"><button type="button" onClick={clearSelection} aria-label="Voltar à lista" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7] md:hidden"><ArrowLeft size={18}/></button><span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]"><MessageCircle size={18}/></span><button type="button" onClick={() => void openConversationInfo()} className="min-w-0 flex-1 text-left"><h2 className="truncate text-sm font-semibold text-[#263548]">{directTitle}</h2><p className="text-xs text-slate-500">{draftRecipient ? 'Nova conversa · será criada ao enviar a primeira mensagem' : directDepartment || 'Conversa direta'}</p></button><button type="button" onClick={() => void openConversationInfo()} title="Ver perfil" aria-label="Ver perfil" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7]"><Info size={18}/></button></header>
-          {messagesLoading ? <LoadingState compact label="Carregando mensagens…" /> : messagesError ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <MessageList messages={messages} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={hasOlderMessages} loadingOlder={loadingOlder} directId={selectedDirectId} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={setMessageDetails} onDelete={setMessageToDelete}/>}
-          <MessageComposer body={body} setBody={setBody} send={send} onSendAudio={sendAudioMessage} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
+          {messagesLoading && !messages.length ? <LoadingState compact label="Carregando mensagens…" /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={messages} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={hasOlderMessages} loadingOlder={loadingOlder} directId={selectedDirectId} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={setMessageDetails} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}
+          <MessageComposer body={body} setBody={setBody} send={send} sending={sendingMessage} onSendAudio={sendAudioMessage} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
         </> : <div className="m-auto max-w-md px-6 text-center"><div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white text-[#916B19] shadow-sm"><MessageCircle size={28}/></div><h2 className="text-lg font-semibold text-[#263548]">Sua comunicação de produção</h2><p className="mt-2 text-sm leading-6 text-slate-500">Selecione uma conversa ou grupo. As mensagens ficam visíveis apenas para seus participantes.</p></div>}
         {error && <p role="alert" className="border-t border-slate-200/70 bg-transparent px-4 py-1.5 text-[11px] text-slate-500">{error}</p>}
       </main>
@@ -580,28 +663,43 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
   </section>;
 };
 
-const MessageList: React.FC<{ messages: Message[]; scrollerRef: React.RefObject<HTMLDivElement | null>; loadOlder: () => void; hasOlder: boolean; loadingOlder: boolean; groupId?: number | null; directId?: number | null; onReply: (message: Message) => void; onForward: (message: Message) => void; onDetails: (message: Message) => void; onDelete: (message: Message) => void }> = ({ messages, scrollerRef, loadOlder, hasOlder, loadingOlder, groupId, directId, onReply, onForward, onDetails, onDelete }) => {
+const MessageList: React.FC<{ messages: Message[]; scrollerRef: React.RefObject<HTMLDivElement | null>; loadOlder: () => void; hasOlder: boolean; loadingOlder: boolean; groupId?: number | null; directId?: number | null; onReply: (message: Message) => void; onForward: (message: Message) => void; onDetails: (message: Message) => void; onDelete: (message: Message) => void; onToggleReaction: (message: Message, emoji: string) => void }> = ({ messages, scrollerRef, loadOlder, hasOlder, loadingOlder, groupId, directId, onReply, onForward, onDetails, onDelete, onToggleReaction }) => {
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
+  const quickReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
   const copyMessage = async (message: Message) => {
     try { await navigator.clipboard.writeText(message.body); setCopied(true); window.setTimeout(() => setCopied(false), 1600); }
     catch { setCopied(false); }
     setOpenMenuId(null);
   };
-  return <div ref={scrollerRef} onScroll={event => { if (event.currentTarget.scrollTop < 90 && hasOlder && !loadingOlder) loadOlder(); }} className="relative min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 pb-5 sm:p-6">{(loadingOlder || hasOlder && !messages.length) && <div className="sticky top-1 z-10 mx-auto w-fit rounded-full bg-white px-3 py-1.5 text-[11px] text-slate-500 shadow">{loadingOlder ? 'Carregando mensagens anteriores…' : ''}</div>}{copied && <div role="status" className="sticky top-1 z-10 mx-auto w-fit rounded-full bg-[#151C25] px-3 py-1.5 text-xs text-white shadow">Mensagem copiada</div>}{(Array.isArray(messages) ? messages : []).map((message, index) => {
-    const quoted = messages.find(item => item.id === message.replyToMessageId);
-    const own = message.authorUid === api.getUser()?.uid;
-    return <article key={`msg-${message.id || index}-${message.createdAt || ''}`} className={`group relative max-w-[90%] rounded-xl border px-3.5 py-2.5 pr-10 shadow-sm sm:max-w-[82%] ${own ? 'ml-auto border-[#E4D2A2] bg-[#FFF9E9]' : 'border-[#E7ECF1] bg-white'}`}>
-      <button type="button" onClick={() => setOpenMenuId(openMenuId === message.id ? null : message.id)} aria-label="Ações da mensagem" title="Ações da mensagem" className="absolute right-1.5 top-1.5 rounded-md p-1 text-slate-400 hover:bg-black/5 hover:text-[#263548] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"><MoreVertical size={16}/></button>
-      {openMenuId === message.id && <div className={`absolute ${own ? 'right-1' : 'left-1'} top-8 z-30 w-48 overflow-hidden rounded-xl border border-[#DCE3EB] bg-white py-1 shadow-xl`}><button type="button" onClick={() => { onDetails(message); setOpenMenuId(null); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Info size={14}/>Dados da mensagem</button>{!message.deletedAt && <><button type="button" onClick={() => { onReply(message); setOpenMenuId(null); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Reply size={14}/>Responder</button><button type="button" onClick={() => void copyMessage(message)} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Copy size={14}/>Copiar</button><button type="button" onClick={() => { onForward(message); setOpenMenuId(null); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Forward size={14}/>Encaminhar</button>{own && <button type="button" onClick={() => { onDelete(message); setOpenMenuId(null); }} className="flex w-full items-center gap-2.5 border-t border-[#E7ECF1] px-3 py-2 text-left text-xs text-rose-700 hover:bg-rose-50"><Trash2 size={14}/>Apagar para todos</button>}</>}</div>}
-      <p className="mb-1 text-[10px] font-semibold text-[#916B19]">{message.authorName}</p>
-      {message.replyToMessageId && <div className="mb-2 border-l-2 border-[#FFAA00] bg-[#F1F4F7]/80 px-2.5 py-1.5"><p className="text-[10px] font-semibold text-[#916B19]">{quoted?.authorName || 'Mensagem anterior'}</p><p className="line-clamp-2 whitespace-pre-wrap break-words text-xs text-slate-600">{quoted?.body || 'Conteúdo fora do histórico carregado'}</p></div>}
-      {message.audioPreviewUrl ? <audio controls preload="metadata" src={message.audioPreviewUrl} className="max-w-full"/> : message.hasAudio && groupId !== undefined && groupId !== null ? <PrivateAudioPlayer message={message} load={() => api.getCommunicationGroupAudio(groupId, message.id)}/> : message.hasAudio && directId !== undefined && directId !== null ? <PrivateAudioPlayer message={message} load={() => api.getCommunicationDirectAudio(directId, message.id)}/> : <p className={`whitespace-pre-wrap break-words text-sm ${message.deletedAt ? 'italic text-slate-500' : 'text-[#263548]'}`}>{message.body}</p>}{message.hasAudio && <p className="mt-1 text-[10px] text-slate-500">Áudio · {Math.max(1, Math.round((message.audioDurationMs || 0) / 1000))}s</p>}<time className="mt-1 block text-right text-[10px] text-slate-400">{formatMessageTime(message.createdAt)}</time>
-    </article>;
-  })}</div>;
+  return <div ref={scrollerRef} aria-label="Mensagens da conversa" onScroll={event => { if (event.currentTarget.scrollTop < 90 && hasOlder && !loadingOlder) loadOlder(); }} className="relative min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 pb-5 sm:p-6">
+    {(loadingOlder || hasOlder && !messages.length) && <div className="sticky top-1 z-10 mx-auto w-fit rounded-full bg-white px-3 py-1.5 text-[11px] text-slate-500 shadow">{loadingOlder ? 'Carregando mensagens anteriores…' : ''}</div>}
+    {copied && <div role="status" className="sticky top-1 z-10 mx-auto w-fit rounded-full bg-[#151C25] px-3 py-1.5 text-xs text-white shadow">Mensagem copiada</div>}
+    {!messages.length && !loadingOlder && <div className="m-auto max-w-xs px-5 py-10 text-center text-sm leading-6 text-slate-500">Nenhuma mensagem ainda. Envie uma mensagem para iniciar a conversa.</div>}
+    {(Array.isArray(messages) ? messages : []).map((message, index) => {
+      const quoted = messages.find(item => item.id === message.replyToMessageId);
+      const own = message.authorUid === api.getUser()?.uid;
+      const readByCount = message.readByCount || 0;
+      const recipientCount = message.recipientCount || 0;
+      return <article key={`msg-${message.id || index}-${message.createdAt || ''}`} className={`group relative max-w-[90%] rounded-xl border px-3.5 py-2.5 pr-10 shadow-sm sm:max-w-[82%] ${own ? 'ml-auto border-[#E4D2A2] bg-[#FFF9E9]' : 'border-[#E7ECF1] bg-white'}`}>
+        <button type="button" onClick={() => setOpenMenuId(openMenuId === message.id ? null : message.id)} aria-label="Ações da mensagem" title="Ações da mensagem" aria-expanded={openMenuId === message.id} className="absolute right-1.5 top-1.5 rounded-md p-1 text-slate-400 hover:bg-black/5 hover:text-[#263548] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"><MoreVertical size={16}/></button>
+        {openMenuId === message.id && <div role="menu" className={`absolute ${own ? 'right-1' : 'left-1'} top-8 z-30 w-56 overflow-hidden rounded-xl border border-[#DCE3EB] bg-white py-1 shadow-xl`}>
+          {!message.deletedAt && <div aria-label="Reações rápidas" className="flex items-center justify-around border-b border-[#E7ECF1] px-2 py-1.5">{quickReactions.map(emoji => <button key={emoji} type="button" role="menuitem" onClick={() => { onToggleReaction(message, emoji); setOpenMenuId(null); }} aria-label={`Reagir com ${emoji}`} title={`Reagir com ${emoji}`} className="rounded-md p-1 text-lg transition hover:scale-110 hover:bg-[#F1F4F7]">{emoji}</button>)}</div>}
+          <button type="button" role="menuitem" onClick={() => { onDetails(message); setOpenMenuId(null); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Info size={14}/>Dados da mensagem</button>
+          {!message.deletedAt && <><button type="button" role="menuitem" onClick={() => { onReply(message); setOpenMenuId(null); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Reply size={14}/>Responder</button><button type="button" role="menuitem" onClick={() => void copyMessage(message)} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Copy size={14}/>Copiar</button><button type="button" role="menuitem" onClick={() => { onForward(message); setOpenMenuId(null); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Forward size={14}/>Encaminhar</button>{own && <button type="button" role="menuitem" onClick={() => { onDelete(message); setOpenMenuId(null); }} className="flex w-full items-center gap-2.5 border-t border-[#E7ECF1] px-3 py-2 text-left text-xs text-rose-700 hover:bg-rose-50"><Trash2 size={14}/>Apagar para todos</button>}</>}
+        </div>}
+        <p className="mb-1 text-[10px] font-semibold text-[#916B19]">{message.authorName}</p>
+        {message.replyToMessageId && <div className="mb-2 border-l-2 border-[#FFAA00] bg-[#F1F4F7]/80 px-2.5 py-1.5"><p className="text-[10px] font-semibold text-[#916B19]">{quoted?.authorName || 'Mensagem anterior'}</p><p className="line-clamp-2 whitespace-pre-wrap break-words text-xs text-slate-600">{quoted?.body || 'Conteúdo fora do histórico carregado'}</p></div>}
+        {message.audioPreviewUrl ? <audio controls preload="metadata" src={message.audioPreviewUrl} className="max-w-full"/> : message.hasAudio && groupId !== undefined && groupId !== null ? <PrivateAudioPlayer message={message} load={() => api.getCommunicationGroupAudio(groupId, message.id)}/> : message.hasAudio && directId !== undefined && directId !== null ? <PrivateAudioPlayer message={message} load={() => api.getCommunicationDirectAudio(directId, message.id)}/> : <p className={`whitespace-pre-wrap break-words text-sm ${message.deletedAt ? 'italic text-slate-500' : 'text-[#263548]'}`}>{message.body}</p>}
+        {message.hasAudio && <p className="mt-1 text-[10px] text-slate-500">Áudio · {Math.max(1, Math.round((message.audioDurationMs || 0) / 1000))}s</p>}
+        {!!message.reactions?.length && <div className="mt-2 flex flex-wrap gap-1.5">{message.reactions.map(reaction => <button key={reaction.emoji} type="button" onClick={() => onToggleReaction(message, reaction.emoji)} aria-label={`${reaction.emoji}, ${reaction.count} reações${reaction.reactedByMe ? ', sua reação' : ''}`} aria-pressed={reaction.reactedByMe} className={`rounded-full border px-2 py-0.5 text-xs transition ${reaction.reactedByMe ? 'border-[#D59A12] bg-[#FFF1C8]' : 'border-[#DCE3EB] bg-white hover:bg-[#F1F4F7]'}`}>{reaction.emoji} <span className="text-[10px] text-slate-600">{reaction.count}</span></button>)}</div>}
+        <time className="mt-1 flex items-center justify-end gap-1 text-[10px] text-slate-400">{formatMessageTime(message.createdAt)}{own && recipientCount > 0 && <span title={readByCount ? `Lida por ${readByCount} de ${recipientCount}` : 'Enviada'} aria-label={readByCount ? `Lida por ${readByCount} de ${recipientCount}` : 'Enviada'} className={readByCount ? 'text-sky-600' : 'text-slate-400'}>{readByCount ? <CheckCheck size={13}/> : <Check size={13}/>}</span>}</time>
+      </article>;
+    })}
+  </div>;
 };
 
-const MessageComposer: React.FC<{ body: string; setBody: (value: string) => void; send: (event: React.FormEvent) => void; onSendAudio: (audio: Blob, durationMs: number) => Promise<void>; replyingTo: Message | null; cancelReply: () => void }> = ({ body, setBody, send, onSendAudio, replyingTo, cancelReply }) => <form onSubmit={send} className="sticky bottom-0 z-10 flex shrink-0 items-end gap-2 border-t border-[#DCE3EB] bg-white p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-4"><EmojiPicker onSelect={emoji => setBody(`${body}${emoji}`.slice(0, 4000))}/><AudioRecorderButton onRecorded={onSendAudio}/><div className="min-w-0 flex-1">{replyingTo && <div className="mb-2 flex items-center gap-2 rounded-lg border-l-2 border-[#FFAA00] bg-[#F1F4F7] px-2.5 py-1.5"><span className="min-w-0 flex-1"><b className="block text-[10px] text-[#916B19]">Respondendo a {replyingTo.authorName}</b><small className="block truncate text-xs text-slate-600">{replyingTo.body}</small></span><button type="button" onClick={cancelReply} aria-label="Cancelar resposta" className="rounded p-1 text-slate-500 hover:bg-white"><X size={15}/></button></div>}<textarea value={body} onChange={event => setBody(event.target.value)} maxLength={4000} rows={1} placeholder="Escreva uma mensagem" className="max-h-28 min-h-11 w-full resize-y rounded-2xl border border-[#DCE3EB] px-4 py-3 text-sm text-[#263548] outline-none focus:border-[#FFAA00]"/></div><button type="submit" disabled={!body.trim()} title="Enviar mensagem" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FFAA00] text-[#151C25] hover:bg-amber-300 disabled:opacity-40"><Send size={17}/></button></form>;
+const MessageComposer: React.FC<{ body: string; setBody: (value: string) => void; send: () => void; sending: boolean; onSendAudio: (audio: Blob, durationMs: number) => Promise<void>; replyingTo: Message | null; cancelReply: () => void }> = ({ body, setBody, send, sending, onSendAudio, replyingTo, cancelReply }) => <form onSubmit={event => { event.preventDefault(); void send(); }} className="sticky bottom-0 z-10 flex shrink-0 items-end gap-2 border-t border-[#DCE3EB] bg-white p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-4"><EmojiPicker onSelect={emoji => setBody(`${body}${emoji}`.slice(0, 4000))}/><AudioRecorderButton onRecorded={onSendAudio}/><div className="min-w-0 flex-1">{replyingTo && <div className="mb-2 flex items-center gap-2 rounded-lg border-l-2 border-[#FFAA00] bg-[#F1F4F7] px-2.5 py-1.5"><span className="min-w-0 flex-1"><b className="block text-[10px] text-[#916B19]">Respondendo a {replyingTo.authorName}</b><small className="block truncate text-xs text-slate-600">{replyingTo.body}</small></span><button type="button" onClick={cancelReply} aria-label="Cancelar resposta" className="rounded p-1 text-slate-500 hover:bg-white"><X size={15}/></button></div>}<textarea aria-label="Escreva uma mensagem" value={body} onChange={event => setBody(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} maxLength={4000} rows={1} placeholder="Escreva uma mensagem · Enter envia, Shift+Enter quebra linha" className="max-h-28 min-h-11 w-full resize-y rounded-2xl border border-[#DCE3EB] px-4 py-3 text-sm text-[#263548] outline-none focus:border-[#FFAA00]"/></div><button type="submit" disabled={!body.trim() || sending} title={sending ? 'Enviando mensagem…' : 'Enviar mensagem'} aria-label={sending ? 'Enviando mensagem' : 'Enviar mensagem'} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FFAA00] text-[#151C25] hover:bg-amber-300 disabled:opacity-40"><Send size={17}/></button></form>;
 
 const PrivateAudioPlayer: React.FC<{ message: Message; load: () => Promise<string> }> = ({ message, load }) => {
   const [url, setUrl] = useState(''); const [failed, setFailed] = useState(false); const [loading, setLoading] = useState(false);

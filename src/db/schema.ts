@@ -425,6 +425,7 @@ export const communicationMessages = pgTable("communication_messages", {
   deletedAt: timestamp("deleted_at"),
   deletedByUid: text("deleted_by_uid"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [index("communication_messages_group_idx").on(table.groupId, table.createdAt)]);
 
 export const communicationDirectConversations = pgTable("communication_direct_conversations", {
@@ -458,7 +459,24 @@ export const communicationDirectMessages = pgTable("communication_direct_message
   deletedAt: timestamp("deleted_at"),
   deletedByUid: text("deleted_by_uid"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [index("communication_direct_messages_conversation_idx").on(table.conversationId, table.createdAt)]);
+
+export const communicationMessageReactions = pgTable("communication_message_reactions", {
+  id: serial("id").primaryKey(),
+  groupMessageId: integer("group_message_id").references(() => communicationMessages.id, { onDelete: "cascade" }),
+  directMessageId: integer("direct_message_id").references(() => communicationDirectMessages.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  emoji: text("emoji").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  check("communication_message_reactions_target_check", sql`(${table.groupMessageId} IS NOT NULL AND ${table.directMessageId} IS NULL) OR (${table.groupMessageId} IS NULL AND ${table.directMessageId} IS NOT NULL)`),
+  check("communication_message_reactions_emoji_check", sql`${table.emoji} IN ('👍', '❤️', '😂', '😮', '😢', '🙏')`),
+  uniqueIndex("communication_message_reactions_group_unique").on(table.groupMessageId, table.userId, table.emoji).where(sql`${table.groupMessageId} IS NOT NULL`),
+  uniqueIndex("communication_message_reactions_direct_unique").on(table.directMessageId, table.userId, table.emoji).where(sql`${table.directMessageId} IS NOT NULL`),
+  index("communication_message_reactions_group_idx").on(table.groupMessageId),
+  index("communication_message_reactions_direct_idx").on(table.directMessageId),
+]);
 
 // Relations
 export const productionOrdersRelations = relations(productionOrders, ({ one, many }) => ({
