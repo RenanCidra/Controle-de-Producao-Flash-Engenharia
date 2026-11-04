@@ -28,7 +28,7 @@ Dados ausentes não devem ser interpretados como zero ou como etapa concluída. 
 1. Instale as dependências:
 
    ```powershell
-   npm install
+   npm ci
    ```
 
 2. Crie um arquivo `.env` local (não o versione) com as variáveis do servidor:
@@ -92,6 +92,7 @@ O projeto também contém testes Python da API simulada; instruções estão na 
 - [Cache offline das imagens da interface](docs/OFFLINE_ASSETS.md)
 - [Ajuda e feedback interno](docs/FEEDBACK.md)
 - [Continuidade do projeto e próximos passos](docs/AI_STUDIO_HANDOFF.md)
+- [Revisão geral, SWOT e verificação de segurança (04/11/2026)](docs/REVIEW_GERAL_SEGURANCA_2026-11-04.md)
 
 ## Segurança e uso operacional
 

@@ -4,6 +4,7 @@ import {
   GitBranch,
   ClipboardList,
   CalendarDays,
+  MessageCircle,
   PanelLeftClose,
   PanelLeftOpen,
   X,
@@ -62,6 +63,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navItems: { id?: ActiveTab; label: string; icon: LucideIcon; badge?: string; planned?: boolean }[] = [
     { id: 'dashboard', label: 'Painel Geral', icon: Home },
     { id: 'traceability', label: 'Pedidos e OPs', icon: GitBranch },
+    ...(currentUser?.role !== 'AUDITOR' ? [{ id: 'communications' as ActiveTab, label: 'Central de comunicação', icon: MessageCircle }] : []),
     { id: 'occurrences', label: 'Gestão de ocorrências', icon: ClipboardList },
     { label: 'PMP · Mestre da Produção', icon: CalendarDays, badge: 'Planejado', planned: true },
   ];

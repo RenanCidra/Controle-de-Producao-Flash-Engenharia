@@ -4,6 +4,9 @@ import { AuditService } from '../services/audit.service.ts';
 import { AuditAction, AuditEntity } from '../types/index.ts';
 
 function inferEntityFromPath(path: string): AuditEntity {
+  if (path.includes('/communications')) return 'COMMUNICATION';
+  if (path.includes('/occurrences')) return 'PRODUCTION_OCCURRENCE';
+  if (path.includes('/feedback')) return 'FEEDBACK_SUBMISSION';
   if (path.includes('/production-orders')) return 'PRODUCTION_ORDER';
   if (path.includes('/production-lines')) return 'PRODUCTION_LINE';
   if (path.includes('/quality')) return 'QUALITY';

@@ -34,6 +34,17 @@ import { requirePermission } from './middleware/access-control.ts';
 const apiRouter = Router();
 
 apiRouter.use(validateRequestBody);
+
+// Enforce local-preview read-only mode before mounting any router, including
+// public authentication/bootstrap endpoints that otherwise bypass the global auth middleware.
+apiRouter.use((req: Request, res: Response, next) => {
+  const previewAuthEnabled = process.env.DEV_PREVIEW_AUTH === 'true' && process.env.NODE_ENV !== 'production';
+  const isMutation = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
+  if (previewAuthEnabled && isMutation) {
+    return res.status(403).json({ error: 'Modo de prévia local: alterações estão desativadas.' });
+  }
+  return next();
+});
 apiRouter.use(auditHttpMiddleware);
 
 apiRouter.use('/auth', authRoutes);
@@ -60,14 +71,6 @@ apiRouter.get('/health', async (req: Request, res: Response) => {
 apiRouter.use(authenticateToken);
 apiRouter.use((req: Request, res: Response, next) => {
   if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return mutationRateLimit(req, res, next);
-  return next();
-});
-apiRouter.use((req: Request, res: Response, next) => {
-  const previewAuthEnabled = process.env.DEV_PREVIEW_AUTH === 'true' && process.env.NODE_ENV !== 'production';
-  const isMutation = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
-  if (previewAuthEnabled && isMutation) {
-    return res.status(403).json({ error: 'Modo de prévia local: alterações estão desativadas.' });
-  }
   return next();
 });
 apiRouter.use('/users', usersRoutes);

@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import apiRouter from './src/routes.ts';
 import { apiRateLimit } from './src/middleware/request-protection.ts';
+import { TokenService } from './src/services/token.service.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,6 +16,7 @@ async function startServer() {
   if (localPreviewAuth && process.env.NODE_ENV === 'production') {
     throw new Error('DEV_PREVIEW_AUTH não pode ser habilitado em produção.');
   }
+  if (process.env.NODE_ENV === 'production') TokenService.assertConfigured();
   const configuredPort = Number.parseInt(process.env.PORT || '', 10);
   const PORT = Number.isInteger(configuredPort) && configuredPort > 0 && configuredPort <= 65535
     ? configuredPort
@@ -55,6 +57,7 @@ async function startServer() {
       "img-src 'self' data: blob:",
       "font-src 'self' data: https://fonts.gstatic.com",
       "connect-src 'self'",
+      "media-src 'self' blob:",
       "worker-src 'self' blob:",
       "base-uri 'self'",
       "object-src 'none'",
@@ -99,7 +102,7 @@ async function startServer() {
     res.status(500).json({ error: 'Erro interno no servidor. Consulte os logs do sistema.' });
   });
 
-  const bindAddress = localPreviewAuth ? '127.0.0.1' : '0.0.0.0';
+  const bindAddress = process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1';
   app.listen(PORT, bindAddress, () => {
     console.log(`🚀 NexusERP Fullstack Server running at http://${bindAddress}:${PORT}`);
     console.log('📦 Database connectivity is reported by GET /api/health.');

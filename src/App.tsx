@@ -1,28 +1,32 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { api, AuthUser, type FeedbackCategory } from './client/api.ts';
 import { Sidebar, ActiveTab } from './client/components/Sidebar.tsx';
 import { Header } from './client/components/Header.tsx';
 import { AuthModal } from './client/modules/auth/AuthModal.tsx';
-import { DashboardView } from './client/modules/dashboard/DashboardView.tsx';
-import { TraceabilityView } from './client/modules/traceability/TraceabilityView.tsx';
-import { OccurrencesView } from './client/modules/occurrences/OccurrencesView.tsx';
-import { ProductionOrdersView } from './client/modules/production-orders/ProductionOrdersView.tsx';
-import { ProductionLinesView } from './client/modules/production-lines/ProductionLinesView.tsx';
-import { QualityView } from './client/modules/quality/QualityView.tsx';
-import { InventoryView } from './client/modules/inventory/InventoryView.tsx';
-import { IntegrationsView } from './client/modules/integrations/IntegrationsView.tsx';
-import { SettingsView, SettingsSubTab } from './client/modules/settings/SettingsView.tsx';
+import type { SettingsSubTab } from './client/modules/settings/SettingsView.tsx';
 import { subscribeToLanguageChange } from './client/i18n/index.ts';
 import { AuthPage } from './client/modules/auth/AuthPage.tsx';
 import { UserProfileModal } from './client/modules/auth/UserProfileModal.tsx';
 import { FlashAssistantWidget } from './client/components/FlashAssistantWidget.tsx';
 import { WelcomeView } from './client/modules/home/WelcomeView.tsx';
-import { CommunicationsView } from './client/modules/communications/CommunicationsView.tsx';
 import { FeedbackDialog } from './client/modules/feedback/FeedbackDialog.tsx';
 import { HelpInfoDialog, type HelpInfoMode } from './client/components/HelpInfoDialog.tsx';
 import { LogoutConfirmDialog } from './client/components/LogoutConfirmDialog.tsx';
+import { LoadingState } from './client/components/DataStatus.tsx';
+import { ModuleErrorBoundary } from './client/components/ModuleErrorBoundary.tsx';
+
+const DashboardView = lazy(() => import('./client/modules/dashboard/DashboardView.tsx').then(module => ({ default: module.DashboardView })));
+const TraceabilityView = lazy(() => import('./client/modules/traceability/TraceabilityView.tsx').then(module => ({ default: module.TraceabilityView })));
+const OccurrencesView = lazy(() => import('./client/modules/occurrences/OccurrencesView.tsx').then(module => ({ default: module.OccurrencesView })));
+const ProductionOrdersView = lazy(() => import('./client/modules/production-orders/ProductionOrdersView.tsx').then(module => ({ default: module.ProductionOrdersView })));
+const ProductionLinesView = lazy(() => import('./client/modules/production-lines/ProductionLinesView.tsx').then(module => ({ default: module.ProductionLinesView })));
+const QualityView = lazy(() => import('./client/modules/quality/QualityView.tsx').then(module => ({ default: module.QualityView })));
+const InventoryView = lazy(() => import('./client/modules/inventory/InventoryView.tsx').then(module => ({ default: module.InventoryView })));
+const IntegrationsView = lazy(() => import('./client/modules/integrations/IntegrationsView.tsx').then(module => ({ default: module.IntegrationsView })));
+const SettingsView = lazy(() => import('./client/modules/settings/SettingsView.tsx').then(module => ({ default: module.SettingsView })));
+const CommunicationsView = lazy(() => import('./client/modules/communications/CommunicationsView.tsx').then(module => ({ default: module.CommunicationsView })));
 
 const DEV_PREVIEW_AUTH = import.meta.env.DEV && import.meta.env.VITE_DEV_PREVIEW_AUTH === 'true';
 const DEV_PREVIEW_USER: AuthUser = {
@@ -418,7 +422,7 @@ export default function App() {
       )}
 
       {activeTab === 'communications' ? (
-        <CommunicationsView
+        <ModuleErrorBoundary key={activeTab} onReturn={() => setActiveTab('home')}><Suspense fallback={<div className="flex h-[100dvh] items-center justify-center bg-[#151C25]"><LoadingState compact label="Abrindo Central de Comunicação…"/></div>}><CommunicationsView
           currentUser={currentUser}
           localPreview={DEV_PREVIEW_AUTH}
           onInitialLoadComplete={onCommunicationsInitialLoadComplete}
@@ -440,9 +444,9 @@ export default function App() {
             handleNavigateToSettings('general');
           }}
           onLogout={handleLogout}
-        />
+        /></Suspense></ModuleErrorBoundary>
       ) : activeTab === 'settings' ? (
-        <SettingsView
+        <ModuleErrorBoundary key={activeTab} onReturn={handleBackFromSettings}><Suspense fallback={<div className="flex h-[100dvh] items-center justify-center bg-[#F1F4F7]"><LoadingState label="Abrindo configurações…"/></div>}><SettingsView
           initialSubTab={settingsSubTab}
           onBack={handleBackFromSettings}
           stats={stats}
@@ -471,7 +475,7 @@ export default function App() {
           onRefreshStats={loadStats}
           onSuccess={(msg) => showToast(msg, 'success')}
           onError={(msg) => showToast(msg, 'error')}
-        />
+        /></Suspense></ModuleErrorBoundary>
       ) : (
         <div className="flex h-[100dvh] w-full min-w-0 overflow-hidden bg-[#F1F4F7]">
           <Sidebar
@@ -515,6 +519,7 @@ export default function App() {
             />
 
             <div className="min-w-0 flex-1 overflow-y-auto bg-transparent p-3 sm:p-4 lg:p-6">
+              <ModuleErrorBoundary key={activeTab} onReturn={() => setActiveTab('home')}><Suspense fallback={<LoadingState label="Abrindo módulo…"/>}>
               {activeTab === 'home' && <WelcomeView stats={stats} loading={statsLoading} error={statsError} onNavigate={(tab) => tab === 'communications' ? navigateToCommunications() : setActiveTab(tab)} onOpenConnectors={() => handleNavigateToSettings('connectors')} onRetry={() => void loadStats()} />}
 
               {activeTab === 'dashboard' && (
@@ -617,7 +622,7 @@ export default function App() {
                   onError={(msg) => showToast(msg, 'error')}
                 />
               )}
-
+              </Suspense></ModuleErrorBoundary>
             </div>
           </main>
         </div>

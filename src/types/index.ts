@@ -57,6 +57,7 @@ export type AuditEntity =
   | 'AUTH'
   | 'PROTHEUS_SYNC'
   | 'PRODUCTION_OCCURRENCE'
+  | 'COMMUNICATION'
   | 'FEEDBACK_SUBMISSION'
   | 'SYSTEM';
 

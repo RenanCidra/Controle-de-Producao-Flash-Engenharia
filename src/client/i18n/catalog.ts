@@ -2018,6 +2018,9 @@ Object.assign(en, {
   'O Nexus ajuda a consultar o andamento da produção espelhado do Protheus e centraliza a comunicação interna.': 'Nexus helps check production progress mirrored from Protheus and centralizes internal communication.',
   'Pedidos e OPs': 'Orders and WOs', 'Consulte pedidos, ordens e etapas disponíveis no espelho operacional.': 'Review orders, work orders, and steps available in the operational mirror.',
   'Central de comunicação': 'Communication Center', 'Converse individualmente ou por grupos de setor habilitados.': 'Chat one-on-one or in enabled department groups.',
+  'Abrindo Central de Comunicação…': 'Opening Communication Center…', 'Abrindo configurações…': 'Opening settings…', 'Abrindo módulo…': 'Opening module…',
+  'Não foi possível abrir este módulo': 'This module could not be opened', 'O restante do sistema continua disponível. Tente abrir o módulo novamente ou volte ao painel inicial.': 'The rest of the system is still available. Try opening the module again or return to the home screen.',
+  'Recarregar sistema': 'Reload system', 'Voltar ao painel': 'Return to dashboard',
 });
 
 Object.assign(es, {
@@ -2043,6 +2046,9 @@ Object.assign(es, {
   'O Nexus ajuda a consultar o andamento da produção espelhado do Protheus e centraliza a comunicação interna.': 'Nexus ayuda a consultar el avance de producción reflejado desde Protheus y centraliza la comunicación interna.',
   'Pedidos e OPs': 'Pedidos y órdenes de producción', 'Consulte pedidos, ordens e etapas disponíveis no espelho operacional.': 'Consulte pedidos, órdenes y etapas disponibles en el espejo operativo.',
   'Central de comunicação': 'Centro de comunicación', 'Converse individualmente ou por grupos de setor habilitados.': 'Converse individualmente o en grupos de sectores habilitados.',
+  'Abrindo Central de Comunicação…': 'Abriendo el centro de comunicación…', 'Abrindo configurações…': 'Abriendo configuración…', 'Abrindo módulo…': 'Abriendo módulo…',
+  'Não foi possível abrir este módulo': 'No se pudo abrir este módulo', 'O restante do sistema continua disponível. Tente abrir o módulo novamente ou volte ao painel inicial.': 'El resto del sistema sigue disponible. Intente abrir el módulo de nuevo o vuelva a la pantalla de inicio.',
+  'Recarregar sistema': 'Recargar el sistema', 'Voltar ao painel': 'Volver al panel',
 });
 
 export const catalogs: Record<Exclude<AppLanguage, 'pt-BR'>, Record<string, string>> = { 'en-US': en, 'es-ES': es };
