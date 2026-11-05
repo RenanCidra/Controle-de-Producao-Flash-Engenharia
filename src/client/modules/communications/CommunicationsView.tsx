@@ -687,7 +687,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
         <div className="mt-auto"><UserAccountMenu compact currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenFeedback={onOpenFeedback} onOpenHelpInfo={onOpenHelpInfo} onOpenShortcuts={onOpenShortcuts} onLogout={onLogout}/></div>
       </nav>
       <aside className={`${selectedConversation ? 'hidden md:flex' : 'flex'} w-full min-w-0 shrink-0 flex-col border-r border-[#DCE3EB] bg-white md:w-[340px] md:max-w-[340px]`}>
-        <header className="flex shrink-0 items-center justify-between border-b border-[#E7ECF1] bg-white px-4 py-3.5 text-[#263548] md:px-5 md:py-4">
+        <header data-theme-communications-header className="flex shrink-0 items-center justify-between border-b border-[#E7ECF1] bg-white px-4 py-3.5 text-[#263548] md:px-5 md:py-4">
           <div className="flex min-w-0 items-center gap-2.5">
             <img src="/assets/flash-brand.svg" alt="Flash Engenharia" className="h-8 w-[132px] shrink-0 object-contain object-left" />
             {section === 'groups' && <span className="truncate border-l border-[#DCE3EB] pl-2.5 text-xs font-medium text-slate-500">{translateText('Grupos')}</span>}
