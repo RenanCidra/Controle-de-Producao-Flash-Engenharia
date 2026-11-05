@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Check, CheckCheck, ChevronDown, Copy, Forward, Info, MessageCircle, MessageSquarePlus, MoreVertical, Pin, Plus, Reply, Search, Send, Smile, Sparkles, Star, Trash2, UserRound, Users, X } from 'lucide-react';
+import { ArrowLeft, Check, CheckCheck, ChevronDown, Copy, Forward, Home, Info, MessageCircle, MessageSquarePlus, MoreVertical, Pin, Plus, Reply, Search, Send, Smile, Sparkles, Star, Trash2, UserRound, Users, X } from 'lucide-react';
 import { api, type AuthUser, type FeedbackCategory } from '../../api.ts';
 import { UserAccountMenu } from '../../components/UserAccountMenu.tsx';
 import { AudioRecorderButton } from '../../components/AudioRecorderButton.tsx';
@@ -677,29 +677,21 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
   const searchResultTotal = localPreview ? messages.length : searchTotal;
 
   return <section className="relative flex h-[100dvh] w-full min-w-0 flex-col overflow-hidden bg-white text-[#263548]">
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#263548] bg-[#151C25] px-3 text-white sm:px-6">
-      <div className="flex min-w-0 items-center gap-3">
-        <img src="/assets/flash-brand.svg" alt="Flash Engenharia" className="h-8 w-[132px] shrink-0 object-contain object-left md:hidden" />
-        <span className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00] md:flex"><MessageCircle size={18}/></span>
-        <div className="hidden min-w-0 md:block"><h1 className="truncate text-sm font-semibold">Central de comunicação</h1><p className="text-[11px] text-slate-300">Flash Connect</p></div>
-      </div>
-      <div className="flex shrink-0 items-center gap-1">
-        <div className="md:hidden"><UserAccountMenu compact currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenFeedback={onOpenFeedback} onOpenHelpInfo={onOpenHelpInfo} onOpenShortcuts={onOpenShortcuts} onLogout={onLogout}/></div>
-        <button type="button" onClick={onBack} className="inline-flex items-center gap-2 rounded-lg px-2 py-2 text-xs font-semibold text-slate-200 transition hover:bg-[#263548] hover:text-white sm:px-3 md:hidden"><ArrowLeft size={15}/><span className="hidden sm:inline">Voltar ao sistema</span><span className="sm:hidden">Voltar</span></button>
-      </div>
-    </header>
-
     <div className="flex min-h-0 flex-1 overflow-hidden">
       <nav aria-label={translateText('Navegação da comunicação')} className="hidden w-16 shrink-0 flex-col items-center border-r border-[#263548] bg-[#111820] py-3 md:flex">
         <button type="button" onClick={onBack} title={translateText('Voltar ao sistema')} aria-label={translateText('Voltar ao sistema')} className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl text-slate-300 transition-colors hover:bg-[#263548] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"><ArrowLeft size={19}/></button>
         <div className="mb-3 w-8 border-t border-[#263548]" />
         <button type="button" onClick={() => { setSection('conversations'); clearSelection(); }} aria-current={section === 'conversations' ? 'page' : undefined} title={translateText('Conversas')} aria-label={translateText('Conversas')} className={`mb-2 flex h-10 w-10 items-center justify-center rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${section === 'conversations' ? 'bg-[#263548] text-[#FFAA00]' : 'text-slate-300 hover:bg-[#263548] hover:text-white'}`}><MessageCircle size={19}/></button>
         <button type="button" onClick={() => { setSection('groups'); clearSelection(); }} aria-current={section === 'groups' ? 'page' : undefined} title={translateText('Grupos')} aria-label={translateText('Grupos')} className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${section === 'groups' ? 'bg-[#263548] text-[#FFAA00]' : 'text-slate-300 hover:bg-[#263548] hover:text-white'}`}><Users size={19}/></button>
-        <button type="button" onClick={onOpenProfile} title={translateText('Meu perfil')} aria-label={translateText('Meu perfil')} className="mt-auto flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[#3A4655] bg-[#263548] text-[#FFAA00] transition-colors hover:border-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400">{currentUser?.avatarUrl ? <img src={currentUser.avatarUrl} alt="" className="h-full w-full object-cover"/> : <UserRound size={18}/>}</button>
+        <button type="button" onClick={() => onAskAssistant('')} title={translateText('Assistente Flash')} aria-label={translateText('Assistente Flash')} className="mt-2 flex h-10 w-10 items-center justify-center rounded-xl text-slate-300 transition-colors hover:bg-[#263548] hover:text-[#FFAA00] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"><Sparkles size={19}/></button>
+        <div className="mt-auto"><UserAccountMenu compact currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenFeedback={onOpenFeedback} onOpenHelpInfo={onOpenHelpInfo} onOpenShortcuts={onOpenShortcuts} onLogout={onLogout}/></div>
       </nav>
       <aside className={`${selectedConversation ? 'hidden md:flex' : 'flex'} w-full min-w-0 shrink-0 flex-col border-r border-[#DCE3EB] bg-white md:w-[340px] md:max-w-[340px]`}>
-        <header className="hidden items-center justify-between bg-[#151C25] px-5 py-4 text-white md:flex">
-          <div><h2 className="text-base font-semibold">{section === 'groups' ? 'Grupos' : 'Conversas'}</h2><p className="mt-0.5 text-xs text-slate-300">Flash Connect</p></div>
+        <header className="flex shrink-0 items-center justify-between border-b border-[#E7ECF1] bg-white px-4 py-3.5 text-[#263548] md:px-5 md:py-4">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <img src="/assets/flash-brand.svg" alt="Flash Engenharia" className="h-8 w-[132px] shrink-0 object-contain object-left" />
+            {section === 'groups' && <span className="truncate border-l border-[#DCE3EB] pl-2.5 text-xs font-medium text-slate-500">{translateText('Grupos')}</span>}
+          </div>
           {section === 'groups' && canCreateGroups && <button type="button" onClick={() => void openCreateGroup()} title="Criar grupo" aria-label="Criar grupo" className="rounded-full bg-[#FFAA00] p-2 text-[#151C25] hover:bg-amber-300"><Plus size={18}/></button>}
           {section === 'conversations' && <button type="button" onClick={() => void openNewConversation()} title="Adicionar conversa" aria-label="Adicionar conversa" className="rounded-full bg-[#FFAA00] p-2 text-[#151C25] transition hover:bg-amber-300"><MessageSquarePlus size={18}/></button>}
         </header>
@@ -761,12 +753,12 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
           )}
           </>}
         </div>
-        <div className="hidden shrink-0 border-t border-[#202936] bg-[#151C25] p-3 md:block">
-          <UserAccountMenu currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenFeedback={onOpenFeedback} onOpenHelpInfo={onOpenHelpInfo} onOpenShortcuts={onOpenShortcuts} onLogout={onLogout}/>
-        </div>
-        <nav aria-label="Seções da comunicação" className="flex shrink-0 items-stretch border-t border-[#263548] bg-[#151C25] pb-[env(safe-area-inset-bottom)] md:hidden">
-          <button type="button" onClick={() => { setSection('conversations'); clearSelection(); }} aria-current={section === 'conversations' ? 'page' : undefined} className={`relative flex min-h-16 flex-1 flex-col items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold transition ${section === 'conversations' ? 'text-[#FFAA00]' : 'text-slate-300'}`}><MessageCircle size={19}/><span>Conversas</span>{unreadDirectTotal > 0 && <b className="absolute right-[calc(50%-25px)] top-1 min-w-4 rounded-full bg-[#FFAA00] px-1 text-center text-[9px] leading-4 text-[#151C25]">{unreadDirectTotal}</b>}</button>
-          <button type="button" onClick={() => { setSection('groups'); clearSelection(); }} aria-current={section === 'groups' ? 'page' : undefined} className={`relative flex min-h-16 flex-1 flex-col items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold transition ${section === 'groups' ? 'text-[#FFAA00]' : 'text-slate-300'}`}><Users size={19}/><span>Grupos</span>{unreadGroupTotal > 0 && <b className="absolute right-[calc(50%-25px)] top-1 min-w-4 rounded-full bg-[#FFAA00] px-1 text-center text-[9px] leading-4 text-[#151C25]">{unreadGroupTotal}</b>}</button>
+        <nav aria-label={translateText('Seções da comunicação')} className="flex shrink-0 items-stretch justify-around border-t border-[#263548] bg-[#151C25] pb-[env(safe-area-inset-bottom)] md:hidden">
+          <button type="button" onClick={() => { setSection('conversations'); clearSelection(); }} aria-current={section === 'conversations' ? 'page' : undefined} className={`relative flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-semibold transition ${section === 'conversations' ? 'text-[#FFAA00]' : 'text-slate-300'}`}><MessageCircle size={18}/><span>{translateText('Conversas')}</span>{unreadDirectTotal > 0 && <b className="absolute left-1/2 top-1 ml-2 min-w-4 rounded-full bg-[#FFAA00] px-1 text-center text-[9px] leading-4 text-[#151C25]">{unreadDirectTotal}</b>}</button>
+          <button type="button" onClick={() => { setSection('groups'); clearSelection(); }} aria-current={section === 'groups' ? 'page' : undefined} className={`relative flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-semibold transition ${section === 'groups' ? 'text-[#FFAA00]' : 'text-slate-300'}`}><Users size={18}/><span>{translateText('Grupos')}</span>{unreadGroupTotal > 0 && <b className="absolute left-1/2 top-1 ml-2 min-w-4 rounded-full bg-[#FFAA00] px-1 text-center text-[9px] leading-4 text-[#151C25]">{unreadGroupTotal}</b>}</button>
+          <button type="button" onClick={() => onAskAssistant('')} aria-label={translateText('Assistente Flash')} title={translateText('Assistente Flash')} className="flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-semibold text-slate-300 transition hover:text-[#FFAA00]"><Sparkles size={18}/><span className="truncate">{translateText('Assistente Flash')}</span></button>
+          <div className="flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[10px] font-semibold text-slate-300"><UserAccountMenu compact currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenFeedback={onOpenFeedback} onOpenHelpInfo={onOpenHelpInfo} onOpenShortcuts={onOpenShortcuts} onLogout={onLogout}/><span>{translateText('Meu perfil')}</span></div>
+          <button type="button" onClick={onBack} aria-label={translateText('Voltar ao sistema')} title={translateText('Voltar ao sistema')} className="flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-semibold text-slate-300 transition hover:text-[#FFAA00]"><Home size={18}/><span>{translateText('Sistema')}</span></button>
         </nav>
       </aside>
 

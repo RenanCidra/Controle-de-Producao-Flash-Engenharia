@@ -156,9 +156,12 @@ export const UserAccountMenu: React.FC<UserAccountMenuProps> = ({
       <a href="https://flashengenharia.com.br/sobre/" target="_blank" rel="noopener noreferrer" onClick={close} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-slate-300 hover:bg-[#1C2532] hover:text-white"><span className="flex items-center gap-2.5"><ExternalLink className="h-4 w-4 text-[#FFAA00]" />{t('Sobre a Flash')}</span><ExternalLink className="h-3.5 w-3.5 text-slate-500" /></a>
     </>}
   </>;
-  const avatar = (size: 'small' | 'regular' = 'regular') => avatarDataUrl
-    ? <img src={avatarDataUrl} alt="" className={`${size === 'small' ? 'h-8 w-8' : 'h-9 w-9'} shrink-0 rounded-full border border-[#3E4F63] object-cover`} />
-    : <span className={`${size === 'small' ? 'h-8 w-8' : 'h-9 w-9'} flex shrink-0 items-center justify-center rounded-full border border-[#3E4F63] bg-[#273547] text-xs font-bold uppercase text-white`}>{initials}</span>;
+  const avatar = (size: 'small' | 'regular' = 'regular') => {
+    const imageUrl = avatarDataUrl || currentUser?.avatarUrl;
+    return imageUrl
+      ? <img src={imageUrl} alt="" className={`${size === 'small' ? 'h-8 w-8' : 'h-9 w-9'} shrink-0 rounded-full border border-[#3E4F63] object-cover`} />
+      : <span className={`${size === 'small' ? 'h-8 w-8' : 'h-9 w-9'} flex shrink-0 items-center justify-center rounded-full border border-[#3E4F63] bg-[#273547] text-xs font-bold uppercase text-white`}>{initials}</span>;
+  };
 
   const handleMouseEnter = () => {
     if (hoverCloseTimerRef.current !== null) window.clearTimeout(hoverCloseTimerRef.current);
