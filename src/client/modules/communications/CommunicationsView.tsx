@@ -8,7 +8,7 @@ import { translateText } from '../../i18n/index.ts';
 import { DataUnavailableState, LoadingState } from '../../components/DataStatus.tsx';
 import { AnimatePresence, motion } from 'motion/react';
 
-type Group = { id: number; name: string; sector: string; createdAt: string; unreadCount: number; lastMessage: Pick<Message, 'id' | 'body' | 'authorUid' | 'authorName' | 'createdAt' | 'deletedAt'> | null };
+type Group = { id: number; name: string; sector: string; createdAt: string; unreadCount: number; canDelete?: boolean; lastMessage: Pick<Message, 'id' | 'body' | 'authorUid' | 'authorName' | 'createdAt' | 'deletedAt'> | null };
 type MessageReaction = { emoji: string; count: number; reactedByMe: boolean };
 type MessageReader = { userId: number; name: string; department: string | null; avatarUrl?: string | null; readAt: string };
 type Message = { id: number; body: string; authorUid: string; authorName: string; createdAt: string; replyToMessageId?: number | null; hasAudio?: boolean; audioDurationMs?: number | null; audioPreviewUrl?: string; deletedAt?: string | null; reactions?: MessageReaction[]; readByCount?: number; recipientCount?: number; readBy?: MessageReader[] };
@@ -84,8 +84,14 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
   const [forwardTarget, setForwardTarget] = useState('');
   const [messageDetails, setMessageDetails] = useState<Message | null>(null);
   const [conversationSearchQuery, setConversationSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Message[]>([]);
+  const [searchTotal, setSearchTotal] = useState(0);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [hasOlderSearchResults, setHasOlderSearchResults] = useState(false);
   const [messageToDelete, setMessageToDelete] = useState<Message | null>(null);
   const [deletingMessage, setDeletingMessage] = useState(false);
+  const [conversationAction, setConversationAction] = useState<'clear' | 'delete-group' | null>(null);
+  const [runningConversationAction, setRunningConversationAction] = useState(false);
   const [conversationInfoOpen, setConversationInfoOpen] = useState(false);
   const [groupMembers, setGroupMembers] = useState<DirectoryUser[]>([]);
   const [profileUser, setProfileUser] = useState<DirectoryUser | null>(null);
@@ -98,6 +104,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
   const activeConversationRef = useRef<string | null>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
   const pendingLatestScrollRef = useRef<string | null>(null);
+  const searchRequestRef = useRef(0);
   const loadingOlderRef = useRef(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlderMessages, setHasOlderMessages] = useState(true);
@@ -110,6 +117,39 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
 
   useEffect(() => { setMessageDetails(null); setConversationInfoOpen(false); setProfileUser(null); }, [selectedGroupId, selectedDirectId]);
   useEffect(() => { setConversationSearchQuery(''); }, [selectedDirectId, selectedGroupId]);
+  useEffect(() => {
+    const query = conversationSearchQuery.trim();
+    const conversationKey = selectedGroupId !== null ? `group:${selectedGroupId}` : selectedDirectId !== null ? `direct:${selectedDirectId}` : null;
+    const requestId = ++searchRequestRef.current;
+    if (!query || localPreview || !conversationKey) {
+      setSearchResults([]);
+      setSearchTotal(0);
+      setSearchLoading(false);
+      setHasOlderSearchResults(false);
+      return;
+    }
+    setSearchResults([]);
+    setSearchTotal(0);
+    setSearchLoading(true);
+    setHasOlderSearchResults(false);
+    const timer = window.setTimeout(() => {
+      const search = selectedGroupId !== null
+        ? api.searchCommunicationGroupMessages(selectedGroupId, query)
+        : api.searchCommunicationDirectMessages(selectedDirectId!, query);
+      void search.then(result => {
+        if (requestId !== searchRequestRef.current || activeConversationRef.current !== conversationKey) return;
+        setSearchResults(Array.isArray(result.items) ? result.items : []);
+        setSearchTotal(Number.isFinite(result.total) ? result.total : 0);
+        setHasOlderSearchResults((result.items?.length || 0) >= 30 && (result.total || 0) > (result.items?.length || 0));
+        setError('');
+      }).catch(() => {
+        if (requestId === searchRequestRef.current) setError(translateText('Não foi possível pesquisar o histórico de mensagens.'));
+      }).finally(() => {
+        if (requestId === searchRequestRef.current) setSearchLoading(false);
+      });
+    }, 220);
+    return () => window.clearTimeout(timer);
+  }, [conversationSearchQuery, selectedGroupId, selectedDirectId, localPreview]);
   useEffect(() => {
     if (!messageDetails) return;
     const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setMessageDetails(null); };
@@ -136,7 +176,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
   const loadGroups = useCallback(async () => {
     if (localPreview) {
       await waitForPreview();
-      setGroups([{ id: 1, name: 'Comunicação da Produção', sector: 'Sinalização', createdAt: new Date().toISOString(), unreadCount: 2, lastMessage: { id: 103, body: 'Assim que concluir, aviso por aqui para atualizar o próximo setor.', authorUid: 'preview-marcos', authorName: 'Marcos Oliveira', createdAt: new Date(Date.now() - 6 * 60000).toISOString() } }]);
+      setGroups([{ id: 1, name: 'Comunicação da Produção', sector: 'Sinalização', createdAt: new Date().toISOString(), unreadCount: 2, canDelete: true, lastMessage: { id: 103, body: 'Assim que concluir, aviso por aqui para atualizar o próximo setor.', authorUid: 'preview-marcos', authorName: 'Marcos Oliveira', createdAt: new Date(Date.now() - 6 * 60000).toISOString() } }]);
       return true;
     }
     try {
@@ -257,14 +297,26 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
   useEffect(() => () => previewAudioUrlsRef.current.forEach(URL.revokeObjectURL), []);
 
   const loadOlderMessages = async () => {
-    if (!hasOlderMessages || loadingOlderRef.current || !messagesRef.current.length) return;
-    const firstId = messagesRef.current[0].id;
+    const searchingHistory = Boolean(conversationSearchQuery.trim()) && !localPreview;
+    const currentMessages = searchingHistory ? searchResults : messagesRef.current;
+    if (!(searchingHistory ? hasOlderSearchResults : hasOlderMessages) || loadingOlderRef.current || !currentMessages.length) return;
+    const firstId = currentMessages[0].id;
     const conversationKey = selectedGroupId !== null ? `group:${selectedGroupId}` : selectedDirectId !== null ? `direct:${selectedDirectId}` : null;
     if (!conversationKey) return;
     loadingOlderRef.current = true; setLoadingOlder(true);
     try {
       const scroller = messageListRef.current;
       const oldHeight = scroller?.scrollHeight || 0;
+      if (searchingHistory) {
+        const page = selectedGroupId !== null
+          ? await api.searchCommunicationGroupMessages(selectedGroupId, conversationSearchQuery.trim(), firstId)
+          : await api.searchCommunicationDirectMessages(selectedDirectId!, conversationSearchQuery.trim(), firstId);
+        if (activeConversationRef.current !== conversationKey) return;
+        setSearchResults(previous => [...page.items.filter(item => !previous.some(existing => existing.id === item.id)), ...previous]);
+        setHasOlderSearchResults(page.items.length >= 30 && searchResults.length + page.items.length < page.total);
+        requestAnimationFrame(() => { if (scroller) scroller.scrollTop += scroller.scrollHeight - oldHeight; });
+        return;
+      }
       const page = selectedGroupId !== null
         ? await api.getCommunicationMessages(selectedGroupId, { beforeId: firstId, limit: 30 })
         : await api.getCommunicationDirectMessages(selectedDirectId!, { beforeId: firstId, limit: 30 });
@@ -411,6 +463,46 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
     }
   };
 
+  const confirmConversationAction = async () => {
+    if (!conversationAction || runningConversationAction) return;
+    setRunningConversationAction(true);
+    setError('');
+    try {
+      if (conversationAction === 'clear') {
+        if (!localPreview) {
+          if (selectedGroupId !== null) await api.clearCommunicationGroupHistory(selectedGroupId);
+          else if (selectedDirectId !== null) await api.clearCommunicationDirectHistory(selectedDirectId);
+        }
+        setMessages([]);
+        setSearchResults([]);
+        setSearchTotal(0);
+        setHasOlderMessages(false);
+        setHasOlderSearchResults(false);
+        setConversationSearchQuery('');
+        setMessageDetails(null);
+        setReplyingTo(null);
+        if (selectedGroupId !== null) setGroups(previous => previous.map(group => group.id === selectedGroupId ? { ...group, unreadCount: 0, lastMessage: null } : group));
+        if (selectedDirectId !== null) setDirects(previous => previous.map(conversation => conversation.conversationId === selectedDirectId ? { ...conversation, unreadCount: 0, lastMessage: null } : conversation));
+        if (!localPreview) await Promise.all([loadGroups(), loadDirects()]);
+      } else {
+        const groupId = selectedGroupId;
+        const group = groups.find(item => item.id === groupId);
+        if (groupId === null || !group?.canDelete) return;
+        if (!localPreview) await api.deleteCommunicationGroup(groupId);
+        setGroups(previous => previous.filter(item => item.id !== groupId));
+        clearSelection();
+        setConversationInfoOpen(false);
+        setProfileUser(null);
+        if (!localPreview) await loadGroups();
+      }
+      setConversationAction(null);
+    } catch (e: any) {
+      setError(e.message || translateText('Não foi possível concluir a ação na conversa.'));
+    } finally {
+      setRunningConversationAction(false);
+    }
+  };
+
   const clearSelection = () => {
     pendingLatestScrollRef.current = null;
     setSelectedGroupId(null);
@@ -440,7 +532,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
     setError('');
     try {
       if (localPreview) {
-        const created: Group = { id: Date.now(), name, sector, createdAt: new Date().toISOString(), unreadCount: 0, lastMessage: null };
+        const created: Group = { id: Date.now(), name, sector, createdAt: new Date().toISOString(), unreadCount: 0, canDelete: true, lastMessage: null };
         setGroups(previous => [created, ...previous]);
         setNewGroup(false);
         setSection('groups');
@@ -576,6 +668,13 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
   const directDepartment = selectedDirect?.department || draftRecipient?.department;
   const unreadGroupTotal = groups.reduce((total, group) => total + (group.unreadCount || 0), 0);
   const unreadDirectTotal = directs.reduce((total, conversation) => total + (conversation.unreadCount || 0), 0);
+  const activeSearchQuery = conversationSearchQuery.trim();
+  const searchingEntireHistory = Boolean(activeSearchQuery) && !localPreview;
+  const displayedMessages = searchingEntireHistory ? searchResults : messages;
+  const displayedHasOlder = searchingEntireHistory ? hasOlderSearchResults : hasOlderMessages;
+  const displayedSearchLoading = searchingEntireHistory && searchLoading;
+  const searchResultCount = localPreview ? messages.filter(message => `${message.body} ${message.authorName}`.toLocaleLowerCase().includes(activeSearchQuery.toLocaleLowerCase())).length : searchResults.length;
+  const searchResultTotal = localPreview ? messages.length : searchTotal;
 
   return <section className="relative flex h-[100dvh] w-full min-w-0 flex-col overflow-hidden bg-white text-[#263548]">
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#263548] bg-[#151C25] px-3 text-white sm:px-6">
@@ -586,11 +685,18 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
       </div>
       <div className="flex shrink-0 items-center gap-1">
         <div className="md:hidden"><UserAccountMenu compact currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenFeedback={onOpenFeedback} onOpenHelpInfo={onOpenHelpInfo} onOpenShortcuts={onOpenShortcuts} onLogout={onLogout}/></div>
-        <button type="button" onClick={onBack} className="inline-flex items-center gap-2 rounded-lg px-2 py-2 text-xs font-semibold text-slate-200 transition hover:bg-[#263548] hover:text-white sm:px-3"><ArrowLeft size={15}/><span className="hidden sm:inline">Voltar ao sistema</span><span className="sm:hidden">Voltar</span></button>
+        <button type="button" onClick={onBack} className="inline-flex items-center gap-2 rounded-lg px-2 py-2 text-xs font-semibold text-slate-200 transition hover:bg-[#263548] hover:text-white sm:px-3 md:hidden"><ArrowLeft size={15}/><span className="hidden sm:inline">Voltar ao sistema</span><span className="sm:hidden">Voltar</span></button>
       </div>
     </header>
 
     <div className="flex min-h-0 flex-1 overflow-hidden">
+      <nav aria-label={translateText('Navegação da comunicação')} className="hidden w-16 shrink-0 flex-col items-center border-r border-[#263548] bg-[#111820] py-3 md:flex">
+        <button type="button" onClick={onBack} title={translateText('Voltar ao sistema')} aria-label={translateText('Voltar ao sistema')} className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl text-slate-300 transition-colors hover:bg-[#263548] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"><ArrowLeft size={19}/></button>
+        <div className="mb-3 w-8 border-t border-[#263548]" />
+        <button type="button" onClick={() => { setSection('conversations'); clearSelection(); }} aria-current={section === 'conversations' ? 'page' : undefined} title={translateText('Conversas')} aria-label={translateText('Conversas')} className={`mb-2 flex h-10 w-10 items-center justify-center rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${section === 'conversations' ? 'bg-[#263548] text-[#FFAA00]' : 'text-slate-300 hover:bg-[#263548] hover:text-white'}`}><MessageCircle size={19}/></button>
+        <button type="button" onClick={() => { setSection('groups'); clearSelection(); }} aria-current={section === 'groups' ? 'page' : undefined} title={translateText('Grupos')} aria-label={translateText('Grupos')} className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${section === 'groups' ? 'bg-[#263548] text-[#FFAA00]' : 'text-slate-300 hover:bg-[#263548] hover:text-white'}`}><Users size={19}/></button>
+        <button type="button" onClick={onOpenProfile} title={translateText('Meu perfil')} aria-label={translateText('Meu perfil')} className="mt-auto flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[#3A4655] bg-[#263548] text-[#FFAA00] transition-colors hover:border-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400">{currentUser?.avatarUrl ? <img src={currentUser.avatarUrl} alt="" className="h-full w-full object-cover"/> : <UserRound size={18}/>}</button>
+      </nav>
       <aside className={`${selectedConversation ? 'hidden md:flex' : 'flex'} w-full min-w-0 shrink-0 flex-col border-r border-[#DCE3EB] bg-white md:w-[340px] md:max-w-[340px]`}>
         <header className="hidden items-center justify-between bg-[#151C25] px-5 py-4 text-white md:flex">
           <div><h2 className="text-base font-semibold">{section === 'groups' ? 'Grupos' : 'Conversas'}</h2><p className="mt-0.5 text-xs text-slate-300">Flash Connect</p></div>
@@ -602,10 +708,6 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
             <label className="flex min-w-0 flex-1 items-center gap-2 rounded-full bg-[#F1F4F7] px-3 py-2 text-slate-500"><Search size={15}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder={section === 'groups' ? 'Pesquisar grupos' : 'Pesquisar conversas'} className="min-w-0 flex-1 bg-transparent text-sm text-[#263548] outline-none placeholder:text-slate-400 sm:text-xs"/></label>
             {section === 'conversations' && <button type="button" onClick={() => void openNewConversation()} title="Adicionar conversa" aria-label="Adicionar conversa" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#FFAA00] text-[#151C25] transition hover:bg-amber-300 md:hidden"><MessageSquarePlus size={18}/></button>}
             {section === 'groups' && canCreateGroups && <button type="button" onClick={() => void openCreateGroup()} title="Criar grupo" aria-label="Criar grupo" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#FFAA00] text-[#151C25] transition hover:bg-amber-300 md:hidden"><Plus size={18}/></button>}
-          </div>
-          <div className="mt-3 hidden items-center gap-2 md:flex">
-            <button type="button" onClick={() => { setSection('conversations'); clearSelection(); }} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${section === 'conversations' ? 'bg-[#263548] text-white' : 'bg-[#F1F4F7] text-slate-600'}`}>Conversas</button>
-            <button type="button" onClick={() => { setSection('groups'); clearSelection(); }} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${section === 'groups' ? 'bg-[#263548] text-white' : 'bg-[#F1F4F7] text-slate-600'}`}>Grupos</button>
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
@@ -670,12 +772,12 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
 
       <main className={`${selectedConversation ? 'flex' : 'hidden md:flex'} relative min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#F1F4F7] transition-[padding-right] duration-300 ease-out ${sidePanelOpen ? 'lg:pr-[min(360px,40vw)]' : ''}`}>
         {selectedGroup ? <>
-          <GroupConversationHeader name={selectedGroup.name} sector={selectedGroup.sector} searchQuery={conversationSearchQuery} onSearchChange={setConversationSearchQuery} matchCount={conversationSearchQuery.trim() ? messages.filter(message => `${message.body} ${message.authorName}`.toLowerCase().includes(conversationSearchQuery.trim().toLowerCase())).length : null} totalMessages={messages.length} onInfo={() => void openConversationInfo()} onBack={clearSelection}/>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{messagesLoading && !messages.length ? <LoadingState compact label="Carregando mensagens…" /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={messages} searchQuery={conversationSearchQuery} selectedMessageId={messageDetails?.id ?? null} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={hasOlderMessages} loadingOlder={loadingOlder} groupId={selectedGroupId} conversationKey={`group:${selectedGroupId}`} currentUserUid={currentUser?.uid || api.getUser()?.uid || 'unknown'} onAskAssistant={onAskAssistant} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={message => { setProfileUser(null); setConversationInfoOpen(false); setMessageDetails(message); }} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}</div>
+          <GroupConversationHeader name={selectedGroup.name} sector={selectedGroup.sector} searchQuery={conversationSearchQuery} onSearchChange={setConversationSearchQuery} matchCount={activeSearchQuery ? searchResultCount : null} totalMessages={activeSearchQuery ? searchResultTotal : messages.length} canDelete={selectedGroup.canDelete ?? false} onClear={() => setConversationAction('clear')} onDeleteGroup={() => setConversationAction('delete-group')} onInfo={() => void openConversationInfo()} onBack={clearSelection}/>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{messagesLoading && !messages.length ? <LoadingState compact label="Carregando mensagens…" /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={displayedMessages} searchQuery={conversationSearchQuery} loadingSearch={displayedSearchLoading} selectedMessageId={messageDetails?.id ?? null} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={displayedHasOlder} loadingOlder={loadingOlder} groupId={selectedGroupId} conversationKey={`group:${selectedGroupId}`} currentUserUid={currentUser?.uid || api.getUser()?.uid || 'unknown'} onAskAssistant={onAskAssistant} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={message => { setProfileUser(null); setConversationInfoOpen(false); setMessageDetails(message); }} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}</div>
           <MessageComposer body={body} setBody={setBody} send={send} sending={sendingMessage} onSendAudio={sendAudioMessage} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
         </> : directTitle ? <>
-          <DirectConversationHeader name={directTitle} avatarUrl={selectedDirect?.avatarUrl || draftRecipient?.avatarUrl} subtitle={draftRecipient ? translateText('Nova conversa · será criada ao enviar a primeira mensagem') : directDepartment || translateText('Conversa direta')} searchQuery={conversationSearchQuery} onSearchChange={setConversationSearchQuery} matchCount={conversationSearchQuery.trim() ? messages.filter(message => `${message.body} ${message.authorName}`.toLowerCase().includes(conversationSearchQuery.trim().toLowerCase())).length : null} totalMessages={messages.length} onInfo={() => void openConversationInfo()} onBack={clearSelection}/>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{messagesLoading && !messages.length ? <LoadingState compact label="Carregando mensagens…" /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={messages} searchQuery={conversationSearchQuery} selectedMessageId={messageDetails?.id ?? null} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={hasOlderMessages} loadingOlder={loadingOlder} directId={selectedDirectId} conversationKey={`direct:${selectedDirectId}`} currentUserUid={currentUser?.uid || api.getUser()?.uid || 'unknown'} onAskAssistant={onAskAssistant} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={message => { setProfileUser(null); setConversationInfoOpen(false); setMessageDetails(message); }} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}</div>
+          <DirectConversationHeader name={directTitle} avatarUrl={selectedDirect?.avatarUrl || draftRecipient?.avatarUrl} subtitle={draftRecipient ? translateText('Nova conversa · será criada ao enviar a primeira mensagem') : directDepartment || translateText('Conversa direta')} searchQuery={conversationSearchQuery} onSearchChange={setConversationSearchQuery} matchCount={activeSearchQuery ? searchResultCount : null} totalMessages={activeSearchQuery ? searchResultTotal : messages.length} canClear={selectedDirectId !== null} onInfo={() => void openConversationInfo()} onClear={() => setConversationAction('clear')} onBack={clearSelection}/>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{messagesLoading && !messages.length ? <LoadingState compact label="Carregando mensagens…" /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={displayedMessages} searchQuery={conversationSearchQuery} loadingSearch={displayedSearchLoading} selectedMessageId={messageDetails?.id ?? null} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={displayedHasOlder} loadingOlder={loadingOlder} directId={selectedDirectId} conversationKey={`direct:${selectedDirectId}`} currentUserUid={currentUser?.uid || api.getUser()?.uid || 'unknown'} onAskAssistant={onAskAssistant} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={message => { setProfileUser(null); setConversationInfoOpen(false); setMessageDetails(message); }} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}</div>
           <MessageComposer body={body} setBody={setBody} send={send} sending={sendingMessage} onSendAudio={sendAudioMessage} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
         </> : <div className="m-auto max-w-md px-6 text-center"><div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white text-[#916B19] shadow-sm"><MessageCircle size={28}/></div><h2 className="text-lg font-semibold text-[#263548]">Sua comunicação de produção</h2><p className="mt-2 text-sm leading-6 text-slate-500">Selecione uma conversa ou grupo. As mensagens ficam visíveis apenas para seus participantes.</p></div>}
         {error && <p role="alert" className="border-t border-slate-200/70 bg-transparent px-4 py-1.5 text-[11px] text-slate-500">{error}</p>}
@@ -697,6 +799,8 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
     </div>
 
     {forwardingMessage && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"><section role="dialog" aria-modal="true" aria-label="Encaminhar mensagem" className="w-full max-w-md space-y-4 rounded-2xl bg-white p-5 shadow-2xl"><div className="flex items-center justify-between"><h3 className="font-semibold text-[#263548]">Encaminhar mensagem</h3><button type="button" onClick={() => setForwardingMessage(null)} aria-label="Fechar" className="rounded-lg p-1.5 text-slate-500 hover:bg-[#F1F4F7]"><X size={18}/></button></div><p className="line-clamp-3 rounded-lg bg-[#F1F4F7] p-3 text-sm text-slate-600">{forwardingMessage.body}</p><label className="block text-xs font-semibold text-slate-600">Enviar para</label><select value={forwardTarget} onChange={event => setForwardTarget(event.target.value)} className="w-full rounded-lg border border-[#DCE3EB] px-3 py-2.5 text-sm text-[#263548]"><option value="">Escolha uma conversa ou grupo</option>{directs.map(item => <option key={`forward-direct-${item.conversationId}`} value={`direct:${item.conversationId}`}>{item.name}</option>)}{groups.map(item => <option key={`forward-group-${item.id}`} value={`group:${item.id}`}>{item.name} · {item.sector}</option>)}</select><div className="flex justify-end gap-2"><button type="button" onClick={() => setForwardingMessage(null)} className="rounded-lg border border-[#DCE3EB] px-3 py-2 text-sm text-slate-600">Cancelar</button><button type="button" onClick={() => void sendForward()} disabled={!forwardTarget} className="inline-flex items-center gap-2 rounded-lg bg-[#FFAA00] px-3 py-2 text-sm font-semibold text-[#151C25] disabled:opacity-50"><Forward size={15}/>Encaminhar</button></div></section></div>}
+
+    {conversationAction && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onMouseDown={event => { if (event.target === event.currentTarget && !runningConversationAction) setConversationAction(null); }}><section role="alertdialog" aria-modal="true" aria-labelledby="conversation-action-title" className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-5 shadow-2xl"><div><h3 id="conversation-action-title" className="font-semibold text-[#263548]">{conversationAction === 'clear' ? translateText('Limpar conversa?') : translateText('Apagar grupo?')}</h3><p className="mt-2 text-sm leading-5 text-slate-600">{conversationAction === 'clear' ? translateText('As mensagens serão ocultadas somente para você. Os outros participantes continuarão vendo o histórico.') : translateText('O grupo e todas as mensagens serão removidos para todos os participantes. Essa ação não pode ser desfeita.')}</p></div><div className="flex justify-end gap-2"><button type="button" disabled={runningConversationAction} onClick={() => setConversationAction(null)} className="rounded-lg border border-[#DCE3EB] px-3 py-2 text-sm text-slate-600 disabled:opacity-50">{translateText('Cancelar')}</button><button type="button" disabled={runningConversationAction} onClick={() => void confirmConversationAction()} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-white disabled:opacity-50 ${conversationAction === 'clear' ? 'bg-[#263548] hover:bg-[#334155]' : 'bg-rose-600 hover:bg-rose-700'}`}><Trash2 size={15}/>{runningConversationAction ? translateText('Processando…') : conversationAction === 'clear' ? translateText('Limpar conversa') : translateText('Apagar grupo')}</button></div></section></div>}
 
     {messageToDelete && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onMouseDown={event => { if (event.target === event.currentTarget && !deletingMessage) setMessageToDelete(null); }}><section role="alertdialog" aria-modal="true" aria-labelledby="delete-message-title" className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-5 shadow-2xl"><div><h3 id="delete-message-title" className="font-semibold text-[#263548]">Apagar mensagem para todos?</h3><p className="mt-2 text-sm leading-5 text-slate-600">O conteúdo será substituído por “Mensagem apagada” para todos os participantes. A ação não pode ser desfeita.</p></div><div className="rounded-lg bg-[#F1F4F7] px-3 py-2 text-xs text-slate-500">{messageToDelete.hasAudio ? 'Mensagem de áudio' : messageToDelete.body}</div><div className="flex justify-end gap-2"><button type="button" disabled={deletingMessage} onClick={() => setMessageToDelete(null)} className="rounded-lg border border-[#DCE3EB] px-3 py-2 text-sm text-slate-600 disabled:opacity-50">Cancelar</button><button type="button" disabled={deletingMessage} onClick={() => void deleteMessage()} className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"><Trash2 size={15}/>{deletingMessage ? 'Apagando…' : 'Apagar mensagem'}</button></div></section></div>}
 
@@ -723,7 +827,7 @@ const readLocalMessageActions = (uid: string, conversationKey: string): LocalMes
   } catch { return { pinnedId: null, favoriteIds: [] }; }
 };
 
-const DirectConversationHeader: React.FC<{ name: string; avatarUrl?: string | null; subtitle: string; searchQuery: string; onSearchChange: (query: string) => void; matchCount: number | null; totalMessages: number; onInfo: () => void; onBack: () => void }> = ({ name, avatarUrl, subtitle, searchQuery, onSearchChange, matchCount, totalMessages, onInfo, onBack }) => {
+const DirectConversationHeader: React.FC<{ name: string; avatarUrl?: string | null; subtitle: string; searchQuery: string; onSearchChange: (query: string) => void; matchCount: number | null; totalMessages: number; canClear: boolean; onInfo: () => void; onClear: () => void; onBack: () => void }> = ({ name, avatarUrl, subtitle, searchQuery, onSearchChange, matchCount, totalMessages, canClear, onInfo, onClear, onBack }) => {
   const [searchOpen, setSearchOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -751,6 +855,7 @@ const DirectConversationHeader: React.FC<{ name: string; avatarUrl?: string | nu
             {menuOpen && <motion.div role="menu" initial={{ opacity: 0, y: -5, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.98 }} transition={{ duration: 0.13 }} className="absolute right-0 top-[calc(100%+8px)] z-50 w-56 overflow-hidden rounded-xl border border-[#DCE3EB] bg-white py-1.5 text-[#263548] shadow-xl">
               <button type="button" role="menuitem" onClick={() => { onInfo(); setMenuOpen(false); }} className="flex min-h-10 w-full items-center gap-3 px-3.5 py-2 text-left text-xs font-medium transition-colors hover:bg-[#F1F4F7]"><Info size={16} className="text-slate-500"/>{translateText('Dados do contato')}</button>
               <button type="button" role="menuitem" onClick={toggleSearch} className="flex min-h-10 w-full items-center gap-3 px-3.5 py-2 text-left text-xs font-medium transition-colors hover:bg-[#F1F4F7]"><Search size={16} className="text-slate-500"/>{translateText('Pesquisar mensagens')}</button>
+              {canClear && <button type="button" role="menuitem" onClick={() => { onClear(); setMenuOpen(false); }} className="flex min-h-10 w-full items-center gap-3 px-3.5 py-2 text-left text-xs font-medium transition-colors hover:bg-[#F1F4F7]"><Trash2 size={16} className="text-slate-500"/>{translateText('Limpar conversa')}</button>}
               <div className="my-1 border-t border-[#E7ECF1]" />
               <button type="button" role="menuitem" onClick={() => { onBack(); setMenuOpen(false); }} className="flex min-h-10 w-full items-center gap-3 px-3.5 py-2 text-left text-xs font-medium transition-colors hover:bg-[#F1F4F7]"><ArrowLeft size={16} className="text-slate-500"/>{translateText('Voltar à lista')}</button>
             </motion.div>}
@@ -760,13 +865,13 @@ const DirectConversationHeader: React.FC<{ name: string; avatarUrl?: string | nu
     </header>
     <AnimatePresence initial={false}>
       {searchOpen && <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18, ease: 'easeOut' }} className="shrink-0 overflow-hidden border-b border-[#DCE3EB] bg-white">
-        <div className="flex items-center gap-2 px-4 py-2.5 sm:px-5"><Search size={16} className="shrink-0 text-slate-400"/><input autoFocus value={searchQuery} onChange={event => onSearchChange(event.target.value)} placeholder={translateText('Pesquisar mensagens carregadas')} aria-label={translateText('Pesquisar mensagens carregadas')} className="min-w-0 flex-1 bg-transparent text-sm text-[#263548] outline-none placeholder:text-slate-400"/>{searchQuery && <span className="shrink-0 text-[11px] text-slate-500">{matchCount} / {totalMessages}</span>}<button type="button" onClick={toggleSearch} aria-label={translateText('Fechar busca')} className="rounded-lg p-1.5 text-slate-500 hover:bg-[#F1F4F7]"><X size={16}/></button></div>
+        <div className="flex items-center gap-2 px-4 py-2.5 sm:px-5"><Search size={16} className="shrink-0 text-slate-400"/><input autoFocus value={searchQuery} onChange={event => onSearchChange(event.target.value)} placeholder={translateText('Pesquisar mensagens no histórico')} aria-label={translateText('Pesquisar mensagens no histórico')} maxLength={120} className="min-w-0 flex-1 bg-transparent text-sm text-[#263548] outline-none placeholder:text-slate-400"/>{searchQuery && <span className="shrink-0 text-[11px] text-slate-500">{matchCount} / {totalMessages}</span>}<button type="button" onClick={toggleSearch} aria-label={translateText('Fechar busca')} className="rounded-lg p-1.5 text-slate-500 hover:bg-[#F1F4F7]"><X size={16}/></button></div>
       </motion.div>}
     </AnimatePresence>
   </>;
 };
 
-const GroupConversationHeader: React.FC<{ name: string; sector: string; searchQuery: string; onSearchChange: (query: string) => void; matchCount: number | null; totalMessages: number; onInfo: () => void; onBack: () => void }> = ({ name, sector, searchQuery, onSearchChange, matchCount, totalMessages, onInfo, onBack }) => {
+const GroupConversationHeader: React.FC<{ name: string; sector: string; searchQuery: string; onSearchChange: (query: string) => void; matchCount: number | null; totalMessages: number; canDelete: boolean; onInfo: () => void; onClear: () => void; onDeleteGroup: () => void; onBack: () => void }> = ({ name, sector, searchQuery, onSearchChange, matchCount, totalMessages, canDelete, onInfo, onClear, onDeleteGroup, onBack }) => {
   const [searchOpen, setSearchOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -794,6 +899,8 @@ const GroupConversationHeader: React.FC<{ name: string; sector: string; searchQu
             {menuOpen && <motion.div role="menu" initial={{ opacity: 0, y: -5, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.98 }} transition={{ duration: 0.13 }} className="absolute right-0 top-[calc(100%+8px)] z-50 w-56 overflow-hidden rounded-xl border border-[#DCE3EB] bg-white py-1.5 text-[#263548] shadow-xl">
               <button type="button" role="menuitem" onClick={() => { onInfo(); setMenuOpen(false); }} className="flex min-h-10 w-full items-center gap-3 px-3.5 py-2 text-left text-xs font-medium transition-colors hover:bg-[#F1F4F7]"><Info size={16} className="text-slate-500"/>{translateText('Dados do grupo')}</button>
               <button type="button" role="menuitem" onClick={toggleSearch} className="flex min-h-10 w-full items-center gap-3 px-3.5 py-2 text-left text-xs font-medium transition-colors hover:bg-[#F1F4F7]"><Search size={16} className="text-slate-500"/>{translateText('Pesquisar mensagens')}</button>
+              <button type="button" role="menuitem" onClick={() => { onClear(); setMenuOpen(false); }} className="flex min-h-10 w-full items-center gap-3 px-3.5 py-2 text-left text-xs font-medium transition-colors hover:bg-[#F1F4F7]"><Trash2 size={16} className="text-slate-500"/>{translateText('Limpar conversa')}</button>
+              {canDelete && <button type="button" role="menuitem" onClick={() => { onDeleteGroup(); setMenuOpen(false); }} className="flex min-h-10 w-full items-center gap-3 px-3.5 py-2 text-left text-xs font-medium text-rose-700 transition-colors hover:bg-rose-50"><Trash2 size={16}/>{translateText('Apagar grupo')}</button>}
               <div className="my-1 border-t border-[#E7ECF1]" />
               <button type="button" role="menuitem" onClick={() => { onBack(); setMenuOpen(false); }} className="flex min-h-10 w-full items-center gap-3 px-3.5 py-2 text-left text-xs font-medium transition-colors hover:bg-[#F1F4F7]"><ArrowLeft size={16} className="text-slate-500"/>{translateText('Voltar à lista')}</button>
             </motion.div>}
@@ -803,7 +910,7 @@ const GroupConversationHeader: React.FC<{ name: string; sector: string; searchQu
     </header>
     <AnimatePresence initial={false}>
       {searchOpen && <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18, ease: 'easeOut' }} className="shrink-0 overflow-hidden border-b border-[#DCE3EB] bg-white">
-        <div className="flex items-center gap-2 px-4 py-2.5 sm:px-5"><Search size={16} className="shrink-0 text-slate-400"/><input autoFocus value={searchQuery} onChange={event => onSearchChange(event.target.value)} placeholder={translateText('Pesquisar mensagens carregadas')} aria-label={translateText('Pesquisar mensagens carregadas')} className="min-w-0 flex-1 bg-transparent text-sm text-[#263548] outline-none placeholder:text-slate-400"/>{searchQuery && <span className="shrink-0 text-[11px] text-slate-500">{matchCount} / {totalMessages}</span>}<button type="button" onClick={toggleSearch} aria-label={translateText('Fechar busca')} className="rounded-lg p-1.5 text-slate-500 hover:bg-[#F1F4F7]"><X size={16}/></button></div>
+        <div className="flex items-center gap-2 px-4 py-2.5 sm:px-5"><Search size={16} className="shrink-0 text-slate-400"/><input autoFocus value={searchQuery} onChange={event => onSearchChange(event.target.value)} placeholder={translateText('Pesquisar mensagens no histórico')} aria-label={translateText('Pesquisar mensagens no histórico')} maxLength={120} className="min-w-0 flex-1 bg-transparent text-sm text-[#263548] outline-none placeholder:text-slate-400"/>{searchQuery && <span className="shrink-0 text-[11px] text-slate-500">{matchCount} / {totalMessages}</span>}<button type="button" onClick={toggleSearch} aria-label={translateText('Fechar busca')} className="rounded-lg p-1.5 text-slate-500 hover:bg-[#F1F4F7]"><X size={16}/></button></div>
       </motion.div>}
     </AnimatePresence>
   </>;
@@ -837,7 +944,7 @@ const GroupDetailsPanel: React.FC<{ group: Group; members: DirectoryUser[]; onCl
   </div>
 </motion.aside>;
 
-const MessageList: React.FC<{ messages: Message[]; searchQuery?: string; selectedMessageId: number | null; scrollerRef: React.RefObject<HTMLDivElement | null>; loadOlder: () => void; hasOlder: boolean; loadingOlder: boolean; groupId?: number | null; directId?: number | null; conversationKey: string; currentUserUid: string; onAskAssistant: (prompt: string) => void; onReply: (message: Message) => void; onForward: (message: Message) => void; onDetails: (message: Message) => void; onDelete: (message: Message) => void; onToggleReaction: (message: Message, emoji: string) => void }> = ({ messages, searchQuery = '', selectedMessageId, scrollerRef, loadOlder, hasOlder, loadingOlder, groupId, directId, conversationKey, currentUserUid, onAskAssistant, onReply, onForward, onDetails, onDelete, onToggleReaction }) => {
+const MessageList: React.FC<{ messages: Message[]; searchQuery?: string; loadingSearch?: boolean; selectedMessageId: number | null; scrollerRef: React.RefObject<HTMLDivElement | null>; loadOlder: () => void; hasOlder: boolean; loadingOlder: boolean; groupId?: number | null; directId?: number | null; conversationKey: string; currentUserUid: string; onAskAssistant: (prompt: string) => void; onReply: (message: Message) => void; onForward: (message: Message) => void; onDetails: (message: Message) => void; onDelete: (message: Message) => void; onToggleReaction: (message: Message, emoji: string) => void }> = ({ messages, searchQuery = '', loadingSearch = false, selectedMessageId, scrollerRef, loadOlder, hasOlder, loadingOlder, groupId, directId, conversationKey, currentUserUid, onAskAssistant, onReply, onForward, onDetails, onDelete, onToggleReaction }) => {
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [reactionMenuId, setReactionMenuId] = useState<number | null>(null);
   const [menuAbove, setMenuAbove] = useState(false);
@@ -917,10 +1024,10 @@ const MessageList: React.FC<{ messages: Message[]; searchQuery?: string; selecte
     catch { setCopied(false); }
     setOpenMenuId(null);
   };
-  return <div ref={scrollerRef} aria-label="Mensagens da conversa" onScroll={event => { if (event.currentTarget.scrollTop < 90 && hasOlder && !loadingOlder) loadOlder(); }} className="relative min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 pb-5 sm:p-6">
-    {(loadingOlder || hasOlder && !messages.length) && <div className="sticky top-1 z-10 mx-auto w-fit rounded-full bg-white px-3 py-1.5 text-[11px] text-slate-500 shadow">{loadingOlder ? 'Carregando mensagens anteriores…' : ''}</div>}
+  return <div ref={scrollerRef} aria-label="Mensagens da conversa" onScroll={event => { if (event.currentTarget.scrollTop < 220 && hasOlder && !loadingOlder) loadOlder(); }} className="relative min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 pb-5 sm:p-6">
+    {(loadingOlder || loadingSearch || hasOlder && !messages.length) && <div role="status" className="sticky top-1 z-10 mx-auto w-fit rounded-full bg-white px-3 py-1.5 text-[11px] text-slate-500 shadow">{loadingSearch ? translateText('Pesquisando todo o histórico…') : loadingOlder ? translateText('Carregando mensagens anteriores…') : ''}</div>}
     {copied && <div role="status" className="sticky top-1 z-10 mx-auto w-fit rounded-full bg-[#151C25] px-3 py-1.5 text-xs text-white shadow">Mensagem copiada</div>}
-    {!visibleMessages.length && !loadingOlder && <div className="m-auto max-w-xs px-5 py-10 text-center text-sm leading-6 text-slate-500">{query ? translateText('Nenhuma mensagem encontrada entre as mensagens carregadas.') : translateText('Nenhuma mensagem ainda. Envie uma mensagem para iniciar a conversa.')}</div>}
+    {!visibleMessages.length && !loadingOlder && !loadingSearch && <div className="m-auto max-w-xs px-5 py-10 text-center text-sm leading-6 text-slate-500">{query ? translateText('Nenhuma mensagem encontrada.') : translateText('Nenhuma mensagem ainda. Envie uma mensagem para iniciar a conversa.')}</div>}
     {visibleMessages.map((message, index) => {
       const quoted = messages.find(item => item.id === message.replyToMessageId);
       const own = message.authorUid === api.getUser()?.uid;

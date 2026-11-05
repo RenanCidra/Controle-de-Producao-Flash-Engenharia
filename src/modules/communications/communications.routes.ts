@@ -1,6 +1,6 @@
 import express, { Router, type Request, type RequestHandler, type Response, type NextFunction } from 'express';
 import { randomUUID } from 'node:crypto';
-import { and, asc, count, desc, eq, gt, inArray, isNull, lt, ne, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, ilike, inArray, isNull, lt, ne, or, type AnyColumn } from 'drizzle-orm';
 import { db } from '../../db/index.ts';
 import { communicationDirectConversations, communicationDirectMembers, communicationDirectMessages, communicationGroupMembers, communicationGroups, communicationMessages, communicationMessageReactions, users } from '../../db/schema.ts';
 import { requirePermission } from '../../middleware/access-control.ts';
@@ -25,12 +25,20 @@ function messagePageOptions(req: Request) {
   const afterId = typeof rawAfter === 'string' ? Number(rawAfter) : null;
   const changedAfterDate = typeof rawChangedAfter === 'string' ? new Date(rawChangedAfter) : null;
   const requestedLimit = typeof req.query.limit === 'string' ? Number(req.query.limit) : MESSAGE_PAGE_SIZE;
+  const rawSearch = typeof req.query.search === 'string' ? req.query.search.trim().slice(0, 120) : '';
   return {
     beforeId: Number.isSafeInteger(beforeId) && beforeId! > 0 ? beforeId : null,
     afterId: Number.isSafeInteger(afterId) && afterId! > 0 ? afterId : null,
     changedAfter: changedAfterDate && Number.isFinite(changedAfterDate.getTime()) ? changedAfterDate : null,
+    search: rawSearch,
     limit: Number.isSafeInteger(requestedLimit) ? Math.min(50, Math.max(1, requestedLimit)) : MESSAGE_PAGE_SIZE,
   };
+}
+
+function messageSearchPredicate(body: AnyColumn, authorName: AnyColumn, search: string) {
+  const escaped = search.replace(/[\\%_]/g, '\\$&');
+  const pattern = `%${escaped}%`;
+  return or(ilike(body, pattern), ilike(authorName, pattern))!;
 }
 
 function publicMessage<T extends { audioStoragePath?: string | null; audioMimeType?: string | null; audioDurationMs?: number | null }>(message: T) {
@@ -135,7 +143,7 @@ router.get('/directory', asyncHandler(async (req, res) => {
 }));
 
 router.get('/direct', asyncHandler(async (req, res) => {
-  const mine = await db.select({ id: communicationDirectConversations.id, createdAt: communicationDirectConversations.createdAt, lastReadAt: communicationDirectMembers.lastReadAt })
+  const mine = await db.select({ id: communicationDirectConversations.id, createdAt: communicationDirectConversations.createdAt, lastReadAt: communicationDirectMembers.lastReadAt, historyClearedAt: communicationDirectMembers.historyClearedAt })
     .from(communicationDirectConversations).innerJoin(communicationDirectMembers, eq(communicationDirectMembers.conversationId, communicationDirectConversations.id))
     .where(eq(communicationDirectMembers.userId, req.user!.userId)).orderBy(desc(communicationDirectConversations.createdAt)).limit(100);
   if (!mine.length) return res.json([]);
@@ -150,7 +158,13 @@ router.get('/direct', asyncHandler(async (req, res) => {
       authorUid: communicationDirectMessages.authorUid,
       authorName: communicationDirectMessages.authorName,
       createdAt: communicationDirectMessages.createdAt,
-    }).from(communicationDirectMessages).where(inArray(communicationDirectMessages.conversationId, ids))
+    }).from(communicationDirectMessages).innerJoin(communicationDirectMembers, and(
+      eq(communicationDirectMembers.conversationId, communicationDirectMessages.conversationId),
+      eq(communicationDirectMembers.userId, req.user!.userId),
+    )).where(and(inArray(communicationDirectMessages.conversationId, ids), or(
+      isNull(communicationDirectMembers.historyClearedAt),
+      gt(communicationDirectMessages.createdAt, communicationDirectMembers.historyClearedAt),
+    )))
       .orderBy(communicationDirectMessages.conversationId, desc(communicationDirectMessages.createdAt)),
     db.select({ conversationId: communicationDirectMembers.conversationId, unreadCount: count() })
       .from(communicationDirectMessages)
@@ -189,17 +203,38 @@ router.get('/direct', asyncHandler(async (req, res) => {
 router.get('/direct/:id/messages', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Conversa inválida.' });
-  if (!await isDirectMember(id, req.user!.userId)) return res.status(404).json({ error: 'Conversa não encontrada.' });
+  const [membership] = await db.select({ historyClearedAt: communicationDirectMembers.historyClearedAt }).from(communicationDirectMembers).where(and(
+    eq(communicationDirectMembers.conversationId, id), eq(communicationDirectMembers.userId, req.user!.userId),
+  )).limit(1);
+  if (!membership) return res.status(404).json({ error: 'Conversa não encontrada.' });
   const page = messagePageOptions(req);
   if (page.beforeId && page.afterId) return res.status(400).json({ error: 'Use um único cursor de mensagens.' });
-  const predicates = [eq(communicationDirectMessages.conversationId, id)];
+  const basePredicates = [eq(communicationDirectMessages.conversationId, id)];
+  if (membership.historyClearedAt) basePredicates.push(gt(communicationDirectMessages.createdAt, membership.historyClearedAt));
+  if (page.search) basePredicates.push(messageSearchPredicate(communicationDirectMessages.body, communicationDirectMessages.authorName, page.search));
+  const predicates = [...basePredicates];
   if (page.beforeId) predicates.push(lt(communicationDirectMessages.id, page.beforeId));
   else if (page.afterId && page.changedAfter) predicates.push(or(gt(communicationDirectMessages.id, page.afterId), gt(communicationDirectMessages.updatedAt, page.changedAfter), gt(communicationDirectMessages.deletedAt, page.changedAfter))!);
   else if (page.afterId) predicates.push(gt(communicationDirectMessages.id, page.afterId));
   else if (page.changedAfter) predicates.push(or(gt(communicationDirectMessages.createdAt, page.changedAfter), gt(communicationDirectMessages.updatedAt, page.changedAfter), gt(communicationDirectMessages.deletedAt, page.changedAfter))!);
-  const rows = await db.select().from(communicationDirectMessages).where(and(...predicates))
-    .orderBy(page.afterId ? asc(communicationDirectMessages.id) : desc(communicationDirectMessages.id)).limit(page.limit);
-  return res.json(await messagePagePayload(page.afterId ? rows : rows.reverse(), 'direct', id, req.user!.userId, req.user!.uid));
+  const [rows, totalRows] = await Promise.all([
+    db.select().from(communicationDirectMessages).where(and(...predicates))
+      .orderBy(page.afterId ? asc(communicationDirectMessages.id) : desc(communicationDirectMessages.id)).limit(page.limit),
+    page.search ? db.select({ total: count() }).from(communicationDirectMessages).where(and(...basePredicates)) : Promise.resolve(null),
+  ]);
+  const items = await messagePagePayload(page.afterId ? rows : rows.reverse(), 'direct', id, req.user!.userId, req.user!.uid);
+  return res.json(page.search ? { items, total: totalRows?.[0]?.total || 0 } : items);
+}));
+
+router.patch('/direct/:id/clear', requirePermission('communications:write'), asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'Conversa inválida.' });
+  const clearedAt = new Date();
+  const [membership] = await db.update(communicationDirectMembers).set({ historyClearedAt: clearedAt, lastReadAt: clearedAt }).where(and(
+    eq(communicationDirectMembers.conversationId, id), eq(communicationDirectMembers.userId, req.user!.userId),
+  )).returning({ id: communicationDirectMembers.id });
+  if (!membership) return res.status(404).json({ error: 'Conversa não encontrada.' });
+  return res.json({ success: true, clearedAt });
 }));
 
 router.put('/direct/:id/messages/:messageId/reactions', requirePermission('communications:write'), allowBodyFields('emoji'), asyncHandler(async (req, res) => {
@@ -351,7 +386,7 @@ router.post('/direct/:id/audio', requirePermission('communications:write'), expr
 }));
 
 router.get('/groups', asyncHandler(async (req, res) => {
-  const groups = await db.select({ id: communicationGroups.id, name: communicationGroups.name, sector: communicationGroups.sector, createdAt: communicationGroups.createdAt, lastReadAt: communicationGroupMembers.lastReadAt })
+  const groups = await db.select({ id: communicationGroups.id, name: communicationGroups.name, sector: communicationGroups.sector, createdAt: communicationGroups.createdAt, createdByUid: communicationGroups.createdByUid, lastReadAt: communicationGroupMembers.lastReadAt, historyClearedAt: communicationGroupMembers.historyClearedAt })
     .from(communicationGroups).innerJoin(communicationGroupMembers, eq(communicationGroupMembers.groupId, communicationGroups.id))
     .where(eq(communicationGroupMembers.userId, req.user!.userId))
     .orderBy(asc(communicationGroups.sector), asc(communicationGroups.name));
@@ -364,7 +399,13 @@ router.get('/groups', asyncHandler(async (req, res) => {
       authorUid: communicationMessages.authorUid,
       authorName: communicationMessages.authorName,
       createdAt: communicationMessages.createdAt,
-    }).from(communicationMessages).where(inArray(communicationMessages.groupId, groupIds))
+    }).from(communicationMessages).innerJoin(communicationGroupMembers, and(
+      eq(communicationGroupMembers.groupId, communicationMessages.groupId),
+      eq(communicationGroupMembers.userId, req.user!.userId),
+    )).where(and(inArray(communicationMessages.groupId, groupIds), or(
+      isNull(communicationGroupMembers.historyClearedAt),
+      gt(communicationMessages.createdAt, communicationGroupMembers.historyClearedAt),
+    )))
       .orderBy(communicationMessages.groupId, desc(communicationMessages.createdAt)),
     db.select({ groupId: communicationGroupMembers.groupId, unreadCount: count() })
       .from(communicationMessages)
@@ -381,27 +422,67 @@ router.get('/groups', asyncHandler(async (req, res) => {
   ]);
   const latestByGroup = new Map(latestMessages.map((message) => [message.groupId, message]));
   const unreadByGroup = new Map(unreadRows.map((row) => [row.groupId, row.unreadCount]));
-  return res.json(groups.map(({ lastReadAt: _lastReadAt, ...group }) => ({
+  return res.json(groups.map(({ lastReadAt: _lastReadAt, historyClearedAt: _historyClearedAt, createdByUid, ...group }) => ({
     ...group,
+    canDelete: createdByUid === req.user!.uid,
     lastMessage: latestByGroup.get(group.id) || null,
     unreadCount: unreadByGroup.get(group.id) || 0,
   })));
 }));
 
+router.patch('/groups/:id/clear', requirePermission('communications:write'), asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'Grupo inválido.' });
+  const clearedAt = new Date();
+  const [membership] = await db.update(communicationGroupMembers).set({ historyClearedAt: clearedAt, lastReadAt: clearedAt }).where(and(
+    eq(communicationGroupMembers.groupId, id), eq(communicationGroupMembers.userId, req.user!.userId),
+  )).returning({ id: communicationGroupMembers.id });
+  if (!membership) return res.status(404).json({ error: 'Grupo não encontrado.' });
+  return res.json({ success: true, clearedAt });
+}));
+
+router.delete('/groups/:id', requirePermission('communications:write'), asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'Grupo inválido.' });
+  const [group] = await db.select({ name: communicationGroups.name, sector: communicationGroups.sector, createdByUid: communicationGroups.createdByUid })
+    .from(communicationGroups).where(eq(communicationGroups.id, id)).limit(1);
+  if (!group) return res.status(404).json({ error: 'Grupo não encontrado.' });
+  if (group.createdByUid !== req.user!.uid) return res.status(403).json({ error: 'Somente quem criou o grupo pode apagá-lo.' });
+  const audioRows = await db.select({ path: communicationMessages.audioStoragePath }).from(communicationMessages).where(eq(communicationMessages.groupId, id));
+  await AuditService.record({ userId: req.user!.uid, userEmail: req.user!.loginName, action: 'DELETE', entity: 'SYSTEM', entityId: String(id), details: { type: 'COMMUNICATION_GROUP', groupName: group.name, sector: group.sector } }, req);
+  await db.delete(communicationGroups).where(eq(communicationGroups.id, id));
+  const audioPaths = audioRows.flatMap(row => row.path ? [row.path] : []);
+  if (audioPaths.length) {
+    const results = await Promise.allSettled(audioPaths.map(path => communicationStorageBucket().file(path).delete()));
+    results.filter(result => result.status === 'rejected').forEach(() => console.error('Failed to remove audio files from deleted communication group:', id));
+  }
+  return res.json({ success: true });
+}));
+
 router.get('/groups/:id/messages', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Grupo inválido.' });
-  if (!await isGroupMember(id, req.user!.userId)) return res.status(404).json({ error: 'Grupo não encontrado.' });
+  const [membership] = await db.select({ historyClearedAt: communicationGroupMembers.historyClearedAt }).from(communicationGroupMembers).where(and(
+    eq(communicationGroupMembers.groupId, id), eq(communicationGroupMembers.userId, req.user!.userId),
+  )).limit(1);
+  if (!membership) return res.status(404).json({ error: 'Grupo não encontrado.' });
   const page = messagePageOptions(req);
   if (page.beforeId && page.afterId) return res.status(400).json({ error: 'Use um único cursor de mensagens.' });
-  const predicates = [eq(communicationMessages.groupId, id)];
+  const basePredicates = [eq(communicationMessages.groupId, id)];
+  if (membership.historyClearedAt) basePredicates.push(gt(communicationMessages.createdAt, membership.historyClearedAt));
+  if (page.search) basePredicates.push(messageSearchPredicate(communicationMessages.body, communicationMessages.authorName, page.search));
+  const predicates = [...basePredicates];
   if (page.beforeId) predicates.push(lt(communicationMessages.id, page.beforeId));
   else if (page.afterId && page.changedAfter) predicates.push(or(gt(communicationMessages.id, page.afterId), gt(communicationMessages.updatedAt, page.changedAfter), gt(communicationMessages.deletedAt, page.changedAfter))!);
   else if (page.afterId) predicates.push(gt(communicationMessages.id, page.afterId));
   else if (page.changedAfter) predicates.push(or(gt(communicationMessages.createdAt, page.changedAfter), gt(communicationMessages.updatedAt, page.changedAfter), gt(communicationMessages.deletedAt, page.changedAfter))!);
-  const rows = await db.select().from(communicationMessages).where(and(...predicates))
-    .orderBy(page.afterId ? asc(communicationMessages.id) : desc(communicationMessages.id)).limit(page.limit);
-  return res.json(await messagePagePayload(page.afterId ? rows : rows.reverse(), 'group', id, req.user!.userId, req.user!.uid));
+  const [rows, totalRows] = await Promise.all([
+    db.select().from(communicationMessages).where(and(...predicates))
+      .orderBy(page.afterId ? asc(communicationMessages.id) : desc(communicationMessages.id)).limit(page.limit),
+    page.search ? db.select({ total: count() }).from(communicationMessages).where(and(...basePredicates)) : Promise.resolve(null),
+  ]);
+  const items = await messagePagePayload(page.afterId ? rows : rows.reverse(), 'group', id, req.user!.userId, req.user!.uid);
+  return res.json(page.search ? { items, total: totalRows?.[0]?.total || 0 } : items);
 }));
 
 router.put('/groups/:id/messages/:messageId/reactions', requirePermission('communications:write'), allowBodyFields('emoji'), asyncHandler(async (req, res) => {

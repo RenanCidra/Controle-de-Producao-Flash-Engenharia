@@ -669,7 +669,14 @@ class ApiService {
     Object.entries(params || {}).forEach(([key, value]) => { if (value !== undefined) query.set(key, String(value)); });
     return this.request<any[]>(`${path}${query.size ? `?${query.toString()}` : ''}`);
   }
+  private communicationMessageSearch(path: string, search: string, beforeId?: number) {
+    const query = new URLSearchParams({ search, limit: '30' });
+    if (beforeId !== undefined) query.set('beforeId', String(beforeId));
+    return this.request<{ items: any[]; total: number }>(`${path}?${query.toString()}`);
+  }
   public getCommunicationDirectMessages(conversationId: number, params?: { beforeId?: number; afterId?: number; changedAfter?: string; limit?: number }) { return this.communicationMessagePage(`/communications/direct/${conversationId}/messages`, params); }
+  public searchCommunicationDirectMessages(conversationId: number, search: string, beforeId?: number) { return this.communicationMessageSearch(`/communications/direct/${conversationId}/messages`, search, beforeId); }
+  public clearCommunicationDirectHistory(conversationId: number) { return this.request<{ success: boolean }>(`/communications/direct/${conversationId}/clear`, { method: 'PATCH' }); }
   public markCommunicationDirectRead(conversationId: number) { return this.request<{ success: boolean }>(`/communications/direct/${conversationId}/read`, { method: 'PATCH' }); }
   public startCommunicationDirectMessage(recipientId: number, body: string) { return this.request<{ conversationId: number; message: any }>('/communications/direct/messages', { method: 'POST', body: JSON.stringify({ recipientId, body }) }); }
   public sendCommunicationDirectMessage(conversationId: number, body: string, replyToMessageId?: number | null) { return this.request<any>(`/communications/direct/${conversationId}/messages`, { method: 'POST', body: JSON.stringify({ body, replyToMessageId }) }); }
@@ -681,6 +688,9 @@ class ApiService {
   public getCommunicationDirectProfile(conversationId: number) { return this.request<{ id: number; name: string; department: string | null; role: string; status: string; avatarUrl?: string | null }>(`/communications/direct/${conversationId}/profile`); }
   public getCommunicationGroups() { return this.request<any[]>('/communications/groups'); }
   public getCommunicationMessages(groupId: number, params?: { beforeId?: number; afterId?: number; changedAfter?: string; limit?: number }) { return this.communicationMessagePage(`/communications/groups/${groupId}/messages`, params); }
+  public searchCommunicationGroupMessages(groupId: number, search: string, beforeId?: number) { return this.communicationMessageSearch(`/communications/groups/${groupId}/messages`, search, beforeId); }
+  public clearCommunicationGroupHistory(groupId: number) { return this.request<{ success: boolean }>(`/communications/groups/${groupId}/clear`, { method: 'PATCH' }); }
+  public deleteCommunicationGroup(groupId: number) { return this.request<{ success: boolean }>(`/communications/groups/${groupId}`, { method: 'DELETE' }); }
   public getCommunicationGroupMembers(groupId: number) { return this.request<Array<{ id: number; name: string; department: string | null; role: string; avatarUrl?: string | null }>>(`/communications/groups/${groupId}/members`); }
   public markCommunicationGroupRead(groupId: number) { return this.request<{ success: boolean }>(`/communications/groups/${groupId}/read`, { method: 'PATCH' }); }
   public createCommunicationGroup(name: string, sector: string, memberIds: number[]) { return this.request<any>('/communications/groups', { method: 'POST', body: JSON.stringify({ name, sector, memberIds }) }); }

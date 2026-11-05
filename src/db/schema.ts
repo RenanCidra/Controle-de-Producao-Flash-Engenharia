@@ -407,6 +407,7 @@ export const communicationGroupMembers = pgTable("communication_group_members", 
   addedByUid: text("added_by_uid").notNull(),
   addedAt: timestamp("added_at").defaultNow().notNull(),
   lastReadAt: timestamp("last_read_at").defaultNow().notNull(),
+  historyClearedAt: timestamp("history_cleared_at"),
 }, (table) => [
   uniqueIndex("communication_group_members_unique").on(table.groupId, table.userId),
   index("communication_group_members_user_idx").on(table.userId, table.groupId),
@@ -441,6 +442,7 @@ export const communicationDirectMembers = pgTable("communication_direct_members"
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   addedAt: timestamp("added_at").defaultNow().notNull(),
   lastReadAt: timestamp("last_read_at").defaultNow().notNull(),
+  historyClearedAt: timestamp("history_cleared_at"),
 }, (table) => [
   uniqueIndex("communication_direct_members_unique").on(table.conversationId, table.userId),
   index("communication_direct_members_user_idx").on(table.userId, table.conversationId),
