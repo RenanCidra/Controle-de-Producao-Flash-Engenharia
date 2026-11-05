@@ -50,10 +50,10 @@ async function messagePagePayload<T extends { id: number; authorUid: string; cre
       : db.select({ messageId: communicationMessageReactions.directMessageId, userId: communicationMessageReactions.userId, emoji: communicationMessageReactions.emoji })
         .from(communicationMessageReactions).where(inArray(communicationMessageReactions.directMessageId, messageIds)),
     kind === 'group'
-      ? db.select({ userId: communicationGroupMembers.userId, lastReadAt: communicationGroupMembers.lastReadAt })
-        .from(communicationGroupMembers).where(eq(communicationGroupMembers.groupId, conversationId))
-      : db.select({ userId: communicationDirectMembers.userId, lastReadAt: communicationDirectMembers.lastReadAt })
-        .from(communicationDirectMembers).where(eq(communicationDirectMembers.conversationId, conversationId)),
+      ? db.select({ userId: communicationGroupMembers.userId, lastReadAt: communicationGroupMembers.lastReadAt, name: users.name, department: users.department, avatarUrl: users.avatarUrl })
+        .from(communicationGroupMembers).innerJoin(users, eq(users.id, communicationGroupMembers.userId)).where(eq(communicationGroupMembers.groupId, conversationId))
+      : db.select({ userId: communicationDirectMembers.userId, lastReadAt: communicationDirectMembers.lastReadAt, name: users.name, department: users.department, avatarUrl: users.avatarUrl })
+        .from(communicationDirectMembers).innerJoin(users, eq(users.id, communicationDirectMembers.userId)).where(eq(communicationDirectMembers.conversationId, conversationId)),
   ]);
   const reactionsByMessage = new Map<number, Map<string, Set<number>>>();
   for (const reaction of reactionRows) {
@@ -68,11 +68,15 @@ async function messagePagePayload<T extends { id: number; authorUid: string; cre
   return rows.map((message) => {
     const reactions = [...(reactionsByMessage.get(message.id)?.entries() || [])]
       .map(([emoji, reactingUsers]) => ({ emoji, count: reactingUsers.size, reactedByMe: reactingUsers.has(currentUserId) }));
-    const readByCount = recipients.filter((member) => member.lastReadAt >= message.createdAt).length;
+    const readBy = recipients.filter((member) => member.lastReadAt >= message.createdAt);
     return {
       ...publicMessage(message),
       reactions,
-      ...(message.authorUid === currentUid ? { readByCount, recipientCount: recipients.length } : {}),
+      ...(message.authorUid === currentUid ? {
+        readByCount: readBy.length,
+        recipientCount: recipients.length,
+        readBy: readBy.map((member) => ({ userId: member.userId, name: member.name, department: member.department, avatarUrl: member.avatarUrl, readAt: member.lastReadAt.toISOString() })),
+      } : {}),
     };
   });
 }

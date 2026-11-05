@@ -6,7 +6,7 @@ const MAX_MS = 120_000;
 const MIME_PREFERENCE = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4'];
 const t = (text: string) => translateText(text);
 
-export const AudioRecorderButton: React.FC<{ onRecorded: (blob: Blob, durationMs: number) => Promise<void> | void; disabled?: boolean; label?: string }> = ({ onRecorded, disabled = false, label = 'Gravar áudio' }) => {
+export const AudioRecorderButton: React.FC<{ onRecorded: (blob: Blob, durationMs: number) => Promise<void> | void; disabled?: boolean; label?: string; buttonClassName?: string }> = ({ onRecorded, disabled = false, label = 'Gravar áudio', buttonClassName = '' }) => {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
@@ -45,7 +45,7 @@ export const AudioRecorderButton: React.FC<{ onRecorded: (blob: Blob, durationMs
   };
 
   return <div className="relative shrink-0">
-    <button type="button" disabled={disabled || busy} onClick={() => recording ? stopRecording() : void start()} title={recording ? t('Parar e enviar áudio') : label} aria-label={recording ? t('Parar e enviar áudio') : label} className={`flex h-10 w-10 items-center justify-center rounded-xl border transition disabled:opacity-40 ${recording ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-[#DCE3EB] bg-white text-slate-500 hover:border-[#FFAA00] hover:text-[#916B19]'}`}>{recording ? <Square size={16} fill="currentColor"/> : <Mic size={17}/>}</button>
+    <button type="button" disabled={disabled || busy} onClick={() => recording ? stopRecording() : void start()} title={recording ? t('Parar e enviar áudio') : label} aria-label={recording ? t('Parar e enviar áudio') : label} className={`flex h-10 w-10 items-center justify-center rounded-xl border transition disabled:opacity-40 ${recording ? 'border-rose-300 bg-rose-50 text-rose-700' : `border-[#DCE3EB] bg-white text-slate-500 hover:border-[#FFAA00] hover:text-[#916B19] ${buttonClassName}`}`}>{recording ? <Square size={16} fill="currentColor"/> : <Mic size={17}/>}</button>
     {error && <span role="alert" className="absolute bottom-12 right-0 z-40 w-56 rounded-lg bg-rose-50 p-2 text-xs text-rose-700 shadow">{error}</span>}
     {recording && <span className="sr-only" aria-live="polite">{t('Gravando; limite de dois minutos.')}</span>}
   </div>;

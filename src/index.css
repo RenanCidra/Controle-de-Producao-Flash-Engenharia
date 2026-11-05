@@ -283,5 +283,20 @@ html[data-theme="dark"] .floating-assistant-control:hover { border-color: #a07d2
   }
 }
 
-
+[data-chat-composer] textarea {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+html[data-theme="mixed"] [data-chat-composer] { background: #f1f4f7; border-color: #dce3eb; }
+html[data-theme="mixed"] [data-chat-composer-pill] { background: #fff; border-color: #cbd5e1; }
+html[data-theme="light"] [data-chat-composer] { background: #f1f2f3; border-color: #e3e5e8; }
+html[data-theme="light"] [data-chat-composer-pill] { background: #fff; border-color: #c9ced6; }
+html[data-theme="dark"] [data-chat-composer] { background: #1b1b1b; border-color: #383838; }
+html[data-theme="dark"] [data-chat-composer-pill] { background: #272727; border-color: #505050; box-shadow: 0 1px 3px rgb(0 0 0 / 30%); }
+html[data-theme="dark"] [data-chat-composer] textarea { color: #f5f5f5; }
+html[data-theme="dark"] [data-chat-composer] textarea::placeholder { color: #b5b5b5; }
+html[data-theme="dark"] [data-chat-composer] [role="group"] { background: #272727; border-color: #505050; }
+html[data-theme="dark"] [data-chat-composer] [role="group"] button:hover { background: #3b3b3b; }
 
