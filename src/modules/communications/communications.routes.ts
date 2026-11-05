@@ -125,7 +125,7 @@ async function isDirectMember(conversationId: number, userId: number) {
 }
 
 router.get('/directory', asyncHandler(async (req, res) => {
-  const directory = await db.select({ id: users.id, name: users.name, department: users.department, role: users.role })
+  const directory = await db.select({ id: users.id, name: users.name, department: users.department, role: users.role, avatarUrl: users.avatarUrl })
     .from(users).where(and(eq(users.status, 'ACTIVE'), inArray(users.role, ['ADMIN', 'SUPERVISOR', 'OPERATOR']), ne(users.id, req.user!.userId))).orderBy(asc(users.name)).limit(200);
   return res.json(directory);
 }));
@@ -137,7 +137,7 @@ router.get('/direct', asyncHandler(async (req, res) => {
   if (!mine.length) return res.json([]);
   const ids = mine.map((conversation) => conversation.id);
   const [others, latestMessages, unreadRows] = await Promise.all([
-    db.select({ conversationId: communicationDirectMembers.conversationId, userId: users.id, name: users.name, department: users.department, role: users.role })
+    db.select({ conversationId: communicationDirectMembers.conversationId, userId: users.id, name: users.name, department: users.department, role: users.role, avatarUrl: users.avatarUrl })
       .from(communicationDirectMembers).innerJoin(users, eq(users.id, communicationDirectMembers.userId))
       .where(and(inArray(communicationDirectMembers.conversationId, ids), ne(communicationDirectMembers.userId, req.user!.userId))),
     db.selectDistinctOn([communicationDirectMessages.conversationId], {
@@ -174,6 +174,7 @@ router.get('/direct', asyncHandler(async (req, res) => {
       name: other.name,
       department: other.department,
       role: other.role,
+      avatarUrl: other.avatarUrl,
       lastMessage: latestByConversation.get(conversation.id) || null,
       unreadCount: unreadByConversation.get(conversation.id) || 0,
     }] : [];
@@ -253,7 +254,7 @@ router.get('/direct/:id/profile', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Conversa inválida.' });
   if (!await isDirectMember(id, req.user!.userId)) return res.status(404).json({ error: 'Conversa não encontrada.' });
-  const [participant] = await db.select({ id: users.id, name: users.name, department: users.department, role: users.role, status: users.status })
+  const [participant] = await db.select({ id: users.id, name: users.name, department: users.department, role: users.role, status: users.status, avatarUrl: users.avatarUrl })
     .from(communicationDirectMembers).innerJoin(users, eq(users.id, communicationDirectMembers.userId))
     .where(and(eq(communicationDirectMembers.conversationId, id), ne(users.id, req.user!.userId))).limit(1);
   return participant ? res.json(participant) : res.status(404).json({ error: 'Participante não encontrado.' });
@@ -454,7 +455,7 @@ router.get('/groups/:id/members', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Grupo inválido.' });
   if (!await isGroupMember(id, req.user!.userId)) return res.status(404).json({ error: 'Grupo não encontrado.' });
-  const members = await db.select({ id: users.id, name: users.name, department: users.department, role: users.role })
+  const members = await db.select({ id: users.id, name: users.name, department: users.department, role: users.role, avatarUrl: users.avatarUrl })
     .from(communicationGroupMembers).innerJoin(users, eq(users.id, communicationGroupMembers.userId))
     .where(eq(communicationGroupMembers.groupId, id)).orderBy(asc(users.name));
   return res.json(members);

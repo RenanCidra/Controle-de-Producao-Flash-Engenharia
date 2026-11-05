@@ -73,6 +73,12 @@ export class AuthRepository {
     }
   }
 
+  public static async updateAvatarUrl(uid: string, avatarUrl: string | null) {
+    const [updated] = await db.update(users).set({ avatarUrl, updatedAt: new Date() })
+      .where(eq(users.uid, uid)).returning({ avatarUrl: users.avatarUrl });
+    return updated || null;
+  }
+
   public static async createUser(data: {
     uid: string;
     loginName: string;

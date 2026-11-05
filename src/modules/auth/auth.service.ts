@@ -38,6 +38,31 @@ async function issueAccessToken(user: any): Promise<string> {
 }
 
 export class AuthService {
+  public static async getOwnAvatar(uid: string) {
+    const user = await AuthRepository.findByUid(uid);
+    if (!user || user.status !== 'ACTIVE') throw new Error('CONTA_INATIVA');
+    return user.avatarUrl || null;
+  }
+
+  public static async updateOwnAvatar(uid: string, avatarUrl: unknown) {
+    if (avatarUrl !== null && typeof avatarUrl !== 'string') throw new Error('FOTO_INVALIDA');
+    if (typeof avatarUrl === 'string') {
+      const match = avatarUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/);
+      if (!match) throw new Error('FOTO_INVALIDA');
+      const bytes = Buffer.from(match[2], 'base64');
+      if (!bytes.length || bytes.length > 1024 * 1024 || bytes.toString('base64') !== match[2]) throw new Error('FOTO_INVALIDA');
+      const validSignature = match[1] === 'image/jpeg'
+        ? bytes[0] === 0xff && bytes[1] === 0xd8 && bytes.at(-2) === 0xff && bytes.at(-1) === 0xd9
+        : match[1] === 'image/png'
+          ? bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+          : bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP';
+      if (!validSignature) throw new Error('FOTO_INVALIDA');
+    }
+    const updated = await AuthRepository.updateAvatarUrl(uid, avatarUrl);
+    if (!updated) throw new Error('CONTA_INATIVA');
+    return updated.avatarUrl;
+  }
+
   public static async changeOwnPassword(uid: string, currentPassword: string, newPassword: string, currentTokenId: string, ipAddress?: string) {
     const user = await AuthRepository.findByUid(uid);
     if (!user || user.status !== 'ACTIVE') throw new Error('CONTA_INATIVA');

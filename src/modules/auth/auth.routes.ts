@@ -9,6 +9,8 @@ router.get('/setup-status', AuthController.setupStatus);
 router.post('/bootstrap-admin', bootstrapRateLimit, allowBodyFields('setupSecret', 'loginName', 'password', 'name', 'email'), AuthController.bootstrapAdmin);
 router.post('/login', loginRateLimit, allowBodyFields('loginName', 'identifier', 'username', 'email', 'password'), AuthController.login);
 router.get('/me', authenticateToken, AuthController.me);
+router.get('/avatar', authenticateToken, AuthController.getOwnAvatar);
+router.put('/avatar', authenticateToken, allowBodyFields('avatarUrl'), AuthController.updateOwnAvatar);
 router.post('/logout', authenticateToken, AuthController.logout);
 router.post('/change-password', authenticateToken, passwordChangeRateLimit, allowBodyFields('currentPassword', 'newPassword'), AuthController.changePassword);
 

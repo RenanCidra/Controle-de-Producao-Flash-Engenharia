@@ -15,6 +15,7 @@ export interface AuthUser {
   name: string;
   role: 'ADMIN' | 'SUPERVISOR' | 'OPERATOR' | 'AUDITOR';
   department?: string | null;
+  avatarUrl?: string | null;
 }
 
 export type FeedbackCategory = 'IDEA' | 'BUG' | 'QUESTION' | 'OTHER';
@@ -283,6 +284,11 @@ class ApiService {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  }
+
+  public getOwnAvatar() { return this.request<{ avatarUrl: string | null }>('/auth/avatar'); }
+  public updateOwnAvatar(avatarUrl: string | null) {
+    return this.request<{ avatarUrl: string | null }>('/auth/avatar', { method: 'PUT', body: JSON.stringify({ avatarUrl }) });
   }
 
   public getAuthSetupStatus() {
@@ -656,7 +662,7 @@ class ApiService {
     return this.request<any>(`/occurrences?${query.toString()}`);
   }
 
-  public getCommunicationDirectory() { return this.request<Array<{ id: number; name: string; department: string | null; role?: string }>>('/communications/directory'); }
+  public getCommunicationDirectory() { return this.request<Array<{ id: number; name: string; department: string | null; role?: string; avatarUrl?: string | null }>>('/communications/directory'); }
   public getCommunicationDirectConversations() { return this.request<any[]>('/communications/direct'); }
   private communicationMessagePage(path: string, params?: { beforeId?: number; afterId?: number; changedAfter?: string; limit?: number }) {
     const query = new URLSearchParams();
@@ -672,10 +678,10 @@ class ApiService {
   public removeCommunicationDirectReaction(conversationId: number, messageId: number, emoji: string) { return this.request<{ success: boolean }>(`/communications/direct/${conversationId}/messages/${messageId}/reactions`, { method: 'DELETE', body: JSON.stringify({ emoji }) }); }
   public sendCommunicationDirectAudio(conversationId: number, audio: Blob, durationMs: number) { return this.uploadCommunicationAudio(`/communications/direct/${conversationId}/audio`, audio, durationMs); }
   public getCommunicationDirectAudio(conversationId: number, messageId: number) { return this.getPrivateAudio(`/communications/direct/${conversationId}/messages/${messageId}/audio`); }
-  public getCommunicationDirectProfile(conversationId: number) { return this.request<{ id: number; name: string; department: string | null; role: string; status: string }>(`/communications/direct/${conversationId}/profile`); }
+  public getCommunicationDirectProfile(conversationId: number) { return this.request<{ id: number; name: string; department: string | null; role: string; status: string; avatarUrl?: string | null }>(`/communications/direct/${conversationId}/profile`); }
   public getCommunicationGroups() { return this.request<any[]>('/communications/groups'); }
   public getCommunicationMessages(groupId: number, params?: { beforeId?: number; afterId?: number; changedAfter?: string; limit?: number }) { return this.communicationMessagePage(`/communications/groups/${groupId}/messages`, params); }
-  public getCommunicationGroupMembers(groupId: number) { return this.request<Array<{ id: number; name: string; department: string | null; role: string }>>(`/communications/groups/${groupId}/members`); }
+  public getCommunicationGroupMembers(groupId: number) { return this.request<Array<{ id: number; name: string; department: string | null; role: string; avatarUrl?: string | null }>>(`/communications/groups/${groupId}/members`); }
   public markCommunicationGroupRead(groupId: number) { return this.request<{ success: boolean }>(`/communications/groups/${groupId}/read`, { method: 'PATCH' }); }
   public createCommunicationGroup(name: string, sector: string, memberIds: number[]) { return this.request<any>('/communications/groups', { method: 'POST', body: JSON.stringify({ name, sector, memberIds }) }); }
   public sendCommunicationMessage(groupId: number, body: string, replyToMessageId?: number | null) { return this.request<any>(`/communications/groups/${groupId}/messages`, { method: 'POST', body: JSON.stringify({ body, replyToMessageId }) }); }

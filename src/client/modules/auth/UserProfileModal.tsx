@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ImagePlus, LockKeyhole, RefreshCw, Trash2, UserRound } from 'lucide-react';
 import { api, AuthUser } from '../../api.ts';
 import { AppLanguage } from '../../i18n/catalog.ts';
@@ -23,11 +23,18 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, user
   const [passwordError, setPasswordError] = useState('');
   const [passwordMessage, setPasswordMessage] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [preferencesLoading, setPreferencesLoading] = useState(false);
+  const avatarEditedRef = useRef(false);
 
   useEffect(() => {
     if (!isOpen) return;
     const preferences = readUserPreferences(user?.uid);
+    let active = true;
+    avatarEditedRef.current = false;
     setAvatarDataUrl(preferences.avatarDataUrl);
+    if (user?.uid && !user.uid.startsWith('dev-preview')) {
+      void api.getOwnAvatar().then(result => { if (active && !avatarEditedRef.current && result.avatarUrl) setAvatarDataUrl(result.avatarUrl); }).catch(() => undefined);
+    }
     setLanguage(preferences.language || getAppLanguage() as AppLanguage);
     setTheme(preferences.theme);
     setMessage('');
@@ -36,6 +43,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, user
     setConfirmPassword('');
     setPasswordError('');
     setPasswordMessage('');
+    return () => { active = false; };
   }, [isOpen, user?.uid]);
 
   const handlePasswordChange = async (event: React.FormEvent) => {
@@ -77,19 +85,30 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, user
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => setAvatarDataUrl(typeof reader.result === 'string' ? reader.result : null);
+    reader.onload = () => { avatarEditedRef.current = true; setAvatarDataUrl(typeof reader.result === 'string' ? reader.result : null); };
     reader.onerror = () => setMessage('Não foi possível abrir a imagem selecionada.');
     reader.readAsDataURL(file);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!user?.uid) {
       setMessage('Entre com sua conta para salvar suas preferências.');
       return;
     }
-    const saved = saveUserPreferences(user.uid, { avatarDataUrl, language, theme });
-    setAppLanguage(language);
-    setMessage(saved ? 'Preferências salvas neste dispositivo.' : 'Não foi possível salvar as preferências neste dispositivo.');
+    setPreferencesLoading(true);
+    try {
+      const isLocalPreview = user.uid.startsWith('dev-preview');
+      if (!isLocalPreview) await api.updateOwnAvatar(avatarDataUrl);
+      const saved = saveUserPreferences(user.uid, { avatarDataUrl, language, theme });
+      if (!saved) throw new Error('Não foi possível salvar as preferências neste dispositivo.');
+      if (!isLocalPreview) window.dispatchEvent(new Event('flash-contact-avatar-change'));
+      setAppLanguage(language);
+      setMessage(isLocalPreview ? 'Foto local salva somente nesta prévia.' : 'Foto sincronizada para seus contatos. As demais preferências ficam neste dispositivo.');
+    } catch (error: any) {
+      setMessage(error.message || 'Não foi possível salvar a foto do perfil.');
+    } finally {
+      setPreferencesLoading(false);
+    }
   };
 
   const handleThemeChange = (nextTheme: ThemePreference) => {
@@ -131,9 +150,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, user
               <ImagePlus className="h-4 w-4 text-amber-400" /> {translateText('Escolher foto')}
               <input type="file" accept="image/*" className="sr-only" onChange={handlePhoto} />
             </label>
-            {avatarDataUrl && <button type="button" onClick={() => setAvatarDataUrl(null)} className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800"><Trash2 className="h-4 w-4" />{translateText('Remover foto')}</button>}
+            {avatarDataUrl && <button type="button" onClick={() => { avatarEditedRef.current = true; setAvatarDataUrl(null); }} className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800"><Trash2 className="h-4 w-4" />{translateText('Remover foto')}</button>}
           </div>
-          <p className="mt-2 text-[11px] text-slate-500">{translateText('Imagem local de até 1 MB; fica salva neste dispositivo.')}</p>
+          <p className="mt-2 text-[11px] text-slate-500">{translateText('Foto de até 1 MB; visível para seus contatos na Central de Comunicação.')}</p>
         </section>
 
         {user?.uid.startsWith('dev-preview') && <p className="rounded-lg border border-amber-500/20 bg-amber-950/20 px-3 py-2 text-xs text-amber-100">{translateText('A troca de senha fica disponível quando você entra com sua conta real.')}</p>}
@@ -167,7 +186,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, user
         {message && <p role="status" className="text-xs text-slate-300">{translateText(message)}</p>}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-300 hover:bg-slate-800">{translateText('Fechar')}</button>
-          <button type="button" onClick={handleSave} className="rounded-lg bg-amber-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-amber-400">{translateText('Salvar preferências')}</button>
+          <button type="button" disabled={preferencesLoading} onClick={() => void handleSave()} className="rounded-lg bg-amber-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-amber-400 disabled:cursor-wait disabled:opacity-60">{translateText(preferencesLoading ? 'Salvando…' : 'Salvar preferências')}</button>
         </div>
       </div>
     </Modal>

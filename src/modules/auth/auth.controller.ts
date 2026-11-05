@@ -70,6 +70,21 @@ export class AuthController {
     return res.json({ user: req.user });
   }
 
+  public static async getOwnAvatar(req: AuthenticatedRequest, res: Response) {
+    if (!req.user?.uid) return res.status(401).json({ error: 'Sessão não autenticada.' });
+    try { return res.json({ avatarUrl: await AuthService.getOwnAvatar(req.user.uid) }); }
+    catch { return res.status(503).json({ error: 'Não foi possível carregar a foto do perfil.' }); }
+  }
+
+  public static async updateOwnAvatar(req: AuthenticatedRequest, res: Response) {
+    if (!req.user?.uid) return res.status(401).json({ error: 'Sessão não autenticada.' });
+    try { return res.json({ avatarUrl: await AuthService.updateOwnAvatar(req.user.uid, req.body?.avatarUrl) }); }
+    catch (error: any) {
+      const invalid = error?.message === 'FOTO_INVALIDA';
+      return res.status(invalid ? 400 : 503).json({ error: invalid ? 'Foto inválida. Use JPG, PNG ou WebP de até 1 MB.' : 'Não foi possível salvar a foto do perfil.' });
+    }
+  }
+
   public static async logout(req: AuthenticatedRequest, res: Response) {
     if (req.user) {
       try {
