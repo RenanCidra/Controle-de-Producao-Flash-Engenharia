@@ -103,9 +103,10 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
   const [hasOlderMessages, setHasOlderMessages] = useState(true);
   const canCreateGroups = ['ADMIN', 'SUPERVISOR'].includes(api.getUser()?.role || '');
   const selectedConversation = selectedGroupId !== null || selectedDirectId !== null || draftRecipient !== null;
+  const contactDetailsOpen = conversationInfoOpen && profileUser !== null;
   activeConversationRef.current = selectedGroupId !== null ? `group:${selectedGroupId}` : selectedDirectId !== null ? `direct:${selectedDirectId}` : null;
 
-  useEffect(() => { setMessageDetails(null); }, [selectedGroupId, selectedDirectId]);
+  useEffect(() => { setMessageDetails(null); setConversationInfoOpen(false); setProfileUser(null); }, [selectedGroupId, selectedDirectId]);
   useEffect(() => { setDirectSearchQuery(''); }, [selectedDirectId]);
   useEffect(() => {
     if (!messageDetails) return;
@@ -113,6 +114,16 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
     document.addEventListener('keydown', closeOnEscape);
     return () => document.removeEventListener('keydown', closeOnEscape);
   }, [messageDetails]);
+  useEffect(() => {
+    if (!contactDetailsOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setProfileUser(null);
+      if (!selectedGroupId) setConversationInfoOpen(false);
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [contactDetailsOpen, selectedGroupId]);
 
   const loadGroups = useCallback(async () => {
     if (localPreview) {
@@ -325,6 +336,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
   };
   const openConversationInfo = async () => {
     setError('');
+    setMessageDetails(null);
     setProfileUser(null);
     if (selectedGroupId !== null) {
       if (localPreview) { setGroupMembers(previewDirectory); setConversationInfoOpen(true); return; }
@@ -648,14 +660,14 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
         </nav>
       </aside>
 
-      <main className={`${selectedConversation ? 'flex' : 'hidden md:flex'} relative min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#F1F4F7] transition-[padding-right] duration-300 ease-out ${messageDetails ? 'lg:pr-[min(360px,40vw)]' : ''}`}>
+      <main className={`${selectedConversation ? 'flex' : 'hidden md:flex'} relative min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#F1F4F7] transition-[padding-right] duration-300 ease-out ${messageDetails || contactDetailsOpen ? 'lg:pr-[min(360px,40vw)]' : ''}`}>
         {selectedGroup ? <>
           <header className="flex items-center gap-3 border-b border-[#DCE3EB] bg-white px-4 py-3.5 sm:px-5"><button type="button" onClick={clearSelection} aria-label="Voltar à lista" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7] md:hidden"><ArrowLeft size={18}/></button><span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]"><Users size={18}/></span><button type="button" onClick={() => void openConversationInfo()} className="min-w-0 flex-1 text-left"><h2 className="truncate text-sm font-semibold text-[#263548]">{selectedGroup.name}</h2><p className="text-xs text-slate-500">{selectedGroup.sector} · {groupMembers.length || 'Ver'} participantes</p></button><button type="button" onClick={() => void openConversationInfo()} title="Dados do grupo" aria-label="Dados do grupo" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7]"><Info size={18}/></button></header>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{messagesLoading && !messages.length ? <LoadingState compact label="Carregando mensagens…" /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={messages} selectedMessageId={messageDetails?.id ?? null} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={hasOlderMessages} loadingOlder={loadingOlder} groupId={selectedGroupId} conversationKey={`group:${selectedGroupId}`} currentUserUid={currentUser?.uid || api.getUser()?.uid || 'unknown'} onAskAssistant={onAskAssistant} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={setMessageDetails} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}</div>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{messagesLoading && !messages.length ? <LoadingState compact label="Carregando mensagens…" /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={messages} selectedMessageId={messageDetails?.id ?? null} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={hasOlderMessages} loadingOlder={loadingOlder} groupId={selectedGroupId} conversationKey={`group:${selectedGroupId}`} currentUserUid={currentUser?.uid || api.getUser()?.uid || 'unknown'} onAskAssistant={onAskAssistant} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={message => { setProfileUser(null); setConversationInfoOpen(false); setMessageDetails(message); }} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}</div>
           <MessageComposer body={body} setBody={setBody} send={send} sending={sendingMessage} onSendAudio={sendAudioMessage} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
         </> : directTitle ? <>
           <DirectConversationHeader name={directTitle} avatarUrl={selectedDirect?.avatarUrl || draftRecipient?.avatarUrl} subtitle={draftRecipient ? translateText('Nova conversa · será criada ao enviar a primeira mensagem') : directDepartment || translateText('Conversa direta')} searchQuery={directSearchQuery} onSearchChange={setDirectSearchQuery} matchCount={directSearchQuery.trim() ? messages.filter(message => `${message.body} ${message.authorName}`.toLowerCase().includes(directSearchQuery.trim().toLowerCase())).length : null} totalMessages={messages.length} onInfo={() => void openConversationInfo()} onBack={clearSelection}/>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{messagesLoading && !messages.length ? <LoadingState compact label="Carregando mensagens…" /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={messages} searchQuery={directSearchQuery} selectedMessageId={messageDetails?.id ?? null} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={hasOlderMessages} loadingOlder={loadingOlder} directId={selectedDirectId} conversationKey={`direct:${selectedDirectId}`} currentUserUid={currentUser?.uid || api.getUser()?.uid || 'unknown'} onAskAssistant={onAskAssistant} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={setMessageDetails} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}</div>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{messagesLoading && !messages.length ? <LoadingState compact label="Carregando mensagens…" /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={messages} searchQuery={directSearchQuery} selectedMessageId={messageDetails?.id ?? null} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={hasOlderMessages} loadingOlder={loadingOlder} directId={selectedDirectId} conversationKey={`direct:${selectedDirectId}`} currentUserUid={currentUser?.uid || api.getUser()?.uid || 'unknown'} onAskAssistant={onAskAssistant} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={message => { setProfileUser(null); setConversationInfoOpen(false); setMessageDetails(message); }} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}</div>
           <MessageComposer body={body} setBody={setBody} send={send} sending={sendingMessage} onSendAudio={sendAudioMessage} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
         </> : <div className="m-auto max-w-md px-6 text-center"><div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white text-[#916B19] shadow-sm"><MessageCircle size={28}/></div><h2 className="text-lg font-semibold text-[#263548]">Sua comunicação de produção</h2><p className="mt-2 text-sm leading-6 text-slate-500">Selecione uma conversa ou grupo. As mensagens ficam visíveis apenas para seus participantes.</p></div>}
         {error && <p role="alert" className="border-t border-slate-200/70 bg-transparent px-4 py-1.5 text-[11px] text-slate-500">{error}</p>}
@@ -664,17 +676,23 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
             <motion.button type="button" aria-label={translateText('Fechar detalhes da mensagem')} onClick={() => setMessageDetails(null)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-30 bg-black/30 lg:hidden" />
             <MessageDetailsPanel message={messages.find(message => message.id === messageDetails.id) || messageDetails} onClose={() => setMessageDetails(null)} />
           </>}
+          {contactDetailsOpen && profileUser && <>
+            <motion.button type="button" aria-label={translateText('Fechar dados do contato')} onClick={() => { setProfileUser(null); setConversationInfoOpen(false); }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-30 bg-black/30 lg:hidden" />
+            <ContactDetailsPanel user={profileUser} onClose={() => { setProfileUser(null); setConversationInfoOpen(false); }} onBack={selectedGroup ? () => setProfileUser(null) : undefined} onStartConversation={selectedGroup && profileUser.id !== api.getUser()?.id ? () => { startConversation(profileUser); setConversationInfoOpen(false); } : undefined} />
+          </>}
         </AnimatePresence>
       </main>
     </div>
 
-    {conversationInfoOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" onMouseDown={event => { if (event.target === event.currentTarget) setConversationInfoOpen(false); }}>
-      <section role="dialog" aria-modal="true" aria-label={profileUser ? 'Perfil do usuário' : selectedGroup ? 'Informações do grupo' : 'Perfil do usuário'} className="max-h-[85dvh] w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
-        <header className="flex items-center justify-between border-b border-[#E7ECF1] px-5 py-4"><div className="flex items-center gap-2">{profileUser && selectedGroup && <button type="button" onClick={() => setProfileUser(null)} className="mr-1 rounded-lg p-1.5 text-slate-500 hover:bg-[#F1F4F7]" aria-label="Voltar ao grupo"><ArrowLeft size={17}/></button>}<h3 className="font-semibold text-[#263548]">{profileUser ? 'Perfil' : selectedGroup ? 'Informações do grupo' : 'Perfil'}</h3></div><button type="button" onClick={() => setConversationInfoOpen(false)} aria-label="Fechar" className="rounded-lg p-1.5 text-slate-500 hover:bg-[#F1F4F7]"><X size={18}/></button></header>
+    {conversationInfoOpen && !profileUser && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" onMouseDown={event => { if (event.target === event.currentTarget) setConversationInfoOpen(false); }}>
+      <section role="dialog" aria-modal="true" aria-label={selectedGroup ? 'Informações do grupo' : 'Perfil do usuário'} className="max-h-[85dvh] w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <header className="flex items-center justify-between border-b border-[#E7ECF1] px-5 py-4"><h3 className="font-semibold text-[#263548]">{selectedGroup ? 'Informações do grupo' : 'Perfil'}</h3><button type="button" onClick={() => setConversationInfoOpen(false)} aria-label="Fechar" className="rounded-lg p-1.5 text-slate-500 hover:bg-[#F1F4F7]"><X size={18}/></button></header>
         <div className="max-h-[calc(85dvh-60px)] overflow-y-auto p-5">
-          {profileUser ? <div className="text-center"><ContactAvatar name={profileUser.name} avatarUrl={profileUser.avatarUrl} size="profile" /><h4 className="mt-3 text-lg font-semibold text-[#263548]">{profileUser.name}</h4><p className="text-sm text-slate-500">{roleLabel(profileUser.role)}</p><div className="mt-5 divide-y divide-[#E7ECF1] rounded-xl border border-[#E7ECF1] text-left"><ProfileRow label="Setor" value={profileUser.department || 'Não informado'}/><ProfileRow label="Acesso" value={roleLabel(profileUser.role)}/></div>{selectedGroup && profileUser.id !== api.getUser()?.id ? <button type="button" onClick={() => { startConversation(profileUser); setConversationInfoOpen(false); }} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#FFAA00] px-4 py-2 text-sm font-semibold text-[#151C25]"><MessageCircle size={16}/>Iniciar conversa individual</button> : <button type="button" onClick={() => setConversationInfoOpen(false)} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#FFAA00] px-4 py-2 text-sm font-semibold text-[#151C25]"><MessageCircle size={16}/>{selectedGroup ? 'Voltar ao grupo' : 'Voltar à conversa'}</button>}</div>
-            : selectedGroup ? <><div className="text-center"><span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]"><Users size={26}/></span><h4 className="mt-3 text-lg font-semibold text-[#263548]">{selectedGroup.name}</h4><p className="text-sm text-slate-500">{selectedGroup.sector}</p><p className="mt-1 text-xs text-slate-400">{groupMembers.length} participantes</p></div><h5 className="mb-2 mt-6 text-xs font-semibold uppercase tracking-wide text-slate-500">Participantes</h5><div className="divide-y divide-[#E7ECF1] rounded-xl border border-[#E7ECF1]">{groupMembers.map(member => <button key={member.id} type="button" onClick={() => setProfileUser(member)} className="flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-[#F8FAFC]"><ContactAvatar name={member.name} avatarUrl={member.avatarUrl} size="list" /><span className="min-w-0 flex-1"><b className="block truncate text-sm text-[#263548]">{member.name}</b><small className="text-xs text-slate-500">{member.department || roleLabel(member.role)}</small></span><UserRound size={16} className="text-slate-400"/></button>)}</div></>
-            : null}
+          {selectedGroup ? <>
+            <div className="text-center"><span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]"><Users size={26}/></span><h4 className="mt-3 text-lg font-semibold text-[#263548]">{selectedGroup.name}</h4><p className="text-sm text-slate-500">{selectedGroup.sector}</p><p className="mt-1 text-xs text-slate-400">{groupMembers.length} participantes</p></div>
+            <h5 className="mb-2 mt-6 text-xs font-semibold uppercase tracking-wide text-slate-500">Participantes</h5>
+            <div className="divide-y divide-[#E7ECF1] rounded-xl border border-[#E7ECF1]">{groupMembers.map(member => <button key={member.id} type="button" onClick={() => setProfileUser(member)} className="flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-[#F8FAFC]"><ContactAvatar name={member.name} avatarUrl={member.avatarUrl} size="list" /><span className="min-w-0 flex-1"><b className="block truncate text-sm text-[#263548]">{member.name}</b><small className="text-xs text-slate-500">{member.department || roleLabel(member.role)}</small></span><UserRound size={16} className="text-slate-400"/></button>)}</div>
+          </> : null}
         </div>
       </section>
     </div>}
@@ -923,6 +941,38 @@ const MessageDetailsPanel: React.FC<{ message: Message; onClose: () => void }> =
     </div>
   </motion.aside>;
 };
+
+const ContactDetailsPanel: React.FC<{ user: DirectoryUser; onClose: () => void; onBack?: () => void; onStartConversation?: () => void }> = ({ user, onClose, onBack, onStartConversation }) => <motion.aside
+  role="dialog"
+  aria-label={translateText('Dados do contato')}
+  aria-modal="false"
+  initial={{ x: '100%', opacity: 0.7 }}
+  animate={{ x: 0, opacity: 1 }}
+  exit={{ x: '100%', opacity: 0.7 }}
+  transition={{ type: 'spring', stiffness: 330, damping: 34, mass: 0.8 }}
+  className="absolute inset-y-0 right-0 z-40 flex w-[min(420px,92vw)] flex-col border-l border-[#DCE3EB] bg-white shadow-2xl lg:w-[min(360px,40vw)]"
+>
+  <header className="flex min-h-14 shrink-0 items-center gap-2 border-b border-[#E7ECF1] px-3.5">
+    {onBack && <button type="button" onClick={onBack} aria-label={translateText('Voltar às informações do grupo')} className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-[#F1F4F7]"><ArrowLeft size={18}/></button>}
+    <h2 className="min-w-0 flex-1 truncate text-sm font-semibold text-[#263548]">{translateText('Dados do contato')}</h2>
+    <button type="button" onClick={onClose} aria-label={translateText('Fechar dados do contato')} className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-[#F1F4F7]"><X size={18}/></button>
+  </header>
+  <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6">
+    <div className="flex flex-col items-center border-b border-[#E7ECF1] pb-6 text-center">
+      <ContactAvatar name={user.name} avatarUrl={user.avatarUrl} size="profile"/>
+      <h3 className="mt-4 max-w-full truncate text-xl font-semibold text-[#263548]">{user.name}</h3>
+      <p className="mt-1 text-sm text-slate-500">{translateText(roleLabel(user.role))}</p>
+    </div>
+    <section className="mt-5" aria-labelledby="contact-data-title">
+      <h4 id="contact-data-title" className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{translateText('Informações')}</h4>
+      <div className="divide-y divide-[#E7ECF1] rounded-xl border border-[#E7ECF1]">
+        <ProfileRow label={translateText('Setor')} value={user.department || translateText('Não informado')}/>
+        <ProfileRow label={translateText('Acesso')} value={translateText(roleLabel(user.role))}/>
+      </div>
+    </section>
+    {onStartConversation && <button type="button" onClick={onStartConversation} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#FFAA00] px-4 py-3 text-sm font-semibold text-[#151C25] transition-colors hover:bg-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"><MessageCircle size={17}/>{translateText('Iniciar conversa individual')}</button>}
+  </div>
+</motion.aside>;
 
 const MessageMenuItem: React.FC<{ icon: React.ReactNode; label: string; onClick: () => void; destructive?: boolean }> = ({ icon, label, onClick, destructive = false }) => <button type="button" role="menuitem" onClick={onClick} className={`message-menu-item flex min-h-10 w-full items-center gap-3 px-3.5 py-2 text-left text-[12px] font-medium transition-colors ${destructive ? 'message-menu-item-destructive' : ''}`}>
   <span className="message-menu-icon">{icon}</span><span>{translateText(label)}</span>
