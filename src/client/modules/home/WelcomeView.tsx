@@ -22,17 +22,17 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ stats, loading, error,
 
   return (
     <div className="mx-auto max-w-[1520px] space-y-5 pb-8">
-      <section data-theme-preserve="dark" className="relative isolate overflow-hidden rounded-2xl border border-[#202936] bg-[#111923] shadow-sm">
-        <div className="absolute inset-0 z-0 bg-cover bg-right bg-no-repeat opacity-55" style={{ backgroundImage: "url('/assets/industrial_banner.png')" }} />
-        <div className="absolute inset-0 z-[1] bg-gradient-to-r from-[#111923] via-[#111923]/95 to-[#111923]/55" />
+      <section data-theme-banner="welcome" className="relative isolate overflow-hidden rounded-2xl border border-[#202936] bg-[#171717] shadow-sm">
+        <div data-theme-banner-image className="absolute inset-0 z-0 bg-cover bg-right bg-no-repeat opacity-55" style={{ backgroundImage: "url('/assets/industrial_banner.png')" }} />
+        <div data-theme-banner-overlay className="absolute inset-0 z-[1] bg-gradient-to-r from-[#171717] via-[#171717]/90 to-[#171717]/42" />
         <div className="relative z-10 grid gap-6 p-6 sm:p-8 lg:grid-cols-[1.35fr_.65fr] lg:items-end lg:p-10">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1 text-[11px] font-semibold text-amber-200"><Database className="h-3.5 w-3.5" />{translateText('Controle de produção industrial')}</div>
-            <h1 className="mt-4 max-w-3xl text-3xl font-bold tracking-tight text-white sm:text-4xl">{translateText('Da ordem à entrega, com clareza em cada etapa.')}</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-300">{translateText('Uma visão integrada para consultar a produção, acompanhar ocorrências e trabalhar com dados rastreáveis.')}</p>
+            <div data-theme-banner-badge className="inline-flex items-center gap-2 rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1 text-[11px] font-semibold text-amber-200"><Database className="h-3.5 w-3.5" />{translateText('Controle de produção industrial')}</div>
+            <h1 data-theme-banner-title className="mt-4 max-w-3xl text-3xl font-bold tracking-tight text-white sm:text-4xl">{translateText('Da ordem à entrega, com clareza em cada etapa.')}</h1>
+            <p data-theme-banner-description className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-300">{translateText('Uma visão integrada para consultar a produção, acompanhar ocorrências e trabalhar com dados rastreáveis.')}</p>
             <button type="button" onClick={() => onNavigate('dashboard')} className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#FFAA00] px-4 py-2.5 text-xs font-bold text-[#151C25] shadow-sm transition hover:bg-[#e69900]">{translateText('Abrir painel geral')}<ArrowRight className="h-4 w-4" /></button>
           </div>
-          <aside className="rounded-xl border border-white/10 bg-black/25 p-4 text-white backdrop-blur-sm">
+          <aside data-theme-banner-card className="rounded-xl border border-white/10 bg-black/25 p-4 text-white">
             <div className="flex items-center gap-2 text-xs font-semibold"><span className={`h-2 w-2 rounded-full ${error ? 'bg-rose-400' : loading ? 'animate-pulse bg-amber-300' : stats ? 'bg-emerald-400' : 'bg-slate-400'}`} />{translateText('Espelho operacional do Protheus')}</div>
             {error ? <DataUnavailableState compact tone="dark" title="Resumo indisponível" description="O sistema não conseguiu consultar os dados do espelho." onRetry={onRetry} retrying={loading} /> : <>
               <p className="mt-2 text-xs leading-relaxed text-slate-300">{stats ? translateText('Resumo baseado nas cargas e registros disponíveis no banco da aplicação.') : translateText('A consulta usa os dados recebidos no espelho; não representa uma conexão ativa ao Protheus.')}</p>

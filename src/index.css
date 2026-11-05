@@ -8,6 +8,19 @@ html[data-theme="light"] body { background: var(--surface-page); color: var(--te
 html[data-theme="dark"] body { background: var(--surface-page); color: var(--text-primary); }
 html[data-theme="dark"] [data-theme-surface="sidebar"] { background-color: #141414 !important; }
 html[data-theme="light"] [data-theme-surface="sidebar"] { background-color: #f7f7f8 !important; }
+html[data-theme="light"] [data-theme-banner="welcome"] { background-color: #f7f7f8 !important; border-color: #e3e5e8 !important; }
+html[data-theme="light"] [data-theme-banner-image] { opacity: 0.72 !important; filter: grayscale(0.7) sepia(0.2) saturate(0.72) brightness(1.04) contrast(0.94); }
+html[data-theme="light"] [data-theme-banner-overlay] { background: linear-gradient(90deg, rgb(247 247 248 / 96%) 0%, rgb(247 247 248 / 76%) 48%, rgb(255 248 232 / 38%) 100%) !important; }
+html[data-theme="light"] [data-theme-banner-badge] { background-color: #fff8e8 !important; border-color: #ead7a9 !important; color: #76530b !important; }
+html[data-theme="light"] [data-theme-banner-title] { color: #202123 !important; }
+html[data-theme="light"] [data-theme-banner-description] { color: #5d6065 !important; }
+html[data-theme="light"] [data-theme-banner-card] { background-color: rgb(255 255 255 / 94%) !important; border-color: #e3e5e8 !important; color: #202123 !important; }
+html[data-theme="light"] [data-theme-banner-card] p { color: #5d6065 !important; }
+html[data-theme="light"] [data-theme-banner-card] [class~="bg-white/5"] { background-color: #f1f2f3 !important; }
+html[data-theme="light"] [data-theme-banner-card] [class~="text-slate-400"] { color: #646970 !important; }
+html[data-theme="light"] [data-theme-banner-card] button { color: #76530b !important; }
+html[data-theme="mixed"] [data-theme-banner="welcome"] { background-color: #111923 !important; }
+html[data-theme="mixed"] [data-theme-banner-overlay] { background: linear-gradient(90deg, #111923 0%, rgb(17 25 35 / 95%) 54%, rgb(17 25 35 / 55%) 100%) !important; }
 html[data-theme="dark"] [data-theme-wallpaper="app"] { background-image: linear-gradient(rgb(27 27 27 / 97%), rgb(27 27 27 / 97%)), url('/assets/login-production.webp') !important; }
 
 /* Recolor legacy blue-gray surfaces to the neutral graphite scale in dark mode. */
