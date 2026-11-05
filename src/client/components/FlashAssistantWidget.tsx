@@ -32,6 +32,7 @@ interface Conversation {
 interface FlashAssistantWidgetProps {
   currentUser: AuthUser | null;
   isOpen: boolean;
+  startFullScreenOnOpen?: boolean;
   initialPrompt?: string;
   onInitialPromptHandled?: () => void;
   onToggle: () => void;
@@ -181,6 +182,7 @@ function renderMessageText(text: string): React.ReactNode {
 export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
   currentUser,
   isOpen,
+  startFullScreenOnOpen = false,
   initialPrompt,
   onInitialPromptHandled,
   onToggle,
@@ -221,6 +223,10 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
   const [loading, setLoading] = useState(false);
   const [showAssistantActivity, setShowAssistantActivity] = useState(false);
   const [assistantActivity, setAssistantActivity] = useState(t('Assistente Flash digitando…'));
+
+  useEffect(() => {
+    if (isOpen && startFullScreenOnOpen) setFullScreen(true);
+  }, [isOpen, startFullScreenOnOpen]);
   const activityTimerRef = useRef<number | null>(null);
   const activityVisibilityTimerRef = useRef<number | null>(null);
   const [isListening, setIsListening] = useState(false);
