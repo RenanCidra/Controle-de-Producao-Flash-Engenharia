@@ -32,6 +32,8 @@ interface Conversation {
 interface FlashAssistantWidgetProps {
   currentUser: AuthUser | null;
   isOpen: boolean;
+  initialPrompt?: string;
+  onInitialPromptHandled?: () => void;
   onToggle: () => void;
   onOpenProfile: () => void;
   onOpenSettings: () => void;
@@ -179,6 +181,8 @@ function renderMessageText(text: string): React.ReactNode {
 export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
   currentUser,
   isOpen,
+  initialPrompt,
+  onInitialPromptHandled,
   onToggle,
   onOpenProfile,
   onOpenSettings,
@@ -227,6 +231,13 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
   const [keyboardOffset, setKeyboardOffset] = useState(0);
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
   const [editingText, setEditingText] = useState(false);
+
+  useEffect(() => {
+    if (!initialPrompt) return;
+    setInputValue(initialPrompt.slice(0, 2000));
+    requestAnimationFrame(() => inputRef.current?.focus());
+    onInitialPromptHandled?.();
+  }, [initialPrompt, onInitialPromptHandled]);
 
   useEffect(() => {
     const isTextControl = (target: EventTarget | null) => target instanceof HTMLElement

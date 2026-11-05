@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Check, CheckCheck, Copy, Forward, Info, MessageCircle, MessageSquarePlus, MoreVertical, Plus, Reply, Search, Send, Trash2, UserRound, Users, X } from 'lucide-react';
+import { ArrowLeft, Check, CheckCheck, ChevronDown, Copy, Forward, Info, MessageCircle, MessageSquarePlus, Pin, Plus, Reply, Search, Send, Smile, Sparkles, Star, Trash2, UserRound, Users, X } from 'lucide-react';
 import { api, type AuthUser, type FeedbackCategory } from '../../api.ts';
 import { UserAccountMenu } from '../../components/UserAccountMenu.tsx';
 import { AudioRecorderButton } from '../../components/AudioRecorderButton.tsx';
 import { EmojiPicker } from '../../components/EmojiPicker.tsx';
 import { translateText } from '../../i18n/index.ts';
 import { DataUnavailableState, LoadingState } from '../../components/DataStatus.tsx';
+import { AnimatePresence, motion } from 'motion/react';
 
 type Group = { id: number; name: string; sector: string; createdAt: string; unreadCount: number; lastMessage: Pick<Message, 'id' | 'body' | 'authorUid' | 'authorName' | 'createdAt' | 'deletedAt'> | null };
 type MessageReaction = { emoji: string; count: number; reactedByMe: boolean };
@@ -52,7 +53,7 @@ const previewConversationMessages = (conversationKey: string, currentUser: AuthU
   return messages;
 };
 
-export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localPreview: boolean; onBack: () => void; onInitialLoadComplete: () => void; onOpenProfile: () => void; onOpenSettings: () => void; onOpenFeedback: (initialTab?: 'submit' | 'inbox', initialCategory?: FeedbackCategory) => void; onOpenHelpInfo: (mode: 'help' | 'release' | 'shortcuts') => void; onOpenShortcuts: () => void; onLogout: () => void }> = ({ currentUser, localPreview, onBack, onInitialLoadComplete, onOpenProfile, onOpenSettings, onOpenFeedback, onOpenHelpInfo, onOpenShortcuts, onLogout }) => {
+export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localPreview: boolean; onBack: () => void; onInitialLoadComplete: () => void; onOpenProfile: () => void; onOpenSettings: () => void; onOpenFeedback: (initialTab?: 'submit' | 'inbox', initialCategory?: FeedbackCategory) => void; onOpenHelpInfo: (mode: 'help' | 'release' | 'shortcuts') => void; onOpenShortcuts: () => void; onAskAssistant: (prompt: string) => void; onLogout: () => void }> = ({ currentUser, localPreview, onBack, onInitialLoadComplete, onOpenProfile, onOpenSettings, onOpenFeedback, onOpenHelpInfo, onOpenShortcuts, onAskAssistant, onLogout }) => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [directs, setDirects] = useState<DirectConversation[]>([]);
   const [directory, setDirectory] = useState<DirectoryUser[]>([]);
@@ -639,11 +640,11 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
       <main className={`${selectedConversation ? 'flex' : 'hidden md:flex'} min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#F1F4F7]`}>
         {selectedGroup ? <>
           <header className="flex items-center gap-3 border-b border-[#DCE3EB] bg-white px-4 py-3.5 sm:px-5"><button type="button" onClick={clearSelection} aria-label="Voltar à lista" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7] md:hidden"><ArrowLeft size={18}/></button><span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]"><Users size={18}/></span><button type="button" onClick={() => void openConversationInfo()} className="min-w-0 flex-1 text-left"><h2 className="truncate text-sm font-semibold text-[#263548]">{selectedGroup.name}</h2><p className="text-xs text-slate-500">{selectedGroup.sector} · {groupMembers.length || 'Ver'} participantes</p></button><button type="button" onClick={() => void openConversationInfo()} title="Dados do grupo" aria-label="Dados do grupo" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7]"><Info size={18}/></button></header>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{messagesLoading && !messages.length ? <LoadingState compact label="Carregando mensagens…" /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={messages} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={hasOlderMessages} loadingOlder={loadingOlder} groupId={selectedGroupId} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={setMessageDetails} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}</div>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{messagesLoading && !messages.length ? <LoadingState compact label="Carregando mensagens…" /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={messages} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={hasOlderMessages} loadingOlder={loadingOlder} groupId={selectedGroupId} conversationKey={`group:${selectedGroupId}`} currentUserUid={currentUser?.uid || api.getUser()?.uid || 'unknown'} onAskAssistant={onAskAssistant} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={setMessageDetails} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}</div>
           <MessageComposer body={body} setBody={setBody} send={send} sending={sendingMessage} onSendAudio={sendAudioMessage} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
         </> : directTitle ? <>
           <header className="flex items-center gap-3 border-b border-[#DCE3EB] bg-white px-4 py-3.5 sm:px-5"><button type="button" onClick={clearSelection} aria-label="Voltar à lista" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7] md:hidden"><ArrowLeft size={18}/></button><ContactAvatar name={directTitle} avatarUrl={selectedDirect?.avatarUrl || draftRecipient?.avatarUrl} size="header" /><button type="button" onClick={() => void openConversationInfo()} className="min-w-0 flex-1 text-left"><h2 className="truncate text-sm font-semibold text-[#263548]">{directTitle}</h2><p className="text-xs text-slate-500">{draftRecipient ? 'Nova conversa · será criada ao enviar a primeira mensagem' : directDepartment || 'Conversa direta'}</p></button><button type="button" onClick={() => void openConversationInfo()} title="Ver perfil" aria-label="Ver perfil" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7]"><Info size={18}/></button></header>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{messagesLoading && !messages.length ? <LoadingState compact label="Carregando mensagens…" /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={messages} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={hasOlderMessages} loadingOlder={loadingOlder} directId={selectedDirectId} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={setMessageDetails} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}</div>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{messagesLoading && !messages.length ? <LoadingState compact label="Carregando mensagens…" /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={messages} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={hasOlderMessages} loadingOlder={loadingOlder} directId={selectedDirectId} conversationKey={`direct:${selectedDirectId}`} currentUserUid={currentUser?.uid || api.getUser()?.uid || 'unknown'} onAskAssistant={onAskAssistant} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={setMessageDetails} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}</div>
           <MessageComposer body={body} setBody={setBody} send={send} sending={sendingMessage} onSendAudio={sendAudioMessage} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
         </> : <div className="m-auto max-w-md px-6 text-center"><div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white text-[#916B19] shadow-sm"><MessageCircle size={28}/></div><h2 className="text-lg font-semibold text-[#263548]">Sua comunicação de produção</h2><p className="mt-2 text-sm leading-6 text-slate-500">Selecione uma conversa ou grupo. As mensagens ficam visíveis apenas para seus participantes.</p></div>}
         {error && <p role="alert" className="border-t border-slate-200/70 bg-transparent px-4 py-1.5 text-[11px] text-slate-500">{error}</p>}
@@ -681,10 +682,89 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
   </section>;
 };
 
-const MessageList: React.FC<{ messages: Message[]; scrollerRef: React.RefObject<HTMLDivElement | null>; loadOlder: () => void; hasOlder: boolean; loadingOlder: boolean; groupId?: number | null; directId?: number | null; onReply: (message: Message) => void; onForward: (message: Message) => void; onDetails: (message: Message) => void; onDelete: (message: Message) => void; onToggleReaction: (message: Message, emoji: string) => void }> = ({ messages, scrollerRef, loadOlder, hasOlder, loadingOlder, groupId, directId, onReply, onForward, onDetails, onDelete, onToggleReaction }) => {
+type LocalMessageActions = { pinnedId: number | null; favoriteIds: number[] };
+const messageActionsStorageKey = (uid: string, conversationKey: string) => `flash-message-actions:${uid}:${conversationKey}`;
+const readLocalMessageActions = (uid: string, conversationKey: string): LocalMessageActions => {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(messageActionsStorageKey(uid, conversationKey)) || '{}');
+    return { pinnedId: Number.isInteger(value.pinnedId) && value.pinnedId > 0 ? value.pinnedId : null, favoriteIds: Array.isArray(value.favoriteIds) ? value.favoriteIds.filter((id: unknown) => Number.isInteger(id) && Number(id) > 0) : [] };
+  } catch { return { pinnedId: null, favoriteIds: [] }; }
+};
+
+const MessageList: React.FC<{ messages: Message[]; scrollerRef: React.RefObject<HTMLDivElement | null>; loadOlder: () => void; hasOlder: boolean; loadingOlder: boolean; groupId?: number | null; directId?: number | null; conversationKey: string; currentUserUid: string; onAskAssistant: (prompt: string) => void; onReply: (message: Message) => void; onForward: (message: Message) => void; onDetails: (message: Message) => void; onDelete: (message: Message) => void; onToggleReaction: (message: Message, emoji: string) => void }> = ({ messages, scrollerRef, loadOlder, hasOlder, loadingOlder, groupId, directId, conversationKey, currentUserUid, onAskAssistant, onReply, onForward, onDetails, onDelete, onToggleReaction }) => {
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [reactionMenuId, setReactionMenuId] = useState<number | null>(null);
+  const [menuAbove, setMenuAbove] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<React.CSSProperties>({});
+  const [messageActions, setMessageActions] = useState<LocalMessageActions>(() => readLocalMessageActions(currentUserUid, conversationKey));
   const [copied, setCopied] = useState(false);
+  const latestMessageIdRef = useRef<number | null>(null);
   const quickReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+  useEffect(() => {
+    setMessageActions(readLocalMessageActions(currentUserUid, conversationKey));
+    setOpenMenuId(null);
+    setReactionMenuId(null);
+  }, [currentUserUid, conversationKey]);
+  useEffect(() => {
+    if (openMenuId === null) return;
+    const closeOnOutside = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Element && !target.closest('[data-message-action-menu], [data-message-action-trigger]')) {
+        setOpenMenuId(null);
+        setReactionMenuId(null);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { setOpenMenuId(null); setReactionMenuId(null); }
+    };
+    document.addEventListener('pointerdown', closeOnOutside);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutside);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [openMenuId]);
+  useLayoutEffect(() => {
+    const latest = messages[messages.length - 1];
+    const scroller = scrollerRef.current;
+    if (!latest || !scroller) return;
+    const previousId = latestMessageIdRef.current;
+    if (previousId !== latest.id) {
+      const distanceFromBottom = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
+      const shouldFollow = previousId === null || latest.authorUid === currentUserUid || distanceFromBottom < 120;
+      if (shouldFollow) scroller.scrollTo({ top: scroller.scrollHeight, behavior: previousId === null ? 'auto' : 'smooth' });
+    }
+    latestMessageIdRef.current = latest.id;
+  }, [messages, scrollerRef, currentUserUid]);
+  const saveMessageActions = (next: LocalMessageActions) => {
+    setMessageActions(next);
+    try { window.localStorage.setItem(messageActionsStorageKey(currentUserUid, conversationKey), JSON.stringify(next)); } catch { /* Browser storage can be disabled. */ }
+  };
+  const togglePinned = (message: Message) => saveMessageActions({ ...messageActions, pinnedId: messageActions.pinnedId === message.id ? null : message.id });
+  const toggleFavorite = (message: Message) => {
+    const favoriteIds = messageActions.favoriteIds.includes(message.id) ? messageActions.favoriteIds.filter(id => id !== message.id) : [...messageActions.favoriteIds, message.id];
+    saveMessageActions({ ...messageActions, favoriteIds });
+  };
+  const openAssistantWithMessage = (message: Message) => {
+    const excerpt = message.hasAudio ? '[mensagem de áudio]' : `“${message.body}”`;
+    onAskAssistant(`Ajude-me a analisar esta mensagem da Central de Comunicação, enviada por ${message.authorName}: ${excerpt}`);
+    setOpenMenuId(null);
+  };
+  const toggleMenu = (event: React.MouseEvent<HTMLButtonElement>, messageId: number) => {
+    if (openMenuId === messageId) { setOpenMenuId(null); setReactionMenuId(null); return; }
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const shouldOpenAbove = window.innerHeight - bounds.bottom < 390;
+    const article = event.currentTarget.closest('article');
+    const articleBounds = article?.getBoundingClientRect();
+    setMenuAbove(shouldOpenAbove);
+    if (articleBounds) {
+      setMenuPosition(shouldOpenAbove
+        ? { bottom: `${articleBounds.bottom - bounds.top + 4}px` }
+        : { top: `${bounds.bottom - articleBounds.top + 4}px` });
+    }
+    setReactionMenuId(null);
+    setOpenMenuId(messageId);
+  };
   const copyMessage = async (message: Message) => {
     try { await navigator.clipboard.writeText(message.body); setCopied(true); window.setTimeout(() => setCopied(false), 1600); }
     catch { setCopied(false); }
@@ -699,23 +779,51 @@ const MessageList: React.FC<{ messages: Message[]; scrollerRef: React.RefObject<
       const own = message.authorUid === api.getUser()?.uid;
       const readByCount = message.readByCount || 0;
       const recipientCount = message.recipientCount || 0;
-      return <article key={`msg-${message.id || index}-${message.createdAt || ''}`} className={`group relative max-w-[90%] rounded-xl border px-3.5 py-2.5 pr-10 shadow-sm sm:max-w-[82%] ${own ? 'ml-auto border-[#E4D2A2] bg-[#FFF9E9]' : 'border-[#E7ECF1] bg-white'}`}>
-        <button type="button" onClick={() => setOpenMenuId(openMenuId === message.id ? null : message.id)} aria-label="Ações da mensagem" title="Ações da mensagem" aria-expanded={openMenuId === message.id} className="absolute right-1.5 top-1.5 rounded-md p-1 text-slate-400 hover:bg-black/5 hover:text-[#263548] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"><MoreVertical size={16}/></button>
-        {openMenuId === message.id && <div role="menu" className={`absolute ${own ? 'right-1' : 'left-1'} top-8 z-30 w-56 overflow-hidden rounded-xl border border-[#DCE3EB] bg-white py-1 shadow-xl`}>
-          {!message.deletedAt && <div aria-label="Reações rápidas" className="flex items-center justify-around border-b border-[#E7ECF1] px-2 py-1.5">{quickReactions.map(emoji => <button key={emoji} type="button" role="menuitem" onClick={() => { onToggleReaction(message, emoji); setOpenMenuId(null); }} aria-label={`Reagir com ${emoji}`} title={`Reagir com ${emoji}`} className="rounded-md p-1 text-lg transition hover:scale-110 hover:bg-[#F1F4F7]">{emoji}</button>)}</div>}
-          <button type="button" role="menuitem" onClick={() => { onDetails(message); setOpenMenuId(null); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Info size={14}/>Dados da mensagem</button>
-          {!message.deletedAt && <><button type="button" role="menuitem" onClick={() => { onReply(message); setOpenMenuId(null); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Reply size={14}/>Responder</button><button type="button" role="menuitem" onClick={() => void copyMessage(message)} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Copy size={14}/>Copiar</button><button type="button" role="menuitem" onClick={() => { onForward(message); setOpenMenuId(null); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-[#263548] hover:bg-[#F1F4F7]"><Forward size={14}/>Encaminhar</button>{own && <button type="button" role="menuitem" onClick={() => { onDelete(message); setOpenMenuId(null); }} className="flex w-full items-center gap-2.5 border-t border-[#E7ECF1] px-3 py-2 text-left text-xs text-rose-700 hover:bg-rose-50"><Trash2 size={14}/>Apagar para todos</button>}</>}
-        </div>}
-        <p className="mb-1 text-[10px] font-semibold text-[#916B19]">{message.authorName}</p>
+      return <article key={`msg-${message.id || index}-${message.createdAt || ''}`} className={`group relative max-w-[90%] rounded-xl border px-3.5 py-2.5 shadow-sm sm:max-w-[82%] ${own ? 'ml-auto border-[#E4D2A2] bg-[#FFF9E9]' : 'border-[#E7ECF1] bg-white'}`}>
+        <AnimatePresence>
+          {openMenuId === message.id && <motion.div
+            key={`menu-${message.id}`}
+            data-message-action-menu
+            role="menu"
+            initial={{ opacity: 0, y: menuAbove ? 6 : -6, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: menuAbove ? 4 : -4, scale: 0.98 }}
+            transition={{ duration: 0.14, ease: 'easeOut' }}
+            style={menuPosition}
+            className={`absolute ${own ? 'right-0' : 'left-0'} ${menuAbove ? 'origin-bottom-right' : 'origin-top-left'} z-40 max-h-[min(70vh,26rem)] w-56 overflow-y-auto overscroll-contain rounded-xl border border-[#303A46] bg-[#171C22] py-1.5 text-slate-100 shadow-xl shadow-slate-950/25`}
+          >
+            <MessageMenuItem icon={<Info size={15}/>} label="Dados da mensagem" onClick={() => { onDetails(message); setOpenMenuId(null); }} />
+            {!message.deletedAt && <>
+              <MessageMenuItem icon={<Reply size={15}/>} label="Responder" onClick={() => { onReply(message); setOpenMenuId(null); }} />
+              <MessageMenuItem icon={<Copy size={15}/>} label="Copiar" onClick={() => void copyMessage(message)} />
+              <MessageMenuItem icon={<Smile size={15}/>} label="Reagir" onClick={() => setReactionMenuId(reactionMenuId === message.id ? null : message.id)} />
+              <AnimatePresence initial={false}>
+                {reactionMenuId === message.id && <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.14 }} className="flex justify-around overflow-hidden border-y border-white/10 px-2 py-1.5" aria-label={translateText('Reações rápidas')}>
+                  {quickReactions.map(emoji => <button key={emoji} type="button" role="menuitem" onClick={() => { onToggleReaction(message, emoji); setOpenMenuId(null); setReactionMenuId(null); }} aria-label={`${translateText('Reagir com')} ${emoji}`} title={`${translateText('Reagir com')} ${emoji}`} className="rounded-md p-1 text-lg transition-transform hover:scale-125">{emoji}</button>)}
+                </motion.div>}
+              </AnimatePresence>
+              <MessageMenuItem icon={<Forward size={15}/>} label="Encaminhar" onClick={() => { onForward(message); setOpenMenuId(null); }} />
+              <MessageMenuItem icon={<Pin size={15}/>} label={messageActions.pinnedId === message.id ? 'Desafixar mensagem' : 'Fixar mensagem'} onClick={() => { togglePinned(message); setOpenMenuId(null); }} />
+              <MessageMenuItem icon={<Sparkles size={15}/>} label="Perguntar ao Assistente Flash" onClick={() => openAssistantWithMessage(message)} />
+              <MessageMenuItem icon={<Star size={15} className={messageActions.favoriteIds.includes(message.id) ? 'fill-current text-amber-300' : ''}/>} label={messageActions.favoriteIds.includes(message.id) ? 'Remover dos favoritos' : 'Favoritar mensagem'} onClick={() => { toggleFavorite(message); setOpenMenuId(null); }} />
+              {own && <div className="my-1 border-t border-white/10 pt-1"><MessageMenuItem destructive icon={<Trash2 size={15}/>} label="Apagar para todos" onClick={() => { onDelete(message); setOpenMenuId(null); }} /></div>}
+            </>}
+          </motion.div>}
+        </AnimatePresence>
+        <div className="mb-1 flex items-center gap-1.5"><p className="truncate text-[10px] font-semibold text-[#916B19]">{message.authorName}</p>{messageActions.pinnedId === message.id && <span title={translateText('Fixada neste dispositivo')} className="inline-flex shrink-0 items-center gap-0.5 text-[9px] text-slate-500"><Pin size={10}/>{translateText('Fixada')}</span>}</div>
         {message.replyToMessageId && <div className="mb-2 border-l-2 border-[#FFAA00] bg-[#F1F4F7]/80 px-2.5 py-1.5"><p className="text-[10px] font-semibold text-[#916B19]">{quoted?.authorName || 'Mensagem anterior'}</p><p className="line-clamp-2 whitespace-pre-wrap break-words text-xs text-slate-600">{quoted?.body || 'Conteúdo fora do histórico carregado'}</p></div>}
         {message.audioPreviewUrl ? <audio controls preload="metadata" src={message.audioPreviewUrl} className="max-w-full"/> : message.hasAudio && groupId !== undefined && groupId !== null ? <PrivateAudioPlayer message={message} load={() => api.getCommunicationGroupAudio(groupId, message.id)}/> : message.hasAudio && directId !== undefined && directId !== null ? <PrivateAudioPlayer message={message} load={() => api.getCommunicationDirectAudio(directId, message.id)}/> : <p className={`whitespace-pre-wrap break-words text-sm ${message.deletedAt ? 'italic text-slate-500' : 'text-[#263548]'}`}>{message.body}</p>}
         {message.hasAudio && <p className="mt-1 text-[10px] text-slate-500">Áudio · {Math.max(1, Math.round((message.audioDurationMs || 0) / 1000))}s</p>}
         {!!message.reactions?.length && <div className="mt-2 flex flex-wrap gap-1.5">{message.reactions.map(reaction => <button key={reaction.emoji} type="button" onClick={() => onToggleReaction(message, reaction.emoji)} aria-label={`${reaction.emoji}, ${reaction.count} reações${reaction.reactedByMe ? ', sua reação' : ''}`} aria-pressed={reaction.reactedByMe} className={`rounded-full border px-2 py-0.5 text-xs transition ${reaction.reactedByMe ? 'border-[#D59A12] bg-[#FFF1C8]' : 'border-[#DCE3EB] bg-white hover:bg-[#F1F4F7]'}`}>{reaction.emoji} <span className="text-[10px] text-slate-600">{reaction.count}</span></button>)}</div>}
-        <time className="mt-1 flex items-center justify-end gap-1 text-[10px] text-slate-400">{formatMessageTime(message.createdAt)}{own && recipientCount > 0 && <span title={readByCount ? `Lida por ${readByCount} de ${recipientCount}` : 'Enviada'} aria-label={readByCount ? `Lida por ${readByCount} de ${recipientCount}` : 'Enviada'} className={readByCount ? 'text-sky-600' : 'text-slate-400'}>{readByCount ? <CheckCheck size={13}/> : <Check size={13}/>}</span>}</time>
+        <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-slate-400">{messageActions.favoriteIds.includes(message.id) && <Star size={11} className="fill-amber-400 text-amber-500" aria-label={translateText('Favorita')} />}<time>{formatMessageTime(message.createdAt)}</time>{own && recipientCount > 0 && <span title={readByCount ? `Lida por ${readByCount} de ${recipientCount}` : 'Enviada'} aria-label={readByCount ? `Lida por ${readByCount} de ${recipientCount}` : 'Enviada'} className={readByCount ? 'text-sky-600' : 'text-slate-400'}>{readByCount ? <CheckCheck size={13}/> : <Check size={13}/>}</span>}<button type="button" data-message-action-trigger aria-haspopup="menu" onClick={event => toggleMenu(event, message.id)} aria-label={translateText('Ações da mensagem')} title={translateText('Ações da mensagem')} aria-expanded={openMenuId === message.id} className={`ml-0.5 rounded p-0.5 transition-colors hover:bg-black/10 hover:text-[#263548] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${openMenuId === message.id ? 'text-[#263548]' : 'text-slate-400 md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100'}`}><ChevronDown size={14}/></button></div>
       </article>;
     })}
   </div>;
 };
+
+const MessageMenuItem: React.FC<{ icon: React.ReactNode; label: string; onClick: () => void; destructive?: boolean }> = ({ icon, label, onClick, destructive = false }) => <button type="button" role="menuitem" onClick={onClick} className={`flex min-h-9 w-full items-center gap-3 px-3.5 py-2 text-left text-[12px] transition-colors ${destructive ? 'text-rose-300 hover:bg-rose-500/15' : 'text-slate-100 hover:bg-white/10'}`}>
+  <span className={destructive ? 'text-rose-300' : 'text-slate-300'}>{icon}</span><span>{translateText(label)}</span>
+</button>;
 
 const MessageComposer: React.FC<{ body: string; setBody: (value: string) => void; send: () => void; sending: boolean; onSendAudio: (audio: Blob, durationMs: number) => Promise<void>; replyingTo: Message | null; cancelReply: () => void }> = ({ body, setBody, send, sending, onSendAudio, replyingTo, cancelReply }) => <form onSubmit={event => { event.preventDefault(); void send(); }} className={`relative z-10 flex shrink-0 gap-2 border-t border-[#DCE3EB] bg-white p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-4 ${replyingTo ? 'items-end' : 'items-center'}`}><EmojiPicker onSelect={emoji => setBody(`${body}${emoji}`.slice(0, 4000))}/><AudioRecorderButton onRecorded={onSendAudio}/><div className="min-w-0 flex-1">{replyingTo && <div className="mb-2 flex items-center gap-2 rounded-lg border-l-2 border-[#FFAA00] bg-[#F1F4F7] px-2.5 py-1.5"><span className="min-w-0 flex-1"><b className="block text-[10px] text-[#916B19]">Respondendo a {replyingTo.authorName}</b><small className="block truncate text-xs text-slate-600">{replyingTo.body}</small></span><button type="button" onClick={cancelReply} aria-label="Cancelar resposta" className="rounded p-1 text-slate-500 hover:bg-white"><X size={15}/></button></div>}<textarea aria-label="Escreva uma mensagem" value={body} onChange={event => setBody(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} maxLength={4000} rows={1} placeholder="Escreva uma mensagem · Enter envia, Shift+Enter quebra linha" className="max-h-28 min-h-11 w-full resize-none overflow-y-auto rounded-2xl border border-[#DCE3EB] px-4 py-3 text-sm text-[#263548] outline-none focus:border-[#FFAA00]"/></div><button type="submit" disabled={!body.trim() || sending} title={sending ? 'Enviando mensagem…' : 'Enviar mensagem'} aria-label={sending ? 'Enviando mensagem' : 'Enviar mensagem'} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FFAA00] text-[#151C25] hover:bg-amber-300 disabled:opacity-40"><Send size={17}/></button></form>;
 

@@ -69,6 +69,7 @@ export default function App() {
   const [setupStatusError, setSetupStatusError] = useState('');
   const [languageRevision, setLanguageRevision] = useState(0);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantPrompt, setAssistantPrompt] = useState('');
   const [communicationsTransitionLoading, setCommunicationsTransitionLoading] = useState(false);
   const [communicationsTransitionFading, setCommunicationsTransitionFading] = useState(false);
   const [systemEntryTransitionLoading, setSystemEntryTransitionLoading] = useState(false);
@@ -444,6 +445,7 @@ export default function App() {
         <ModuleErrorBoundary key={activeTab} onReturn={() => setActiveTab('home')}><Suspense fallback={<div className="flex h-[100dvh] items-center justify-center bg-[#151C25]"><LoadingState compact label="Abrindo Central de Comunicação…"/></div>}><CommunicationsView
           currentUser={currentUser}
           localPreview={DEV_PREVIEW_AUTH}
+          onAskAssistant={(prompt) => { setAssistantPrompt(prompt); setAssistantOpen(true); }}
           onInitialLoadComplete={onCommunicationsInitialLoadComplete}
           onBack={async () => {
             beginCommunicationsTransition();
@@ -668,6 +670,8 @@ export default function App() {
         <FlashAssistantWidget
           currentUser={currentUser}
           isOpen={assistantOpen}
+          initialPrompt={assistantPrompt}
+          onInitialPromptHandled={() => setAssistantPrompt('')}
           onToggle={() => setAssistantOpen((prev) => !prev)}
           onOpenProfile={() => setProfileModalOpen(true)}
           onOpenFeedback={openFeedbackDialog}
