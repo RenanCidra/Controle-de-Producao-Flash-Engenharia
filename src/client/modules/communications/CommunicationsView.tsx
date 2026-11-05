@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Check, CheckCheck, ChevronDown, Copy, Forward, Info, MessageCircle, MessageSquarePlus, Pin, Plus, Reply, Search, Send, Smile, Sparkles, Star, Trash2, UserRound, Users, X } from 'lucide-react';
+import { ArrowLeft, Check, CheckCheck, ChevronDown, Copy, Forward, Info, MessageCircle, MessageSquarePlus, MoreVertical, Pin, Plus, Reply, Search, Send, Smile, Sparkles, Star, Trash2, UserRound, Users, X } from 'lucide-react';
 import { api, type AuthUser, type FeedbackCategory } from '../../api.ts';
 import { UserAccountMenu } from '../../components/UserAccountMenu.tsx';
 import { AudioRecorderButton } from '../../components/AudioRecorderButton.tsx';
@@ -83,6 +83,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
   const [forwardTarget, setForwardTarget] = useState('');
   const [messageDetails, setMessageDetails] = useState<Message | null>(null);
+  const [directSearchQuery, setDirectSearchQuery] = useState('');
   const [messageToDelete, setMessageToDelete] = useState<Message | null>(null);
   const [deletingMessage, setDeletingMessage] = useState(false);
   const [conversationInfoOpen, setConversationInfoOpen] = useState(false);
@@ -105,6 +106,7 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
   activeConversationRef.current = selectedGroupId !== null ? `group:${selectedGroupId}` : selectedDirectId !== null ? `direct:${selectedDirectId}` : null;
 
   useEffect(() => { setMessageDetails(null); }, [selectedGroupId, selectedDirectId]);
+  useEffect(() => { setDirectSearchQuery(''); }, [selectedDirectId]);
   useEffect(() => {
     if (!messageDetails) return;
     const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setMessageDetails(null); };
@@ -652,8 +654,8 @@ export const CommunicationsView: React.FC<{ currentUser: AuthUser | null; localP
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{messagesLoading && !messages.length ? <LoadingState compact label="Carregando mensagens…" /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={messages} selectedMessageId={messageDetails?.id ?? null} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={hasOlderMessages} loadingOlder={loadingOlder} groupId={selectedGroupId} conversationKey={`group:${selectedGroupId}`} currentUserUid={currentUser?.uid || api.getUser()?.uid || 'unknown'} onAskAssistant={onAskAssistant} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={setMessageDetails} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}</div>
           <MessageComposer body={body} setBody={setBody} send={send} sending={sendingMessage} onSendAudio={sendAudioMessage} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
         </> : directTitle ? <>
-          <header className="flex items-center gap-3 border-b border-[#DCE3EB] bg-white px-4 py-3.5 sm:px-5"><button type="button" onClick={clearSelection} aria-label="Voltar à lista" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7] md:hidden"><ArrowLeft size={18}/></button><ContactAvatar name={directTitle} avatarUrl={selectedDirect?.avatarUrl || draftRecipient?.avatarUrl} size="header" /><button type="button" onClick={() => void openConversationInfo()} className="min-w-0 flex-1 text-left"><h2 className="truncate text-sm font-semibold text-[#263548]">{directTitle}</h2><p className="text-xs text-slate-500">{draftRecipient ? 'Nova conversa · será criada ao enviar a primeira mensagem' : directDepartment || 'Conversa direta'}</p></button><button type="button" onClick={() => void openConversationInfo()} title="Ver perfil" aria-label="Ver perfil" className="rounded-lg p-2 text-slate-500 hover:bg-[#F1F4F7]"><Info size={18}/></button></header>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{messagesLoading && !messages.length ? <LoadingState compact label="Carregando mensagens…" /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={messages} selectedMessageId={messageDetails?.id ?? null} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={hasOlderMessages} loadingOlder={loadingOlder} directId={selectedDirectId} conversationKey={`direct:${selectedDirectId}`} currentUserUid={currentUser?.uid || api.getUser()?.uid || 'unknown'} onAskAssistant={onAskAssistant} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={setMessageDetails} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}</div>
+          <DirectConversationHeader name={directTitle} avatarUrl={selectedDirect?.avatarUrl || draftRecipient?.avatarUrl} subtitle={draftRecipient ? translateText('Nova conversa · será criada ao enviar a primeira mensagem') : directDepartment || translateText('Conversa direta')} searchQuery={directSearchQuery} onSearchChange={setDirectSearchQuery} matchCount={directSearchQuery.trim() ? messages.filter(message => `${message.body} ${message.authorName}`.toLowerCase().includes(directSearchQuery.trim().toLowerCase())).length : null} totalMessages={messages.length} onInfo={() => void openConversationInfo()} onBack={clearSelection}/>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{messagesLoading && !messages.length ? <LoadingState compact label="Carregando mensagens…" /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={messages} searchQuery={directSearchQuery} selectedMessageId={messageDetails?.id ?? null} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={hasOlderMessages} loadingOlder={loadingOlder} directId={selectedDirectId} conversationKey={`direct:${selectedDirectId}`} currentUserUid={currentUser?.uid || api.getUser()?.uid || 'unknown'} onAskAssistant={onAskAssistant} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={setMessageDetails} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}</div>
           <MessageComposer body={body} setBody={setBody} send={send} sending={sendingMessage} onSendAudio={sendAudioMessage} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
         </> : <div className="m-auto max-w-md px-6 text-center"><div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white text-[#916B19] shadow-sm"><MessageCircle size={28}/></div><h2 className="text-lg font-semibold text-[#263548]">Sua comunicação de produção</h2><p className="mt-2 text-sm leading-6 text-slate-500">Selecione uma conversa ou grupo. As mensagens ficam visíveis apenas para seus participantes.</p></div>}
         {error && <p role="alert" className="border-t border-slate-200/70 bg-transparent px-4 py-1.5 text-[11px] text-slate-500">{error}</p>}
@@ -704,7 +706,50 @@ const readLocalMessageActions = (uid: string, conversationKey: string): LocalMes
   } catch { return { pinnedId: null, favoriteIds: [] }; }
 };
 
-const MessageList: React.FC<{ messages: Message[]; selectedMessageId: number | null; scrollerRef: React.RefObject<HTMLDivElement | null>; loadOlder: () => void; hasOlder: boolean; loadingOlder: boolean; groupId?: number | null; directId?: number | null; conversationKey: string; currentUserUid: string; onAskAssistant: (prompt: string) => void; onReply: (message: Message) => void; onForward: (message: Message) => void; onDetails: (message: Message) => void; onDelete: (message: Message) => void; onToggleReaction: (message: Message, emoji: string) => void }> = ({ messages, selectedMessageId, scrollerRef, loadOlder, hasOlder, loadingOlder, groupId, directId, conversationKey, currentUserUid, onAskAssistant, onReply, onForward, onDetails, onDelete, onToggleReaction }) => {
+const DirectConversationHeader: React.FC<{ name: string; avatarUrl?: string | null; subtitle: string; searchQuery: string; onSearchChange: (query: string) => void; matchCount: number | null; totalMessages: number; onInfo: () => void; onBack: () => void }> = ({ name, avatarUrl, subtitle, searchQuery, onSearchChange, matchCount, totalMessages, onInfo, onBack }) => {
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeOutside = (event: PointerEvent) => { if (event.target instanceof Node && !menuRef.current?.contains(event.target)) setMenuOpen(false); };
+    const closeEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setMenuOpen(false); };
+    document.addEventListener('pointerdown', closeOutside);
+    document.addEventListener('keydown', closeEscape);
+    return () => { document.removeEventListener('pointerdown', closeOutside); document.removeEventListener('keydown', closeEscape); };
+  }, [menuOpen]);
+  const toggleSearch = () => { setSearchOpen(open => !open); setMenuOpen(false); if (searchOpen) onSearchChange(''); };
+  return <>
+    <header className="relative z-20 flex min-h-[68px] shrink-0 items-center gap-3 border-b border-[#DCE3EB] bg-white px-3.5 py-2.5 sm:px-5">
+      <button type="button" onClick={onBack} aria-label={translateText('Voltar à lista')} className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-[#F1F4F7] md:hidden"><ArrowLeft size={19}/></button>
+      <button type="button" onClick={onInfo} className="flex min-w-0 flex-1 items-center gap-3 rounded-xl py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400">
+        <ContactAvatar name={name} avatarUrl={avatarUrl} size="header" />
+        <span className="min-w-0"><b className="block truncate text-sm font-semibold text-[#263548]">{name}</b><small className="mt-0.5 block truncate text-xs text-slate-500">{subtitle}</small></span>
+      </button>
+      <div className="flex shrink-0 items-center gap-1">
+        <button type="button" onClick={toggleSearch} aria-label={translateText('Pesquisar mensagens')} aria-pressed={searchOpen} title={translateText('Pesquisar mensagens')} className={`rounded-full p-2.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${searchOpen ? 'bg-[#FFF4D6] text-[#76530B]' : 'text-slate-500 hover:bg-[#F1F4F7] hover:text-[#263548]'}`}><Search size={19}/></button>
+        <div ref={menuRef} className="relative">
+          <button type="button" onClick={() => setMenuOpen(open => !open)} aria-label={translateText('Mais opções do contato')} aria-haspopup="menu" aria-expanded={menuOpen} title={translateText('Mais opções')} className="rounded-full p-2.5 text-slate-500 transition-colors hover:bg-[#F1F4F7] hover:text-[#263548] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"><MoreVertical size={19}/></button>
+          <AnimatePresence>
+            {menuOpen && <motion.div role="menu" initial={{ opacity: 0, y: -5, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.98 }} transition={{ duration: 0.13 }} className="absolute right-0 top-[calc(100%+8px)] z-50 w-56 overflow-hidden rounded-xl border border-[#DCE3EB] bg-white py-1.5 text-[#263548] shadow-xl">
+              <button type="button" role="menuitem" onClick={() => { onInfo(); setMenuOpen(false); }} className="flex min-h-10 w-full items-center gap-3 px-3.5 py-2 text-left text-xs font-medium transition-colors hover:bg-[#F1F4F7]"><Info size={16} className="text-slate-500"/>{translateText('Dados do contato')}</button>
+              <button type="button" role="menuitem" onClick={toggleSearch} className="flex min-h-10 w-full items-center gap-3 px-3.5 py-2 text-left text-xs font-medium transition-colors hover:bg-[#F1F4F7]"><Search size={16} className="text-slate-500"/>{translateText('Pesquisar mensagens')}</button>
+              <div className="my-1 border-t border-[#E7ECF1]" />
+              <button type="button" role="menuitem" onClick={() => { onBack(); setMenuOpen(false); }} className="flex min-h-10 w-full items-center gap-3 px-3.5 py-2 text-left text-xs font-medium transition-colors hover:bg-[#F1F4F7]"><ArrowLeft size={16} className="text-slate-500"/>{translateText('Voltar à lista')}</button>
+            </motion.div>}
+          </AnimatePresence>
+        </div>
+      </div>
+    </header>
+    <AnimatePresence initial={false}>
+      {searchOpen && <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18, ease: 'easeOut' }} className="shrink-0 overflow-hidden border-b border-[#DCE3EB] bg-white">
+        <div className="flex items-center gap-2 px-4 py-2.5 sm:px-5"><Search size={16} className="shrink-0 text-slate-400"/><input autoFocus value={searchQuery} onChange={event => onSearchChange(event.target.value)} placeholder={translateText('Pesquisar mensagens carregadas')} aria-label={translateText('Pesquisar mensagens carregadas')} className="min-w-0 flex-1 bg-transparent text-sm text-[#263548] outline-none placeholder:text-slate-400"/>{searchQuery && <span className="shrink-0 text-[11px] text-slate-500">{matchCount} / {totalMessages}</span>}<button type="button" onClick={toggleSearch} aria-label={translateText('Fechar busca')} className="rounded-lg p-1.5 text-slate-500 hover:bg-[#F1F4F7]"><X size={16}/></button></div>
+      </motion.div>}
+    </AnimatePresence>
+  </>;
+};
+
+const MessageList: React.FC<{ messages: Message[]; searchQuery?: string; selectedMessageId: number | null; scrollerRef: React.RefObject<HTMLDivElement | null>; loadOlder: () => void; hasOlder: boolean; loadingOlder: boolean; groupId?: number | null; directId?: number | null; conversationKey: string; currentUserUid: string; onAskAssistant: (prompt: string) => void; onReply: (message: Message) => void; onForward: (message: Message) => void; onDetails: (message: Message) => void; onDelete: (message: Message) => void; onToggleReaction: (message: Message, emoji: string) => void }> = ({ messages, searchQuery = '', selectedMessageId, scrollerRef, loadOlder, hasOlder, loadingOlder, groupId, directId, conversationKey, currentUserUid, onAskAssistant, onReply, onForward, onDetails, onDelete, onToggleReaction }) => {
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [reactionMenuId, setReactionMenuId] = useState<number | null>(null);
   const [menuAbove, setMenuAbove] = useState(false);
@@ -712,6 +757,8 @@ const MessageList: React.FC<{ messages: Message[]; selectedMessageId: number | n
   const [messageActions, setMessageActions] = useState<LocalMessageActions>(() => readLocalMessageActions(currentUserUid, conversationKey));
   const [copied, setCopied] = useState(false);
   const latestMessageIdRef = useRef<number | null>(null);
+  const query = searchQuery.trim().toLocaleLowerCase();
+  const visibleMessages = (Array.isArray(messages) ? messages : []).filter(message => !query || `${message.body} ${message.authorName}`.toLocaleLowerCase().includes(query));
   const quickReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
   useEffect(() => {
     setMessageActions(readLocalMessageActions(currentUserUid, conversationKey));
@@ -785,8 +832,8 @@ const MessageList: React.FC<{ messages: Message[]; selectedMessageId: number | n
   return <div ref={scrollerRef} aria-label="Mensagens da conversa" onScroll={event => { if (event.currentTarget.scrollTop < 90 && hasOlder && !loadingOlder) loadOlder(); }} className="relative min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 pb-5 sm:p-6">
     {(loadingOlder || hasOlder && !messages.length) && <div className="sticky top-1 z-10 mx-auto w-fit rounded-full bg-white px-3 py-1.5 text-[11px] text-slate-500 shadow">{loadingOlder ? 'Carregando mensagens anteriores…' : ''}</div>}
     {copied && <div role="status" className="sticky top-1 z-10 mx-auto w-fit rounded-full bg-[#151C25] px-3 py-1.5 text-xs text-white shadow">Mensagem copiada</div>}
-    {!messages.length && !loadingOlder && <div className="m-auto max-w-xs px-5 py-10 text-center text-sm leading-6 text-slate-500">Nenhuma mensagem ainda. Envie uma mensagem para iniciar a conversa.</div>}
-    {(Array.isArray(messages) ? messages : []).map((message, index) => {
+    {!visibleMessages.length && !loadingOlder && <div className="m-auto max-w-xs px-5 py-10 text-center text-sm leading-6 text-slate-500">{query ? translateText('Nenhuma mensagem encontrada entre as mensagens carregadas.') : translateText('Nenhuma mensagem ainda. Envie uma mensagem para iniciar a conversa.')}</div>}
+    {visibleMessages.map((message, index) => {
       const quoted = messages.find(item => item.id === message.replyToMessageId);
       const own = message.authorUid === api.getUser()?.uid;
       const readByCount = message.readByCount || 0;
