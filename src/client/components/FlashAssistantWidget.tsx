@@ -617,7 +617,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
                 type="button"
                 aria-label={t('Fechar Assistente Flash')}
                 onClick={onToggle}
-                className="fixed inset-0 z-40 cursor-default bg-slate-950/25 backdrop-blur-[2px]"
+                className="assistant-backdrop fixed inset-0 z-40 cursor-default bg-slate-950/25 backdrop-blur-[3px]"
               />
             )}
 

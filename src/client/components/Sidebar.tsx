@@ -91,6 +91,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           return (
             <button
               key={item.id || item.label}
+              data-sidebar-nav-item="true"
+              data-active={isActive ? 'true' : 'false'}
+              data-planned={item.planned ? 'true' : 'false'}
               disabled={item.planned}
               title={item.planned ? `${item.label} · planejado para uma próxima etapa` : item.label}
               onClick={() => { if (item.id) setActiveTab(item.id); onCloseMobile(); }}

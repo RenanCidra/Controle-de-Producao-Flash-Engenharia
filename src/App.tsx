@@ -711,7 +711,7 @@ export default function App() {
         />
       )}
       {communicationsTransitionLoading && (
-        <div className={`fixed inset-0 z-[70] flex items-center justify-center bg-[#0C1118]/[0.97] px-4 py-8 text-white backdrop-blur-xl transition-opacity duration-300 ease-out ${communicationsTransitionFading ? 'opacity-0' : 'opacity-100'}`} role="status" aria-live="polite" aria-label={activeTab === 'communications' ? 'Carregando Central de Comunicações' : 'Retornando ao Sistema'}>
+        <div data-theme-loading="transition" className={`fixed inset-0 z-[70] flex items-center justify-center bg-[#0C1118] px-4 py-8 text-white transition-opacity duration-300 ease-out ${communicationsTransitionFading ? 'opacity-0' : 'opacity-100'}`} role="status" aria-live="polite" aria-label={activeTab === 'communications' ? 'Carregando Central de Comunicações' : 'Retornando ao Sistema'}>
           <div className="flex w-full max-w-xl flex-col items-center justify-center text-center">
             <div className="relative mb-6 flex h-28 w-28 items-center justify-center sm:h-32 sm:w-32">
               <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
@@ -724,7 +724,7 @@ export default function App() {
                 <defs><linearGradient id="transition-gold-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#FFAA00"/><stop offset="100%" stopColor="#FFD15C"/></linearGradient></defs>
               </svg>
               <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-[#FFAA00] opacity-70 [animation-duration:1.8s]" />
-              <div className="flex h-20 w-20 items-center justify-center rounded-full border border-white/10 bg-[#161E28] shadow-[0_4px_24px_rgba(0,0,0,0.6)] sm:h-24 sm:w-24">
+              <div data-loading-indicator-disc className="flex h-20 w-20 items-center justify-center rounded-full border border-white/10 bg-[#161E28] shadow-[0_4px_24px_rgba(0,0,0,0.6)] sm:h-24 sm:w-24">
                 {activeTab === 'communications' ? (
                   <svg className="h-9 w-9 text-[#FFAA00] drop-shadow-[0_0_6px_rgba(255,170,0,0.35)] sm:h-11 sm:w-11" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M12 36l-4 4V12a4 4 0 0 1 4-4h24a4 4 0 0 1 4 4v18a4 4 0 0 1-4 4H12z" />
@@ -739,14 +739,14 @@ export default function App() {
             <p className="mt-2 text-xs text-slate-300 sm:text-sm">
               {activeTab === 'communications' ? 'Inicializando conversas, grupos e participantes...' : 'Sincronizando painel, OPs e chão de fábrica...'}
             </p>
-            <div className="mt-6 h-2 w-64 overflow-hidden rounded-full bg-white/10 sm:w-80">
+            <div data-loading-track className="mt-6 h-2 w-64 overflow-hidden rounded-full bg-white/10 sm:w-80">
               <motion.div className="h-full w-2/5 rounded-full bg-gradient-to-r from-[#FFAA00] via-[#FFB82E] to-[#FFAA00] shadow-[0_0_12px_rgba(255,170,0,0.6)]" animate={{ x: ['-110%', '250%'] }} transition={{ duration: 1.25, repeat: Infinity, ease: 'easeInOut' }} />
             </div>
           </div>
         </div>
       )}
       {systemEntryTransitionLoading && currentUser && (
-        <div className={`fixed inset-0 z-[80] flex items-center justify-center bg-[#0C1118]/[0.98] px-4 py-8 text-white backdrop-blur-xl transition-opacity duration-[360ms] ease-out motion-reduce:transition-none ${systemEntryTransitionFading ? 'opacity-0' : 'opacity-100'}`} role="status" aria-live="polite" aria-label="Acesso confirmado. Preparando o sistema.">
+        <div data-theme-loading="entry" className={`fixed inset-0 z-[80] flex items-center justify-center bg-[#0C1118] px-4 py-8 text-white transition-opacity duration-[360ms] ease-out motion-reduce:transition-none ${systemEntryTransitionFading ? 'opacity-0' : 'opacity-100'}`} role="status" aria-live="polite" aria-label="Acesso confirmado. Preparando o sistema.">
           <div className="flex w-full max-w-lg flex-col items-center text-center">
             <motion.div initial={{ opacity: 0, scale: 0.92, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.45, ease: 'easeOut' }} className="relative mb-7 flex h-28 w-28 items-center justify-center sm:h-32 sm:w-32">
               <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
@@ -755,14 +755,14 @@ export default function App() {
                 <defs><linearGradient id="entry-gold-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#FFAA00"/><stop offset="100%" stopColor="#FFD15C"/></linearGradient></defs>
               </svg>
               <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#FFAA00] opacity-70 [animation-duration:1.8s] motion-safe:animate-spin" />
-              <motion.div initial={shouldReduceMotion ? false : { opacity: 0, scale: 0.85 }} animate={shouldReduceMotion ? { opacity: 1, scale: 1 } : { opacity: 1, scale: [1, 1.035, 1] }} transition={shouldReduceMotion ? { duration: 0 } : { opacity: { delay: 0.12, duration: 0.35 }, scale: { delay: 0.35, duration: 2.2, repeat: Infinity, ease: 'easeInOut' } }} className="flex h-20 w-20 items-center justify-center rounded-full border border-white/10 bg-[#161E28] shadow-[0_4px_24px_rgba(0,0,0,0.6)] sm:h-24 sm:w-24">
+              <motion.div data-loading-indicator-disc initial={shouldReduceMotion ? false : { opacity: 0, scale: 0.85 }} animate={shouldReduceMotion ? { opacity: 1, scale: 1 } : { opacity: 1, scale: [1, 1.035, 1] }} transition={shouldReduceMotion ? { duration: 0 } : { opacity: { delay: 0.12, duration: 0.35 }, scale: { delay: 0.35, duration: 2.2, repeat: Infinity, ease: 'easeInOut' } }} className="flex h-20 w-20 items-center justify-center rounded-full border border-white/10 bg-[#161E28] shadow-[0_4px_24px_rgba(0,0,0,0.6)] sm:h-24 sm:w-24">
                 <img src="/assets/flash-symbol.png" alt="Flash" className="h-9 w-9 object-contain drop-shadow-[0_0_8px_rgba(255,170,0,0.5)] sm:h-11 sm:w-11" />
               </motion.div>
             </motion.div>
             <motion.p initial={shouldReduceMotion ? false : { opacity: 0, y: 7 }} animate={{ opacity: 1, y: 0 }} transition={shouldReduceMotion ? { duration: 0 } : { delay: 0.18, duration: 0.4 }} className="text-xs font-semibold uppercase tracking-[0.2em] text-[#FFAA00]">Acesso confirmado</motion.p>
             <motion.h2 initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={shouldReduceMotion ? { duration: 0 } : { delay: 0.28, duration: 0.4 }} className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Bem-vindo, <span className="text-[#FFAA00]">{currentUser.name}</span></motion.h2>
             <motion.p initial={shouldReduceMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={shouldReduceMotion ? { duration: 0 } : { delay: 0.42, duration: 0.45 }} className="mt-2 text-sm text-slate-300">Preparando seu ambiente de produção…</motion.p>
-            <div className="mt-7 h-1.5 w-56 overflow-hidden rounded-full bg-white/10 sm:w-72"><motion.div className="h-full w-2/5 rounded-full bg-gradient-to-r from-[#FFAA00] via-[#FFD15C] to-[#FFAA00] shadow-[0_0_12px_rgba(255,170,0,0.55)]" animate={shouldReduceMotion ? { x: 0 } : { x: ['-110%', '250%'] }} transition={shouldReduceMotion ? { duration: 0 } : { duration: 1.25, repeat: Infinity, ease: 'easeInOut' }} /></div>
+            <div data-loading-track className="mt-7 h-1.5 w-56 overflow-hidden rounded-full bg-white/10 sm:w-72"><motion.div className="h-full w-2/5 rounded-full bg-gradient-to-r from-[#FFAA00] via-[#FFD15C] to-[#FFAA00] shadow-[0_0_12px_rgba(255,170,0,0.55)]" animate={shouldReduceMotion ? { x: 0 } : { x: ['-110%', '250%'] }} transition={shouldReduceMotion ? { duration: 0 } : { duration: 1.25, repeat: Infinity, ease: 'easeInOut' }} /></div>
           </div>
         </div>
       )}

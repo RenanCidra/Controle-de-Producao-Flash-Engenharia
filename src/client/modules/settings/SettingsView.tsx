@@ -337,7 +337,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     <div className="relative flex h-[100dvh] w-full min-w-0 overflow-hidden bg-[#0F141C] font-sans text-slate-200 select-none">
       {mobileSettingsNavOpen && <button type="button" aria-label="Fechar navegação de configurações" onClick={() => setMobileSettingsNavOpen(false)} className="fixed inset-0 z-30 bg-black/60 md:hidden" />}
       {/* Dedicated Left Settings Sidebar (matching image_a72b3d4c.png) */}
-      <aside className={`fixed inset-y-0 left-0 z-40 flex h-[100dvh] w-72 shrink-0 flex-col border-r border-[#202936] bg-[#141B24] text-slate-300 transition-transform duration-200 md:relative md:z-20 md:translate-x-0 ${mobileSettingsNavOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+      <aside data-settings-sidebar="true" className={`fixed inset-y-0 left-0 z-40 flex h-[100dvh] w-72 shrink-0 flex-col border-r border-[#202936] bg-[#141B24] text-slate-300 transition-transform duration-200 md:relative md:z-20 md:translate-x-0 ${mobileSettingsNavOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         {/* Top return to app button */}
         <div className="p-4 border-b border-[#202936]">
           <button
@@ -384,6 +384,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 return (
                   <button
                     key={item.id}
+                    data-settings-nav-item="true"
+                    data-active={isActive ? 'true' : 'false'}
                     onClick={() => { setActiveSubTab(item.id); setMobileSettingsNavOpen(false); }}
                     className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all group ${
                       isActive
