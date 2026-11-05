@@ -753,15 +753,14 @@ const MessageList: React.FC<{ messages: Message[]; scrollerRef: React.RefObject<
   const toggleMenu = (event: React.MouseEvent<HTMLButtonElement>, messageId: number) => {
     if (openMenuId === messageId) { setOpenMenuId(null); setReactionMenuId(null); return; }
     const bounds = event.currentTarget.getBoundingClientRect();
-    const shouldOpenAbove = window.innerHeight - bounds.bottom < 390;
-    const article = event.currentTarget.closest('article');
-    const articleBounds = article?.getBoundingClientRect();
+    const menuWidth = Math.min(224, window.innerWidth - 16);
+    const menuHeight = Math.min(380, window.innerHeight - 16);
+    const left = Math.max(8, Math.min(bounds.right - menuWidth, window.innerWidth - menuWidth - 8));
+    const spaceBelow = window.innerHeight - bounds.bottom - 8;
+    const shouldOpenAbove = spaceBelow < Math.min(menuHeight, 300);
+    const top = shouldOpenAbove ? Math.max(8, bounds.top - menuHeight - 4) : bounds.bottom + 4;
     setMenuAbove(shouldOpenAbove);
-    if (articleBounds) {
-      setMenuPosition(shouldOpenAbove
-        ? { bottom: `${articleBounds.bottom - bounds.top + 4}px` }
-        : { top: `${bounds.bottom - articleBounds.top + 4}px` });
-    }
+    setMenuPosition({ left: `${left}px`, top: `${top}px`, width: `${menuWidth}px`, maxHeight: shouldOpenAbove ? `${Math.max(96, bounds.top - top - 4)}px` : `calc(100dvh - ${top + 8}px)` });
     setReactionMenuId(null);
     setOpenMenuId(messageId);
   };
@@ -785,12 +784,13 @@ const MessageList: React.FC<{ messages: Message[]; scrollerRef: React.RefObject<
             key={`menu-${message.id}`}
             data-message-action-menu
             role="menu"
-            initial={{ opacity: 0, y: menuAbove ? 6 : -6, scale: 0.97 }}
+            initial={{ opacity: 0, y: menuAbove ? 5 : -5, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: menuAbove ? 4 : -4, scale: 0.98 }}
+            exit={{ opacity: 0, y: menuAbove ? 3 : -3, scale: 0.98 }}
             transition={{ duration: 0.14, ease: 'easeOut' }}
             style={menuPosition}
-            className={`absolute ${own ? 'right-0' : 'left-0'} ${menuAbove ? 'origin-bottom-right' : 'origin-top-left'} z-40 max-h-[min(70vh,26rem)] w-56 overflow-y-auto overscroll-contain rounded-xl border border-[#303A46] bg-[#171C22] py-1.5 text-slate-100 shadow-xl shadow-slate-950/25`}
+            data-theme-message-menu
+            className={`fixed z-[100] overflow-y-auto overscroll-contain rounded-xl border py-1.5 shadow-xl ${menuAbove ? 'origin-bottom-right' : 'origin-top-right'}`}
           >
             <MessageMenuItem icon={<Info size={15}/>} label="Dados da mensagem" onClick={() => { onDetails(message); setOpenMenuId(null); }} />
             {!message.deletedAt && <>
@@ -810,19 +810,19 @@ const MessageList: React.FC<{ messages: Message[]; scrollerRef: React.RefObject<
             </>}
           </motion.div>}
         </AnimatePresence>
-        <div className="mb-1 flex items-center gap-1.5"><p className="truncate text-[10px] font-semibold text-[#916B19]">{message.authorName}</p>{messageActions.pinnedId === message.id && <span title={translateText('Fixada neste dispositivo')} className="inline-flex shrink-0 items-center gap-0.5 text-[9px] text-slate-500"><Pin size={10}/>{translateText('Fixada')}</span>}</div>
+        <div className="mb-1 flex min-h-8 items-center gap-1.5"><p className="min-w-0 truncate text-[10px] font-semibold text-[#916B19]">{message.authorName}</p>{messageActions.pinnedId === message.id && <span title={translateText('Fixada neste dispositivo')} className="inline-flex shrink-0 items-center gap-0.5 text-[9px] text-slate-500"><Pin size={10}/>{translateText('Fixada')}</span>}<button type="button" data-message-action-trigger aria-haspopup="menu" onClick={event => toggleMenu(event, message.id)} aria-label={translateText('Ações da mensagem')} title={translateText('Ações da mensagem')} aria-expanded={openMenuId === message.id} className={`ml-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${openMenuId === message.id ? 'border-amber-500 bg-amber-100 text-[#573900]' : 'border-slate-300 bg-white/90 text-slate-600 hover:border-amber-500 hover:bg-amber-50 hover:text-[#573900] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100'}`}><ChevronDown className={`transition-transform ${openMenuId === message.id && menuAbove ? 'rotate-180' : ''}`} size={18}/></button></div>
         {message.replyToMessageId && <div className="mb-2 border-l-2 border-[#FFAA00] bg-[#F1F4F7]/80 px-2.5 py-1.5"><p className="text-[10px] font-semibold text-[#916B19]">{quoted?.authorName || 'Mensagem anterior'}</p><p className="line-clamp-2 whitespace-pre-wrap break-words text-xs text-slate-600">{quoted?.body || 'Conteúdo fora do histórico carregado'}</p></div>}
         {message.audioPreviewUrl ? <audio controls preload="metadata" src={message.audioPreviewUrl} className="max-w-full"/> : message.hasAudio && groupId !== undefined && groupId !== null ? <PrivateAudioPlayer message={message} load={() => api.getCommunicationGroupAudio(groupId, message.id)}/> : message.hasAudio && directId !== undefined && directId !== null ? <PrivateAudioPlayer message={message} load={() => api.getCommunicationDirectAudio(directId, message.id)}/> : <p className={`whitespace-pre-wrap break-words text-sm ${message.deletedAt ? 'italic text-slate-500' : 'text-[#263548]'}`}>{message.body}</p>}
         {message.hasAudio && <p className="mt-1 text-[10px] text-slate-500">Áudio · {Math.max(1, Math.round((message.audioDurationMs || 0) / 1000))}s</p>}
         {!!message.reactions?.length && <div className="mt-2 flex flex-wrap gap-1.5">{message.reactions.map(reaction => <button key={reaction.emoji} type="button" onClick={() => onToggleReaction(message, reaction.emoji)} aria-label={`${reaction.emoji}, ${reaction.count} reações${reaction.reactedByMe ? ', sua reação' : ''}`} aria-pressed={reaction.reactedByMe} className={`rounded-full border px-2 py-0.5 text-xs transition ${reaction.reactedByMe ? 'border-[#D59A12] bg-[#FFF1C8]' : 'border-[#DCE3EB] bg-white hover:bg-[#F1F4F7]'}`}>{reaction.emoji} <span className="text-[10px] text-slate-600">{reaction.count}</span></button>)}</div>}
-        <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-slate-400">{messageActions.favoriteIds.includes(message.id) && <Star size={11} className="fill-amber-400 text-amber-500" aria-label={translateText('Favorita')} />}<time>{formatMessageTime(message.createdAt)}</time>{own && recipientCount > 0 && <span title={readByCount ? `Lida por ${readByCount} de ${recipientCount}` : 'Enviada'} aria-label={readByCount ? `Lida por ${readByCount} de ${recipientCount}` : 'Enviada'} className={readByCount ? 'text-sky-600' : 'text-slate-400'}>{readByCount ? <CheckCheck size={13}/> : <Check size={13}/>}</span>}<button type="button" data-message-action-trigger aria-haspopup="menu" onClick={event => toggleMenu(event, message.id)} aria-label={translateText('Ações da mensagem')} title={translateText('Ações da mensagem')} aria-expanded={openMenuId === message.id} className={`ml-0.5 rounded p-0.5 transition-colors hover:bg-black/10 hover:text-[#263548] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${openMenuId === message.id ? 'text-[#263548]' : 'text-slate-400 md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100'}`}><ChevronDown size={14}/></button></div>
+        <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-slate-400">{messageActions.favoriteIds.includes(message.id) && <Star size={11} className="fill-amber-400 text-amber-500" aria-label={translateText('Favorita')} />}<time>{formatMessageTime(message.createdAt)}</time>{own && recipientCount > 0 && <span title={readByCount ? `Lida por ${readByCount} de ${recipientCount}` : 'Enviada'} aria-label={readByCount ? `Lida por ${readByCount} de ${recipientCount}` : 'Enviada'} className={readByCount ? 'text-sky-600' : 'text-slate-400'}>{readByCount ? <CheckCheck size={13}/> : <Check size={13}/>}</span>}</div>
       </article>;
     })}
   </div>;
 };
 
-const MessageMenuItem: React.FC<{ icon: React.ReactNode; label: string; onClick: () => void; destructive?: boolean }> = ({ icon, label, onClick, destructive = false }) => <button type="button" role="menuitem" onClick={onClick} className={`flex min-h-9 w-full items-center gap-3 px-3.5 py-2 text-left text-[12px] transition-colors ${destructive ? 'text-rose-300 hover:bg-rose-500/15' : 'text-slate-100 hover:bg-white/10'}`}>
-  <span className={destructive ? 'text-rose-300' : 'text-slate-300'}>{icon}</span><span>{translateText(label)}</span>
+const MessageMenuItem: React.FC<{ icon: React.ReactNode; label: string; onClick: () => void; destructive?: boolean }> = ({ icon, label, onClick, destructive = false }) => <button type="button" role="menuitem" onClick={onClick} className={`message-menu-item flex min-h-10 w-full items-center gap-3 px-3.5 py-2 text-left text-[12px] font-medium transition-colors ${destructive ? 'message-menu-item-destructive' : ''}`}>
+  <span className="message-menu-icon">{icon}</span><span>{translateText(label)}</span>
 </button>;
 
 const MessageComposer: React.FC<{ body: string; setBody: (value: string) => void; send: () => void; sending: boolean; onSendAudio: (audio: Blob, durationMs: number) => Promise<void>; replyingTo: Message | null; cancelReply: () => void }> = ({ body, setBody, send, sending, onSendAudio, replyingTo, cancelReply }) => <form onSubmit={event => { event.preventDefault(); void send(); }} className={`relative z-10 flex shrink-0 gap-2 border-t border-[#DCE3EB] bg-white p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-4 ${replyingTo ? 'items-end' : 'items-center'}`}><EmojiPicker onSelect={emoji => setBody(`${body}${emoji}`.slice(0, 4000))}/><AudioRecorderButton onRecorded={onSendAudio}/><div className="min-w-0 flex-1">{replyingTo && <div className="mb-2 flex items-center gap-2 rounded-lg border-l-2 border-[#FFAA00] bg-[#F1F4F7] px-2.5 py-1.5"><span className="min-w-0 flex-1"><b className="block text-[10px] text-[#916B19]">Respondendo a {replyingTo.authorName}</b><small className="block truncate text-xs text-slate-600">{replyingTo.body}</small></span><button type="button" onClick={cancelReply} aria-label="Cancelar resposta" className="rounded p-1 text-slate-500 hover:bg-white"><X size={15}/></button></div>}<textarea aria-label="Escreva uma mensagem" value={body} onChange={event => setBody(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} maxLength={4000} rows={1} placeholder="Escreva uma mensagem · Enter envia, Shift+Enter quebra linha" className="max-h-28 min-h-11 w-full resize-none overflow-y-auto rounded-2xl border border-[#DCE3EB] px-4 py-3 text-sm text-[#263548] outline-none focus:border-[#FFAA00]"/></div><button type="submit" disabled={!body.trim() || sending} title={sending ? 'Enviando mensagem…' : 'Enviar mensagem'} aria-label={sending ? 'Enviando mensagem' : 'Enviar mensagem'} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FFAA00] text-[#151C25] hover:bg-amber-300 disabled:opacity-40"><Send size={17}/></button></form>;
