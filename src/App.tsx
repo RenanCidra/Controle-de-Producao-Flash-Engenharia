@@ -466,6 +466,15 @@ export default function App() {
             setAssistantOpen(false);
             handleNavigateToSettings('general');
           }}
+          onNavigate={(targetTab, options) => {
+            if (targetTab === 'settings') {
+              setAssistantOpen(false);
+              handleNavigateToSettings((options?.subTab as any) || 'general');
+            } else {
+              setAssistantOpen(false);
+              setActiveTab(targetTab as ActiveTab);
+            }
+          }}
           onLogout={handleLogout}
         /></Suspense></ModuleErrorBoundary>
       ) : activeTab === 'settings' ? (

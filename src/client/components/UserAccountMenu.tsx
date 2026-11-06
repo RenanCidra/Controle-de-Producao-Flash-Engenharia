@@ -180,14 +180,14 @@ export const UserAccountMenu: React.FC<UserAccountMenuProps> = ({
   };
 
   return <>
-    <div ref={rootRef} data-user-account-menu onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} className={`relative z-[60] ${compact ? 'inline-flex' : 'w-full'}`}>
+    <div ref={rootRef} data-user-account-menu onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} className={`relative ${compact ? 'inline-flex' : 'w-full'}`}>
       <button type="button" onClick={(event) => { if (compact) { if (open) close(); else setOpen(true); } else if (event.detail === 0) setOpen(true); }} onFocus={() => { if (!compact) setOpen(true); }} aria-expanded={open} aria-label="Opções do usuário" title={collapsed ? `Opções do usuário · ${currentUser?.name || 'Conta'}` : 'Opções do usuário'} className={`flex items-center rounded-xl border border-transparent bg-[#151C25] text-left transition hover:border-[#FFAA00]/40 hover:bg-[#1C2532] ${compact ? 'h-10 w-10 justify-center border-[#334155]' : collapsed ? 'w-full justify-center px-0 py-1.5' : 'w-full justify-between px-2 py-1.5'} ${open ? 'border-[#FFAA00]/50 bg-[#1C2532]' : ''}`}>
         <span className={`flex min-w-0 items-center overflow-hidden ${compact || collapsed ? '' : 'gap-2.5'}`}>{avatar('small')}{!compact && !collapsed && <span className="min-w-0 text-left"><b className="block truncate text-xs leading-tight text-white">{currentUser?.name || 'Renan Cidra'}</b><small className="mt-0.5 block truncate text-[10px] leading-tight text-slate-400">{currentUser?.role || 'Acesso Operacional'}</small></span>}</span>
         {!compact && !collapsed && <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180 text-[#FFAA00]' : ''}`} />}
       </button>
     </div>
     {open && typeof document !== 'undefined' && createPortal(<>
-      <div ref={mainMenuRef} data-user-account-menu-popover onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} style={{ position: 'fixed', zIndex: 70, top: menuPosition?.top ?? 8, left: menuPosition?.left ?? 8, visibility: menuPosition ? 'visible' : 'hidden', width: 'min(18rem, calc(100vw - 1rem))', maxHeight: 'calc(100dvh - 1rem)' }} className="overflow-y-auto rounded-2xl border border-[#2B3747] bg-[#151C25] p-2 text-xs text-slate-200 shadow-2xl backdrop-blur-md" >
+      <div ref={mainMenuRef} data-user-account-menu-popover onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} style={{ position: 'fixed', zIndex: 90, top: menuPosition?.top ?? 8, left: menuPosition?.left ?? 8, visibility: menuPosition ? 'visible' : 'hidden', width: 'min(18rem, calc(100vw - 1rem))', maxHeight: 'calc(100dvh - 1rem)' }} className="overflow-y-auto rounded-2xl border border-[#2B3747] bg-[#151C25] p-2 text-xs text-slate-200 shadow-2xl backdrop-blur-md" >
         {helpOpen && compact ? helpContent : <>
           <button type="button" onClick={() => { close(); onOpenProfile(); }} className="group flex w-full items-center justify-between rounded-xl p-2.5 text-left transition hover:bg-[#1C2532]">
             <span className="flex min-w-0 items-center gap-2.5">{avatar()}<span className="min-w-0"><b className="block truncate text-xs text-white">{currentUser?.name || 'Renan Cidra'}</b><small className="mt-0.5 block truncate text-[10px] text-slate-400">{currentUser?.role || 'Acesso Operacional'} • Flash</small></span></span>
@@ -203,7 +203,7 @@ export const UserAccountMenu: React.FC<UserAccountMenuProps> = ({
             : <button type="button" onClick={() => { close(); onOpenAuth?.(); }} className="mt-0.5 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left font-bold text-[#FFAA00] transition hover:bg-[#FFAA00]/10"><LogIn className="h-4 w-4" /><span>{t('Entrar no Sistema')}</span></button>}
         </>}
       </div>
-      {!compact && helpOpen && <div ref={helpMenuRef} data-user-account-menu-popover onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} style={{ position: 'fixed', zIndex: 70, top: helpPosition?.top ?? 8, left: helpPosition?.left ?? 8, visibility: helpPosition ? 'visible' : 'hidden', width: 'min(16rem, calc(100vw - 1rem))', maxHeight: 'calc(100dvh - 1rem)' }} className="overflow-y-auto rounded-2xl border border-[#2B3747] bg-[#151C25] p-2 text-xs text-slate-200 shadow-2xl backdrop-blur-md">{helpContent}</div>}
+      {!compact && helpOpen && <div ref={helpMenuRef} data-user-account-menu-popover onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} style={{ position: 'fixed', zIndex: 90, top: helpPosition?.top ?? 8, left: helpPosition?.left ?? 8, visibility: helpPosition ? 'visible' : 'hidden', width: 'min(16rem, calc(100vw - 1rem))', maxHeight: 'calc(100dvh - 1rem)' }} className="overflow-y-auto rounded-2xl border border-[#2B3747] bg-[#151C25] p-2 text-xs text-slate-200 shadow-2xl backdrop-blur-md">{helpContent}</div>}
     </>, document.body)}
   </>;
 };

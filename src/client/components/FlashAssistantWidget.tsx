@@ -634,7 +634,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
                 type="button"
                 aria-label={t('Fechar Assistente Flash')}
                 onClick={onToggle}
-                className="assistant-backdrop fixed inset-0 z-40 cursor-default bg-slate-950/25 backdrop-blur-[3px]"
+                className="assistant-backdrop fixed inset-0 z-[75] cursor-default bg-slate-950/25 backdrop-blur-[3px]"
               />
             )}
 
@@ -673,8 +673,8 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
               }}
               className={
                 fullScreen
-                  ? 'fixed inset-0 z-50 flex min-h-0 flex-col overflow-hidden bg-[#F1F4F7] text-[#263548] md:flex-row'
-                  : 'fixed inset-x-2 bottom-2 top-2 z-50 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[#DCE3EB] bg-white text-[#263548] shadow-2xl shadow-slate-950/25 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-auto sm:h-[min(680px,calc(100dvh-32px))] sm:w-[420px]'
+                  ? 'fixed inset-0 z-[80] flex min-h-0 flex-col overflow-hidden bg-[#F1F4F7] text-[#263548] md:flex-row'
+                  : 'fixed inset-x-2 bottom-2 top-2 z-[80] flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[#DCE3EB] bg-white text-[#263548] shadow-2xl shadow-slate-950/25 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-auto sm:h-[min(680px,calc(100dvh-32px))] sm:w-[420px]'
               }
             >
           {fullScreen && (
@@ -725,7 +725,6 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
               </div>
             </div>
             <div className="ml-3 flex shrink-0 items-center gap-1">
-              {fullScreen && <div className="md:hidden"><UserAccountMenu compact currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={() => { setFullScreen(false); onOpenSettings(); }} onOpenFeedback={onOpenFeedback} onOpenHelpInfo={onOpenHelpInfo} onOpenShortcuts={onOpenShortcuts} onLogout={onLogout}/></div>}
               <button type="button" onClick={startNewConversation} disabled={loading} title={t('Nova conversa')} aria-label={t('Nova conversa')} className={`rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 ${fullScreen ? 'md:hidden' : ''}`}>
                 <MessageSquarePlus className="h-4 w-4" />
               </button>
