@@ -1,4 +1,4 @@
-import { db } from '../../db/index.ts';
+import { db, withDbRetry } from '../../db/index.ts';
 import { users } from '../../db/schema.ts';
 import { and, eq, isNotNull, or, sql } from 'drizzle-orm';
 import type { UserRole } from '../../types/index.ts';
@@ -7,8 +7,10 @@ export class AuthRepository {
   public static async findByEmail(email: string) {
     if (!email?.trim()) return null;
     try {
-      const records = await db.select().from(users).where(eq(users.email, email.toLowerCase().trim()));
-      return records[0] || null;
+      return await withDbRetry(async () => {
+        const records = await db.select().from(users).where(eq(users.email, email.toLowerCase().trim()));
+        return records[0] || null;
+      });
     } catch (error) {
       console.error('Database query failed in AuthRepository.findByEmail:', error);
       throw new Error('Falha ao consultar usuário no banco de dados.', { cause: error });
@@ -19,8 +21,10 @@ export class AuthRepository {
     if (!loginName?.trim()) return null;
     try {
       const normalized = loginName.toLowerCase().trim();
-      const records = await db.select().from(users).where(eq(users.loginName, normalized));
-      return records[0] || null;
+      return await withDbRetry(async () => {
+        const records = await db.select().from(users).where(eq(users.loginName, normalized));
+        return records[0] || null;
+      });
     } catch (error) {
       console.error('Database query failed in AuthRepository.findByExactLoginName:', error);
       throw new Error('Falha ao consultar conta de acesso.', { cause: error });
@@ -50,8 +54,9 @@ export class AuthRepository {
       }
 
       // Exact identifiers and exact full names preserve compatibility without an unbounded prefix scan.
-      const records = await db.select().from(users).where(or(...conditions)).limit(10);
-      return records;
+      return await withDbRetry(async () => {
+        return await db.select().from(users).where(or(...conditions)).limit(10);
+      });
     } catch (error) {
       console.error('Database query failed in AuthRepository.findByIdentifier:', error);
       throw new Error('Falha ao consultar conta de acesso.', { cause: error });
@@ -65,8 +70,10 @@ export class AuthRepository {
 
   public static async findByUid(uid: string) {
     try {
-      const records = await db.select().from(users).where(eq(users.uid, uid));
-      return records[0] || null;
+      return await withDbRetry(async () => {
+        const records = await db.select().from(users).where(eq(users.uid, uid));
+        return records[0] || null;
+      });
     } catch (error) {
       console.error('Database query failed in AuthRepository.findByUid:', error);
       throw new Error('Falha ao consultar usuário por UID.', { cause: error });

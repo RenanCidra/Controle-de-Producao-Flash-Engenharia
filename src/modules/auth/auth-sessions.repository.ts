@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { and, eq, gt, isNull, lt, ne } from 'drizzle-orm';
-import { db } from '../../db/index.ts';
+import { db, withDbRetry } from '../../db/index.ts';
 import { authSessions } from '../../db/schema.ts';
 
 export class AuthSessionsRepository {
@@ -9,24 +9,28 @@ export class AuthSessionsRepository {
   }
 
   public static async create(userId: number, tokenId: string, expiresAt: Date): Promise<void> {
-    const now = new Date();
-    const retentionCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    await db.delete(authSessions).where(lt(authSessions.expiresAt, retentionCutoff));
-    await db.insert(authSessions).values({
-      userId,
-      sessionHash: this.hashTokenId(tokenId),
-      expiresAt,
+    return withDbRetry(async () => {
+      const now = new Date();
+      const retentionCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      await db.delete(authSessions).where(lt(authSessions.expiresAt, retentionCutoff));
+      await db.insert(authSessions).values({
+        userId,
+        sessionHash: this.hashTokenId(tokenId),
+        expiresAt,
+      });
     });
   }
 
   public static async isActive(userId: number, tokenId: string): Promise<boolean> {
-    const [session] = await db.select({ id: authSessions.id }).from(authSessions).where(and(
-      eq(authSessions.userId, userId),
-      eq(authSessions.sessionHash, this.hashTokenId(tokenId)),
-      isNull(authSessions.revokedAt),
-      gt(authSessions.expiresAt, new Date()),
-    )).limit(1);
-    return Boolean(session);
+    return withDbRetry(async () => {
+      const [session] = await db.select({ id: authSessions.id }).from(authSessions).where(and(
+        eq(authSessions.userId, userId),
+        eq(authSessions.sessionHash, this.hashTokenId(tokenId)),
+        isNull(authSessions.revokedAt),
+        gt(authSessions.expiresAt, new Date()),
+      )).limit(1);
+      return Boolean(session);
+    });
   }
 
   public static async revoke(userId: number, tokenId: string): Promise<void> {
