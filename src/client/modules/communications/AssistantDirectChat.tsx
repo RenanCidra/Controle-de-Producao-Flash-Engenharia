@@ -58,6 +58,7 @@ const currentTime = () => new Date().toLocaleTimeString(getIntlLocale(), { hour:
 const personalityStorageKey = (uid?: string) => `nexus_copilot_personality_${uid || 'guest'}`;
 const displayModeStorageKey = (uid?: string) => `nexus_copilot_display_mode_${uid || 'guest'}`;
 const conversationStorageKey = (uid?: string) => `nexus_copilot_conversations_${uid || 'guest'}`;
+const LEAVE_COMMUNICATIONS_CONFIRM_KEY = (uid?: string) => `nexus_communications_leave_confirm_${uid || 'guest'}`;
 const MAX_SAVED_CONVERSATIONS = 25;
 const MAX_SAVED_MESSAGES = 80;
 
@@ -108,11 +109,11 @@ const personalityOptions: Array<{
 function makeWelcome(name?: string, mode: PersonalityMode = 'casual'): AssistantMessage {
   let text = '';
   if (mode === 'direct') {
-    text = `${name ? `${t('Olá')}, ${name}.` : `${t('Olá')}.`} ${t('Assistente Flash conectado no modo Direto. Pergunte sobre OPs, ocorrências ou estoques para respostas imediatas.')}`;
+    text = `${name ? `${t('Olá')}, ${name}.` : `${t('Olá')}.`} ${t('Assistente Flash conectado no modo Direto. Pergunte sobre OPs, ocorrências ou estoques.')}`;
   } else if (mode === 'formal') {
-    text = `${name ? `${t('Prezado(a)')} ${name},` : `${t('Prezado(a)')},`} ${t('Prezado(a), sou o Assistente Flash, copiloto de planejamento e controle da produção industrial. Como posso auxiliá-lo(a) nesta sessão?')}`;
+    text = `${name ? `${t('Prezado(a)')} ${name},` : `${t('Prezado(a)')},`} ${t('Prezado(a), sou o Assistente Flash, focado em planejamento e controle da produção industrial. Como posso auxiliá-lo(a) nesta sessão?')}`;
   } else {
-    text = `${name ? `${t('Olá')}, ${name}!` : `${t('Olá')}!`} ${t('Sou o Assistente Flash, seu copiloto no PCP e chão de fábrica.')}\n\n${t('Posso tirar dúvidas sobre a produção, analisar o andamento do turno, checar qualquer OP ou te guiar pelo sistema. Como posso te ajudar hoje?')}`;
+    text = `${name ? `${t('Olá')}, ${name}!` : `${t('Olá')}!`} ${t('Sou o Assistente Flash, seu assistente no PCP e chão de fábrica.')}\n\n${t('Posso tirar dúvidas sobre a produção, analisar a operação, checar qualquer OP ou te guiar pelo sistema. Como posso te ajudar hoje?')}`;
   }
   return {
     id: 'welcome',
@@ -123,7 +124,7 @@ function makeWelcome(name?: string, mode: PersonalityMode = 'casual'): Assistant
 }
 
 const quickQuestions = [
-  { label: 'Resumo do Turno', prompt: 'Resumo do Turno' },
+  { label: 'Status da produção', prompt: 'Como está o status geral da produção?' },
   { label: 'OPs atrasadas', prompt: 'Quais OPs estão atrasadas?' },
   { label: 'Ocorrências abertas', prompt: 'Quais ocorrências estão abertas?' },
   { label: 'Estoque crítico', prompt: 'Quais itens de estoque estão abaixo do mínimo?' },
@@ -214,6 +215,17 @@ export const AssistantDirectChat: React.FC<AssistantDirectChatProps> = ({
   const [loading, setLoading] = useState(false);
   const [showAssistantActivity, setShowAssistantActivity] = useState(false);
   const [assistantActivity, setAssistantActivity] = useState(t('Assistente Flash digitando…'));
+  const [pendingAction, setPendingAction] = useState<{ target: string; label: string } | null>(null);
+  const [dontShowAgain, setDontShowAgain] = useState(false);
+
+  useEffect(() => {
+    if (!pendingAction) return;
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPendingAction(null);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [pendingAction]);
 
   const activityTimerRef = useRef<number | null>(null);
   const activityVisibilityTimerRef = useRef<number | null>(null);
@@ -467,13 +479,38 @@ export const AssistantDirectChat: React.FC<AssistantDirectChatProps> = ({
     }
   };
 
-  const handleActionClick = (target: string) => {
+  const executeNavigation = (target: string) => {
     if (!onNavigate) return;
     const [tab, queryString] = target.split('?');
-    const validTabs = new Set(['dashboard', 'traceability', 'occurrences', 'inventory', 'production-lines', 'production-orders', 'settings']);
+    const validTabs = new Set(['dashboard', 'traceability', 'occurrences', 'inventory', 'production-lines', 'production-orders', 'settings', 'home']);
     if (!validTabs.has(tab)) return;
     const params = new URLSearchParams(queryString || '');
     onNavigate(tab, { op: params.get('op') || undefined, subTab: params.get('sub') || undefined });
+  };
+
+  const handleActionClick = (target: string, label: string) => {
+    if (!onNavigate) return;
+    const dismissed = typeof window !== 'undefined' && localStorage.getItem(LEAVE_COMMUNICATIONS_CONFIRM_KEY(currentUser?.uid)) === 'true';
+    if (dismissed) {
+      executeNavigation(target);
+      return;
+    }
+    setDontShowAgain(false);
+    setPendingAction({ target, label });
+  };
+
+  const handleConfirmNavigation = () => {
+    if (!pendingAction) return;
+    if (dontShowAgain && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(LEAVE_COMMUNICATIONS_CONFIRM_KEY(currentUser?.uid), 'true');
+      } catch {
+        // Storage unavailable
+      }
+    }
+    const target = pendingAction.target;
+    setPendingAction(null);
+    executeNavigation(target);
   };
 
   const startNewConversation = () => {
@@ -540,26 +577,17 @@ export const AssistantDirectChat: React.FC<AssistantDirectChatProps> = ({
             <div className="flex items-center gap-2">
               <h2 className="truncate text-sm font-bold text-[#263548]">Assistente Flash</h2>
               <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-900">
-                Copiloto IA
+                IA
               </span>
             </div>
             <p className="flex items-center gap-1.5 truncate text-xs text-slate-500">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              <span>{translateText('PCP e Chão de Fábrica · Respostas imediatas')}</span>
+              <span>{translateText('PCP e Chão de Fábrica')}</span>
             </p>
           </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void handleSendMessage(t('Resumo do turno'))}
-            disabled={loading}
-            className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-900 transition hover:bg-amber-100 disabled:opacity-50"
-          >
-            <Zap className="h-3.5 w-3.5 text-amber-600" />
-            <span>{t('Resumo do turno')}</span>
-          </button>
 
           {/* Menu dos 3 Pontos */}
           <div ref={menuRef} className="relative">
@@ -686,7 +714,7 @@ export const AssistantDirectChat: React.FC<AssistantDirectChatProps> = ({
                           <button
                             key={`${message.id}-${idx}`}
                             type="button"
-                            onClick={() => handleActionClick(action.target)}
+                            onClick={() => handleActionClick(action.target, action.label)}
                             className="inline-flex items-center gap-1.5 rounded-lg border border-[#DCE3EB] bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs transition hover:border-amber-400 hover:bg-amber-50 hover:text-slate-950"
                           >
                             <span>{action.label}</span>
@@ -979,6 +1007,69 @@ export const AssistantDirectChat: React.FC<AssistantDirectChatProps> = ({
                 )}
               </div>
             </motion.aside>
+          )}
+        </AnimatePresence>
+
+        {/* Modal de Confirmação: Sair da Central */}
+        <AnimatePresence>
+          {pendingAction && (
+            <div
+              className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4"
+              onMouseDown={(e) => {
+                if (e.target === e.currentTarget) setPendingAction(null);
+              }}
+            >
+              <motion.section
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="leave-central-title"
+                initial={{ opacity: 0, scale: 0.95, y: 8 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 8 }}
+                transition={{ duration: 0.16 }}
+                className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl space-y-4"
+              >
+                <div>
+                  <h3 id="leave-central-title" className="font-semibold text-[#263548]">
+                    {t('Deseja sair da central?')}
+                  </h3>
+                  <p className="mt-2 text-xs leading-5 text-slate-600">
+                    {t('Você será direcionado para o módulo do sistema')}{' '}
+                    {pendingAction.label ? <strong className="text-slate-800">({pendingAction.label})</strong> : ''}. {t('Deseja continuar?')}
+                  </p>
+                </div>
+
+                <div className="pt-1 border-t border-[#F1F4F7]">
+                  <label className="flex cursor-pointer items-center gap-2.5 text-xs text-slate-600 select-none">
+                    <input
+                      type="checkbox"
+                      checked={dontShowAgain}
+                      onChange={(e) => setDontShowAgain(e.target.checked)}
+                      className="h-4 w-4 rounded border-[#DCE3EB] text-amber-500 focus:ring-amber-400"
+                    />
+                    <span>{t('Não mostrar novamente')}</span>
+                  </label>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setPendingAction(null)}
+                    className="rounded-lg border border-[#DCE3EB] px-3.5 py-2 text-xs font-semibold text-slate-600 transition hover:bg-[#F1F4F7]"
+                  >
+                    {t('Cancelar')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmNavigation}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#FFAA00] px-3.5 py-2 text-xs font-bold text-[#151C25] shadow-xs transition hover:bg-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                  >
+                    <span>{t('Confirmar')}</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </motion.section>
+            </div>
           )}
         </AnimatePresence>
       </div>

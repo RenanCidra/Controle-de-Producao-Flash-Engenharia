@@ -101,11 +101,11 @@ const personalityOptions: Array<{
 function makeWelcome(name?: string, mode: PersonalityMode = 'casual'): Message {
   let text = '';
   if (mode === 'direct') {
-    text = `${name ? `${t('Olá')}, ${name}.` : `${t('Olá')}.`} ${t('Assistente Flash conectado no modo Direto. Pergunte sobre OPs, ocorrências ou estoques para respostas imediatas.')}`;
+    text = `${name ? `${t('Olá')}, ${name}.` : `${t('Olá')}.`} ${t('Assistente Flash conectado no modo Direto. Pergunte sobre OPs, ocorrências ou estoques.')}`;
   } else if (mode === 'formal') {
-    text = `${name ? `${t('Prezado(a)')} ${name},` : `${t('Prezado(a)')},`} ${t('Prezado(a), sou o Assistente Flash, copiloto de planejamento e controle da produção industrial. Como posso auxiliá-lo(a) nesta sessão?')}`;
+    text = `${name ? `${t('Prezado(a)')} ${name},` : `${t('Prezado(a)')},`} ${t('Prezado(a), sou o Assistente Flash, focado em planejamento e controle da produção industrial. Como posso auxiliá-lo(a) nesta sessão?')}`;
   } else {
-    text = `${name ? `${t('Olá')}, ${name}!` : `${t('Olá')}!`} ${t('Sou o Assistente Flash, seu copiloto no PCP e chão de fábrica.')}\n\n${t('Posso tirar dúvidas sobre a produção, analisar o andamento do turno, checar qualquer OP ou te guiar pelo sistema. Como posso te ajudar hoje?')}`;
+    text = `${name ? `${t('Olá')}, ${name}!` : `${t('Olá')}!`} ${t('Sou o Assistente Flash, seu assistente no PCP e chão de fábrica.')}\n\n${t('Posso tirar dúvidas sobre a produção, analisar a operação, checar qualquer OP ou te guiar pelo sistema. Como posso te ajudar hoje?')}`;
   }
   return {
     id: 'welcome',
@@ -116,7 +116,7 @@ function makeWelcome(name?: string, mode: PersonalityMode = 'casual'): Message {
 }
 
 const quickQuestions = [
-  { label: 'Resumo do Turno', prompt: 'Resumo do Turno' },
+  { label: 'Status da produção', prompt: 'Como está o status geral da produção?' },
   { label: 'OPs atrasadas', prompt: 'Quais OPs estão atrasadas?' },
   { label: 'Ocorrências abertas', prompt: 'Quais ocorrências estão abertas?' },
   { label: 'Estoque crítico', prompt: 'Quais itens de estoque estão abaixo do mínimo?' },
@@ -232,7 +232,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
   const [isListening, setIsListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const speechRecognitionRef = useRef<any>(null);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
@@ -746,11 +746,8 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
           <div className={`flex shrink-0 items-center justify-between gap-3 border-b px-4 py-2 ${fullScreen ? 'border-[#DCE3EB] bg-[#F8FAFC]' : 'border-[#E7ECF1] bg-[#F8FAFC]'}`}>
             <div className="flex min-w-0 items-center gap-2 text-xs font-medium text-slate-600">
               <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-              <span className={`truncate ${fullScreen ? 'text-slate-200' : ''}`}>{t('Consulta operacional')}</span>
+              <span className="truncate text-slate-600">{t('Consulta operacional')}</span>
             </div>
-            <button type="button" onClick={() => void handleSendMessage(t('Resumo do turno'))} disabled={loading} className="shrink-0 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] font-semibold text-amber-900 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50">
-              {t('Resumo do turno')}
-            </button>
           </div>
 
           {settingsOpen ? (
@@ -913,37 +910,80 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
           </div>
           )}
 
-          {!historyOpen && !settingsOpen && <footer className={`shrink-0 border-t p-3 ${fullScreen ? 'border-[#DCE3EB] bg-white px-4 py-4' : 'border-[#E7ECF1] bg-[#F8FAFC]'}`}>
-            {speechSupported && (
-              <div className="mb-2 text-[10px] text-slate-500" aria-live="polite">{isListening ? t('Ouvindo... Fale agora') : ''}</div>
+          {!historyOpen && !settingsOpen && <footer className={`shrink-0 border-t p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] ${fullScreen ? 'border-[#DCE3EB] bg-[#F1F4F7] px-4 py-4' : 'border-[#E7ECF1] bg-[#F1F4F7]'}`}>
+            {speechSupported && isListening && (
+              <div className="mb-2 text-center text-xs font-medium text-amber-700 animate-pulse" aria-live="polite">
+                {t('Ouvindo... Fale agora sua pergunta operacional')}
+              </div>
             )}
-            <form onSubmit={(event) => { event.preventDefault(); void handleSendMessage(); }} className={`mx-auto flex w-full items-center gap-2 ${fullScreen ? 'max-w-4xl' : ''}`}>
-              <EmojiPicker onSelect={emoji => setInputValue(value => `${value}${emoji}`.slice(0, 2000))} label={t('Inserir emoji')} />
-              <AudioRecorderButton onRecorded={async (audio) => { await handleSendMessage(undefined, audio); }} disabled={loading} label={t('Gravar áudio')} />
-              {speechSupported && (
-                <button type="button" onClick={toggleListening} disabled={loading} title={t(isListening ? 'Parar ditado' : 'Ditar pergunta por voz')} aria-label={t(isListening ? 'Parar ditado' : 'Ditar pergunta por voz')} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition disabled:opacity-40 ${isListening ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-[#DCE3EB] bg-white text-slate-500 hover:border-amber-300 hover:text-slate-900'}`}>
-                  {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-                </button>
-              )}
-              <input
-                ref={inputRef}
-                type="text"
-                value={inputValue}
-                onChange={(event) => setInputValue(event.target.value.slice(0, 2000))}
-                onFocus={() => {
-                  setTimeout(() => {
-                    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                  }, 180);
-                }}
-                maxLength={2000}
-                placeholder={t('Pergunte sobre OPs, ocorrências, insumos...')}
-                disabled={loading}
-                aria-label={t('Pergunte sobre OPs, ocorrências, insumos...')}
-                className="h-10 min-w-0 flex-1 rounded-xl border border-[#DCE3EB] bg-white px-3 text-[13px] text-[#263548] placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 disabled:bg-slate-100"
-              />
-              <button type="submit" disabled={!inputValue.trim() || loading} title={t('Enviar mensagem')} aria-label={t('Enviar mensagem')} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-400 text-slate-950 transition hover:bg-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
-                <Send className="h-4 w-4" />
-              </button>
+            <form onSubmit={(event) => { event.preventDefault(); void handleSendMessage(); }} className={`mx-auto flex w-full flex-col gap-2 ${fullScreen ? 'max-w-4xl' : ''}`}>
+              <div
+                data-chat-composer-pill
+                className="flex min-h-12 w-full items-center gap-1.5 rounded-full border border-[#D0D5DC] bg-white px-2 shadow-sm transition-colors focus-within:border-[#B8891F] focus-within:ring-2 focus-within:ring-amber-400/20"
+              >
+                <EmojiPicker
+                  buttonClassName="!border-transparent !bg-transparent hover:!border-transparent hover:!bg-[#F1F4F7]"
+                  onSelect={emoji => setInputValue(value => `${value}${emoji}`.slice(0, 4000))}
+                />
+                <textarea
+                  ref={inputRef}
+                  value={inputValue}
+                  onChange={(event) => setInputValue(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                      event.preventDefault();
+                      void handleSendMessage();
+                    }
+                  }}
+                  onFocus={() => {
+                    setTimeout(() => {
+                      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                    }, 180);
+                  }}
+                  maxLength={4000}
+                  rows={1}
+                  disabled={loading}
+                  placeholder={t('Digite uma mensagem')}
+                  aria-label={t('Digite uma mensagem')}
+                  className="max-h-28 min-h-10 min-w-0 flex-1 resize-none overflow-y-auto border-0 bg-transparent px-1 py-2.5 text-sm leading-5 text-[#263548] outline-none placeholder:text-slate-500 focus:ring-0 disabled:opacity-50"
+                />
+                {speechSupported && !inputValue.trim() && (
+                  <button
+                    type="button"
+                    onClick={toggleListening}
+                    disabled={loading}
+                    title={t(isListening ? 'Parar ditado' : 'Ditar pergunta')}
+                    aria-label={t(isListening ? 'Parar ditado' : 'Ditar pergunta')}
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors ${
+                      isListening
+                        ? 'bg-rose-100 text-rose-700 animate-pulse'
+                        : 'text-slate-500 hover:bg-[#F1F4F7]'
+                    }`}
+                  >
+                    {isListening ? <MicOff size={17} /> : <Mic size={17} />}
+                  </button>
+                )}
+                {inputValue.trim() ? (
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    title={loading ? t('Enviando mensagem…') : t('Enviar mensagem')}
+                    aria-label={loading ? t('Enviando mensagem') : t('Enviar mensagem')}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#FFAA00] text-[#151C25] transition-colors hover:bg-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50"
+                  >
+                    <Send size={17} />
+                  </button>
+                ) : (
+                  <AudioRecorderButton
+                    onRecorded={async (audio) => {
+                      await handleSendMessage(undefined, audio);
+                    }}
+                    disabled={loading}
+                    label={t('Gravar áudio')}
+                    buttonClassName="!border-transparent !bg-transparent hover:!border-transparent hover:!bg-[#F1F4F7]"
+                  />
+                )}
+              </div>
             </form>
             <p className="mt-2 text-center text-[10px] text-slate-400">{t('Confira informações críticas na tela de origem antes de agir.')}</p>
           </footer>}

@@ -2034,6 +2034,16 @@ Object.assign(en, {
   'Resumo': 'Summary',
   'Gerar resumo do turno atual': 'Generate current shift summary',
   'Prezado(a)': 'Dear',
+  'Assistente Flash conectado no modo Direto. Pergunte sobre OPs, ocorrências ou estoques.': 'Flash Assistant connected in Direct mode. Ask about work orders, occurrences, or inventory.',
+  'Prezado(a), sou o Assistente Flash, focado em planejamento e controle da produção industrial. Como posso auxiliá-lo(a) nesta sessão?': 'Greetings. I am Flash Assistant, dedicated to industrial production planning and control. How may I assist you in this session?',
+  'Sou o Assistente Flash, seu assistente no PCP e chão de fábrica.': 'I am Flash Assistant, your assistant in production planning and shop floor operations.',
+  'Posso tirar dúvidas sobre a produção, analisar a operação, checar qualquer OP ou te guiar pelo sistema. Como posso te ajudar hoje?': 'I can answer questions about production, analyze operations, check any work order, or guide you through the system. How can I help you today?',
+  'Status da produção': 'Production status',
+  'Como está o status geral da produção?': 'How is the overall production status?',
+  'Deseja sair da central?': 'Do you want to leave the communications center?',
+  'Não mostrar novamente': 'Do not show again',
+  'Você será direcionado para o módulo do sistema': 'You will be directed to the system module',
+  'Deseja continuar?': 'Do you wish to continue?',
 });
 
 Object.assign(es, {
@@ -2094,6 +2104,16 @@ Object.assign(es, {
   'Resumo': 'Resumen',
   'Gerar resumo do turno atual': 'Generar resumen del turno actual',
   'Prezado(a)': 'Estimado(a)',
+  'Assistente Flash conectado no modo Direto. Pergunte sobre OPs, ocorrências ou estoques.': 'Asistente Flash conectado en modo Directo. Pregunte sobre órdenes, incidencias o inventario.',
+  'Prezado(a), sou o Assistente Flash, focado em planejamento e controle da produção industrial. Como posso auxiliá-lo(a) nesta sessão?': 'Estimado(a), soy el Asistente Flash, dedicado a la planificación y control de la producción industrial. ¿En qué puedo asistirle en esta sesión?',
+  'Sou o Assistente Flash, seu assistente no PCP e chão de fábrica.': 'Soy el Asistente Flash, tu asistente en PCP y planta de producción.',
+  'Posso tirar dúvidas sobre a produção, analisar a operação, checar qualquer OP ou te guiar pelo sistema. Como posso te ajudar hoje?': 'Puedo resolver dudas de producción, analizar la operación, consultar cualquier OP o guiarte por el sistema. ¿Cómo puedo ayudarte hoy?',
+  'Status da produção': 'Estado de la producción',
+  'Como está o status geral da produção?': '¿Cómo está el estado general de la producción?',
+  'Deseja sair da central?': '¿Desea salir de la central?',
+  'Não mostrar novamente': 'No volver a mostrar',
+  'Você será direcionado para o módulo do sistema': 'Será dirigido al módulo del sistema',
+  'Deseja continuar?': '¿Desea continuar?',
 });
 
 Object.assign(en, {

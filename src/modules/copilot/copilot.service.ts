@@ -317,7 +317,7 @@ export class CopilotService {
 - Estruture a resposta com rigor analítico, clareza metódica e respeito institucional.`,
         }[personality];
 
-        const systemInstruction = `Você é o Assistente Flash, copiloto inteligente de chão de fábrica e PCP da Flash Engenharia no sistema NexusPCP.
+        const systemInstruction = `Você é o Assistente Flash, assistente inteligente de chão de fábrica e PCP da Flash Engenharia no sistema NexusPCP.
 
 ${personalityInstruction}
 
@@ -449,7 +449,7 @@ DIRETRIZES DE ATUAÇÃO:
 
   public async getBriefing(user: { name: string; role: UserRole }): Promise<CopilotChatResponse> {
     return this.chat({
-      message: 'Gere um resumo do turno usando os dados disponíveis. Indique fontes indisponíveis e diferencie a amostra recente de totais.',
+      message: 'Gere um resumo da produção usando os dados disponíveis. Indique fontes indisponíveis e diferencie a amostra recente de totais.',
       user: { uid: 'system', name: user.name, role: user.role },
     });
   }
@@ -610,9 +610,9 @@ DIRETRIZES DE ATUAÇÃO:
 
       return {
         reply: copy(
-          `E aí! Tudo sob controle na fábrica. Tô acompanhando a operação de perto: temos **${context.ordersTotal ?? 'várias'} ordens de produção** rodando no espelho Protheus e **${context.activeOccurrencesTotal ?? 0} ocorrência(s)** em aberto.\n\nPode mandar qualquer pergunta sobre OPs, insumos ou pedir o resumo do turno. O que vamos resolver agora?`,
-          `Hello! Everything is running smoothly. I'm monitoring the shop floor and ready to assist you.\n\nWe currently have **${context.ordersTotal ?? 'several'} work orders** in the Protheus mirror and **${context.activeOccurrencesTotal ?? 0} active occurrence(s)**.\n\nFeel free to ask questions naturally, look up any work order, or request a shift summary. How can I help?`,
-          `¡Hola! Todo marcha muy bien por aquí. Estoy siguiendo la producción y listo para ayudarte.\n\nActualmente tenemos **${context.ordersTotal ?? 'varias'} órdenes de producción** en el espejo de Protheus y **${context.activeOccurrencesTotal ?? 0} incidencia(s)** activas.\n\nPuedes hacer preguntas de forma natural, consultar cualquier OP o pedir el resumen del turno. ¿En qué te puedo ayudar?`
+          `E aí! Tudo sob controle na fábrica. Tô acompanhando a operação de perto: temos **${context.ordersTotal ?? 'várias'} ordens de produção** rodando no espelho Protheus e **${context.activeOccurrencesTotal ?? 0} ocorrência(s)** em aberto.\n\nPode mandar qualquer pergunta sobre OPs, insumos ou pedir o status da produção. O que vamos resolver agora?`,
+          `Hello! Everything is running smoothly. I'm monitoring the shop floor and ready to assist you.\n\nWe currently have **${context.ordersTotal ?? 'several'} work orders** in the Protheus mirror and **${context.activeOccurrencesTotal ?? 0} active occurrence(s)**.\n\nFeel free to ask questions naturally, look up any work order, or request a production overview. How can I help?`,
+          `¡Hola! Todo marcha muy bien por aquí. Estoy siguiendo la producción y listo para ayudarte.\n\nActualmente tenemos **${context.ordersTotal ?? 'varias'} órdenes de producción** en el espejo de Protheus y **${context.activeOccurrencesTotal ?? 0} incidencia(s)** activas.\n\nPuedes hacer preguntas de forma natural, consultar cualquier OP o pedir el estado de la producción. ¿En qué te puedo ayudar?`
         ),
         actions,
       };
@@ -627,9 +627,9 @@ DIRETRIZES DE ATUAÇÃO:
       if (personality === 'direct') {
         return {
           reply: copy(
-            `**Assistente Flash** — Comandos e consultas diretas:\n• **OPs:** Digite o número da ordem (ex: *OP 000101*) para quantidades e prazo.\n• **Turno:** Digite *"Resumo do turno"* para atrasos e prioridades.\n• **Ocorrências / Estoque:** Pergunte por paradas abertas ou insumos no mínimo.\n• **Navegação:** Digite o módulo desejado para receber o atalho.`,
-            `**Flash Assistant** — Direct inquiry commands:\n• **WOs:** Type order number (e.g. *WO 000101*) for balances and due date.\n• **Shift:** Type *"Shift summary"* for overdue orders and priorities.\n• **Occurrences / Stock:** Query active issues or low stock.\n• **Navigation:** Ask for any module to receive direct shortcuts.`,
-            `**Asistente Flash** — Consultas directas:\n• **OP:** Escriba el número de la OP para ver saldo y fecha.\n• **Turno:** Solicite *"Resumen del turno"* para ver prioridades.\n• **Incidencias / Inventario:** Consulte paradas o insumos críticos.\n• **Navegación:** Pida cualquier módulo para acceso directo.`
+            `**Assistente Flash** — Comandos e consultas diretas:\n• **OPs:** Digite o número da ordem (ex: *OP 000101*) para quantidades e prazo.\n• **Produção:** Digite *"Status da produção"* para atrasos e prioridades.\n• **Ocorrências / Estoque:** Pergunte por paradas abertas ou insumos no mínimo.\n• **Navegação:** Digite o módulo desejado para receber o atalho.`,
+            `**Flash Assistant** — Direct inquiry commands:\n• **WOs:** Type order number (e.g. *WO 000101*) for balances and due date.\n• **Production:** Type *"Production status"* for overdue orders and priorities.\n• **Occurrences / Stock:** Query active issues or low stock.\n• **Navigation:** Ask for any module to receive direct shortcuts.`,
+            `**Asistente Flash** — Consultas directas:\n• **OP:** Escriba el número de la OP para ver saldo y fecha.\n• **Producción:** Solicite *"Estado de la producción"* para ver prioridades.\n• **Incidencias / Inventario:** Consulte paradas o insumos críticos.\n• **Navegación:** Pida cualquier módulo para acceso directo.`
           ),
           actions,
         };
@@ -638,9 +638,9 @@ DIRETRIZES DE ATUAÇÃO:
       if (personality === 'formal') {
         return {
           reply: copy(
-            `O **Assistente Flash** constitui o copiloto de inteligência operacional e controle de produção (PCP) integrado ao NexusPCP.\n\nPrincipais capacidades disponíveis:\n- **Rastreabilidade Fabril:** Consulta tempestiva de especificações, saldos e prazos de ordens de produção.\n- **Briefing de Turno:** Consolidação analítica de metas, gargalos e pendências operacionais.\n- **Governança de Ocorrências:** Registro e monitoramento de paradas e não-conformidades de postos.\n- **Controle de Insumos:** Identificação de itens sob risco de ruptura de estoque mínimo.\n- **Navegação Guiada:** Fornecimento de atalhos diretos aos módulos requeridos.`,
-            `**Flash Assistant** is the integrated operational intelligence copilot in NexusPCP.\n\nKey capabilities:\n- **Traceability:** Inquiries on work orders, balances, and completion dates.\n- **Shift Briefing:** Analytical synthesis of goals, bottlenecks, and priorities.\n- **Occurrence Governance:** Monitoring of stoppages and workstation non-conformities.\n- **Inventory Control:** Alerts for materials approaching critical safety stock levels.\n- **Guided Navigation:** Direct shortcuts to system modules.`,
-            `El **Asistente Flash** es el copiloto de inteligencia operativa y control de producción en NexusPCP.`
+            `O **Assistente Flash** constitui o assistente de inteligência operacional e controle de produção (PCP) integrado ao NexusPCP.\n\nPrincipais capacidades disponíveis:\n- **Rastreabilidade Fabril:** Consulta tempestiva de especificações, saldos e prazos de ordens de produção.\n- **Briefing de Produção:** Consolidação analítica de metas, gargalos e pendências operacionais.\n- **Governança de Ocorrências:** Registro e monitoramento de paradas e não-conformidades de postos.\n- **Controle de Insumos:** Identificação de itens sob risco de ruptura de estoque mínimo.\n- **Navegação Guiada:** Fornecimento de atalhos diretos aos módulos requeridos.`,
+            `**Flash Assistant** is the integrated operational intelligence assistant in NexusPCP.\n\nKey capabilities:\n- **Traceability:** Inquiries on work orders, balances, and completion dates.\n- **Production Briefing:** Analytical synthesis of goals, bottlenecks, and priorities.\n- **Occurrence Governance:** Monitoring of stoppages and workstation non-conformities.\n- **Inventory Control:** Alerts for materials approaching critical safety stock levels.\n- **Guided Navigation:** Direct shortcuts to system modules.`,
+            `El **Asistente Flash** es el asistente de inteligencia operativa y control de producción en NexusPCP.`
           ),
           actions,
         };
@@ -648,9 +648,9 @@ DIRETRIZES DE ATUAÇÃO:
 
       return {
         reply: copy(
-          `Sou o **Assistente Flash**, seu copiloto industrial aqui no NexusPCP!\n\nVocê não precisa usar comandos engessados, pode falar comigo com naturalidade sobre:\n- **Ordens de Produção:** Pergunte sobre qualquer OP pelo número (ex: *"Como está a OP 000101?"*) para ver saldo, quantidade e previsão.\n- **Visão do Turno:** Peça um *"Resumo do Turno"* para ter um panorama rápido de atrasos e prioridades.\n- **Ocorrências:** Veja quais problemas ou paradas de máquina estão em aberto no chão de fábrica.\n- **Estoque:** Consulte matérias-primas e insumos em nível crítico.\n- **Navegação:** Peça para ir até qualquer tela e eu coloco o atalho direto para você!\n\nO que gostaria de verificar agora?`,
-          `I am **Flash Assistant**, your industrial copilot in NexusPCP!\n\nYou can chat with me naturally about:\n- **Work Orders:** Ask about any work order by number to see balances and due dates.\n- **Shift Overview:** Ask for a shift briefing to see active priorities and bottlenecks.\n- **Occurrences:** Check shop floor issues and stoppages.\n- **Inventory:** Check critical materials and low stock alerts.\n- **Navigation:** Ask to open any module and I'll provide direct shortcuts!\n\nWhat would you like to check?`,
-          `¡Soy el **Asistente Flash**, tu copiloto industrial en NexusPCP!\n\nPuedes conversar conmigo con naturalidad sobre órdenes de producción, resumen de turno, incidencias de planta, inventario y navegación rápida. ¿Qué te gustaría consultar?`
+          `Sou o **Assistente Flash**, seu assistente industrial aqui no NexusPCP!\n\nVocê não precisa usar comandos engessados, pode falar comigo com naturalidade sobre:\n- **Ordens de Produção:** Pergunte sobre qualquer OP pelo número (ex: *"Como está a OP 000101?"*) para ver saldo, quantidade e previsão.\n- **Visão da Produção:** Peça um *"Status da Produção"* para ter um panorama rápido de atrasos e prioridades.\n- **Ocorrências:** Veja quais problemas ou paradas de máquina estão em aberto no chão de fábrica.\n- **Estoque:** Consulte matérias-primas e insumos em nível crítico.\n- **Navegação:** Peça para ir até qualquer tela e eu coloco o atalho direto para você!\n\nO que gostaria de verificar agora?`,
+          `I am **Flash Assistant**, your industrial assistant in NexusPCP!\n\nYou can chat with me naturally about:\n- **Work Orders:** Ask about any work order by number to see balances and due dates.\n- **Production Overview:** Ask for a production briefing to see active priorities and bottlenecks.\n- **Occurrences:** Check shop floor issues and stoppages.\n- **Inventory:** Check critical materials and low stock alerts.\n- **Navigation:** Ask to open any module and I'll provide direct shortcuts!\n\nWhat would you like to check?`,
+          `¡Soy el **Asistente Flash**, tu asistente industrial en NexusPCP!\n\nPuedes conversar conmigo con naturalidad sobre órdenes de producción, estado de la producción, incidencias de planta, inventario y navegación rápida. ¿Qué te gustaría consultar?`
         ),
         actions,
       };
@@ -975,7 +975,7 @@ DIRETRIZES DE ATUAÇÃO:
     if (personality === 'direct') {
       return {
         reply: copy(
-          `Operação em andamento: **${context.ordersTotal ?? 0} OPs** no espelho (${context.delayedOrdersInSample.length} com atraso) e **${context.activeOccurrencesTotal ?? 0} ocorrência(s)** ativas. Digite o número de uma OP, peça o resumo do turno ou selecione um módulo:`,
+          `Operação em andamento: **${context.ordersTotal ?? 0} OPs** no espelho (${context.delayedOrdersInSample.length} com atraso) e **${context.activeOccurrencesTotal ?? 0} ocorrência(s)** ativas. Digite o número de uma OP, consulte o status da produção ou selecione um módulo:`,
           `Operation active: **${context.ordersTotal ?? 0} WOs** in mirror (${context.delayedOrdersInSample.length} delayed) and **${context.activeOccurrencesTotal ?? 0} active occurrence(s)**. Enter a WO number or select a shortcut:`,
           `Operación activa: **${context.ordersTotal ?? 0} OP** en espejo y **${context.activeOccurrencesTotal ?? 0} incidencia(s)** activas. Ingrese una OP o seleccione un módulo:`
         ),

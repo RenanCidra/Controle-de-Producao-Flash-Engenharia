@@ -466,14 +466,24 @@ export default function App() {
             setAssistantOpen(false);
             handleNavigateToSettings('general');
           }}
-          onNavigate={(targetTab, options) => {
+          onNavigate={async (targetTab, options) => {
+            beginCommunicationsTransition();
+            setAssistantOpen(false);
             if (targetTab === 'settings') {
-              setAssistantOpen(false);
               handleNavigateToSettings((options?.subTab as any) || 'general');
+              await loadTabData('settings');
             } else {
-              setAssistantOpen(false);
               setActiveTab(targetTab as ActiveTab);
+              if (targetTab === 'dashboard' || targetTab === 'home') {
+                pendingDashboardDataRef.current = true;
+                pendingDashboardStatsRef.current = true;
+                await loadStats();
+                pendingDashboardStatsRef.current = false;
+              } else {
+                await loadTabData(targetTab as ActiveTab);
+              }
             }
+            finishCommunicationsTransition();
           }}
           onLogout={handleLogout}
         /></Suspense></ModuleErrorBoundary>
