@@ -551,7 +551,7 @@ export const AssistantDirectChat: React.FC<AssistantDirectChatProps> = ({
   };
 
   return (
-    <div className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-[#F1F4F7]">
+    <div data-theme-assistant-chat className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-[#F1F4F7]">
       {/* Header do Contato: Assistente Flash */}
       <header className="relative z-20 flex min-h-[68px] shrink-0 items-center justify-between border-b border-[#DCE3EB] bg-white px-3.5 py-2.5 sm:px-5">
         <div className="flex min-w-0 items-center gap-3">

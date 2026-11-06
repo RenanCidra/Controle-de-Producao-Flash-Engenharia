@@ -723,7 +723,7 @@ export const CommunicationsView: React.FC<{
   const searchResultCount = localPreview ? messages.filter(message => `${message.body} ${message.authorName}`.toLocaleLowerCase().includes(activeSearchQuery.toLocaleLowerCase())).length : searchResults.length;
   const searchResultTotal = localPreview ? messages.length : searchTotal;
 
-  return <section className="relative flex h-[100dvh] w-full min-w-0 flex-col overflow-hidden bg-white text-[#263548]">
+  return <section data-theme-communications-root className="relative flex h-[100dvh] w-full min-w-0 flex-col overflow-hidden bg-white text-[#263548]">
     <div className="flex min-h-0 flex-1 overflow-hidden">
       <nav data-theme-communications-rail aria-label={translateText('Navegação da comunicação')} className="hidden w-16 shrink-0 flex-col items-center border-r border-[#263548] bg-[#111820] py-3 md:flex">
         <button type="button" onClick={onBack} title={translateText('Voltar ao sistema')} aria-label={translateText('Voltar ao sistema')} className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl text-slate-300 transition-colors hover:bg-[#263548] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"><ArrowLeft size={19}/></button>
@@ -749,7 +749,7 @@ export const CommunicationsView: React.FC<{
             {section === 'groups' && canCreateGroups && <button type="button" onClick={() => void openCreateGroup()} title="Criar grupo" aria-label="Criar grupo" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#FFAA00] text-[#151C25] transition hover:bg-amber-300 md:hidden"><Plus size={18}/></button>}
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto">
+        <div data-theme-communications-list className="flex-1 overflow-y-auto">
           {listsLoading && !groups.length && !directs.length ? <LoadingState compact label="Carregando conversas e grupos…" /> : listsError && !groups.length && !directs.length ? <DataUnavailableState compact title="Conversas indisponíveis" description="Não foi possível carregar suas conversas e grupos. Confira a conexão com o sistema e tente novamente." onRetry={() => void retryLists()} retrying={listsLoading} /> : <>
           {listsError && <div role="status" className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50/80 px-4 py-2 text-[11px] text-amber-900"><span>Sem atualização no momento. Mostrando conversas carregadas anteriormente.</span><button type="button" onClick={() => void retryLists()} className="shrink-0 font-semibold underline underline-offset-2">Tentar novamente</button></div>}
           {section === 'groups' ? (
@@ -758,6 +758,8 @@ export const CommunicationsView: React.FC<{
                 <button
                   key={`group-${group.id || index}`}
                   type="button"
+                  data-communications-list-item
+                  data-selected={selectedGroupId === group.id && !assistantActive ? 'true' : 'false'}
                   onClick={() => { pendingLatestScrollRef.current = `group:${group.id}`; setAssistantActive(false); setSelectedGroupId(group.id); setSelectedDirectId(null); setDraftRecipient(null); setMessages([]); setMessagesLoading(true); setMessagesError(false); setReplyingTo(null); lastSeenMessageRef.current = null; if (!localPreview) void api.markCommunicationGroupRead(group.id).then(loadGroups).catch(() => undefined); }}
                   className={`flex w-full items-center gap-3 border-b border-[#F1F4F7] px-4 py-3.5 text-left ${selectedGroupId === group.id && !assistantActive ? 'bg-[#F1F4F7]' : 'hover:bg-slate-50'}`}
                 >
@@ -782,6 +784,8 @@ export const CommunicationsView: React.FC<{
                   <button
                     key={`direct-${directId}`}
                     type="button"
+                    data-communications-list-item
+                    data-selected={selectedDirectId === directId && !assistantActive ? 'true' : 'false'}
                     onClick={() => { pendingLatestScrollRef.current = `direct:${directId}`; setAssistantActive(false); setSelectedGroupId(null); setSelectedDirectId(directId); setDraftRecipient(null); setMessages([]); setMessagesLoading(true); setMessagesError(false); setReplyingTo(null); lastSeenMessageRef.current = null; if (!localPreview) void api.markCommunicationDirectRead(directId).then(loadDirects).catch(() => undefined); }}
                     className={`flex w-full items-center gap-3 border-b border-[#F1F4F7] px-4 py-3.5 text-left ${selectedDirectId === directId && !assistantActive ? 'bg-[#F1F4F7]' : 'hover:bg-slate-50'}`}
                   >

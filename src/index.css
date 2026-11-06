@@ -176,6 +176,40 @@ html[data-theme="dark"] .floating-communication-control:hover { border-color: #8
 html[data-theme="dark"] .floating-assistant-control { background-color: #1f1f1f !important; border-color: #80631f !important; color: #d4a626 !important; box-shadow: 0 3px 10px rgb(0 0 0 / 22%), 0 0 0 1px rgb(126 96 29 / 28%) !important; }
 html[data-theme="dark"] .floating-assistant-control:hover { border-color: #a07d2b !important; color: #e0b83e !important; }
 
+/* Communications dark theme: subdued list selection and separators, including hover states. */
+html[data-theme="dark"] [data-theme-communications-root] { background-color: #1b1b1b !important; color: #ededed; }
+html[data-theme="dark"] [data-theme-communications-root] [data-theme-communications-list] { background-color: #202020 !important; }
+html[data-theme="dark"] [data-theme-communications-root] [data-communications-list-item] {
+  background-color: #202020 !important;
+  border-color: #2d2d2d !important;
+  transition: background-color 140ms ease;
+}
+html[data-theme="dark"] [data-theme-communications-root] [data-communications-list-item]:hover { background-color: #292929 !important; }
+html[data-theme="dark"] [data-theme-communications-root] [data-communications-list-item][data-selected="true"] { background-color: #2b2b2b !important; }
+html[data-theme="dark"] [data-theme-communications-root] [data-communications-list-item]:focus-visible { outline: 2px solid #80631f; outline-offset: -2px; }
+html[data-theme="dark"] [data-theme-communications-root] [class~="border-[#DCE3EB]"],
+html[data-theme="dark"] [data-theme-communications-root] [class~="border-[#E7ECF1]"],
+html[data-theme="dark"] [data-theme-communications-root] [class~="border-[#F1F4F7]"],
+html[data-theme="dark"] [data-theme-communications-root] [class~="border-slate-200"] { border-color: #303030 !important; }
+
+/* Keep the direct assistant chat and its history panel in the same charcoal scale. */
+html[data-theme="dark"] [data-theme-assistant-chat] { background-color: #1b1b1b !important; color: #ededed; }
+html[data-theme="dark"] [data-theme-assistant-chat] > header { background-color: #202020 !important; border-color: #303030 !important; }
+html[data-theme="dark"] [data-theme-assistant-chat] > header h2,
+html[data-theme="dark"] [data-theme-assistant-chat] [role="menu"] button { color: #ededed !important; }
+html[data-theme="dark"] [data-theme-assistant-chat] [role="menu"],
+html[data-theme="dark"] [data-theme-assistant-chat] [role="dialog"] { background-color: #272727 !important; border-color: #383838 !important; color: #ededed !important; }
+html[data-theme="dark"] [data-theme-assistant-chat] [role="menu"] button:hover,
+html[data-theme="dark"] [data-theme-assistant-chat] button[class*="hover:bg-slate-50"]:hover,
+html[data-theme="dark"] [data-theme-assistant-chat] button[class*="hover:bg-slate-100"]:hover { background-color: #333333 !important; color: #ededed !important; }
+html[data-theme="dark"] [data-theme-assistant-chat] [class~="border-[#DCE3EB]"],
+html[data-theme="dark"] [data-theme-assistant-chat] [class~="border-[#E7ECF1]"],
+html[data-theme="dark"] [data-theme-assistant-chat] [class~="border-[#F1F4F7]"] { border-color: #333333 !important; }
+html[data-theme="dark"] [data-theme-assistant-chat] article [class~="bg-white"] { background-color: #272727 !important; color: #ededed !important; }
+html[data-theme="dark"] [data-theme-assistant-chat] article [class~="bg-rose-50"] { background-color: #321f22 !important; border-color: #684047 !important; color: #fecaca !important; }
+html[data-theme="dark"] [data-theme-assistant-chat] [class~="bg-amber-50/70"] { background-color: #332d1e !important; }
+html[data-theme="dark"] [data-theme-assistant-chat] [class~="text-amber-800"] { color: #e8c66b !important; }
+
 @keyframes auth-enter-left {
   from { opacity: 0; transform: translate3d(-18px, 0, 0); }
   to { opacity: 1; transform: translate3d(0, 0, 0); }
