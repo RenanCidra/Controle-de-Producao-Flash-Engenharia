@@ -107,6 +107,7 @@ export class IntegrationClientService {
       const response = await fetch(url, {
         method: 'POST',
         headers,
+        signal: AbortSignal.timeout(8000),
         body: JSON.stringify({
           timestamp: new Date().toISOString(),
           data: payload,

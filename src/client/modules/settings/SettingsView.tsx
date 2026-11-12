@@ -13,7 +13,6 @@ import {
   Globe,
   Clock,
   MapPin,
-  Palette,
   CheckCircle2,
   RefreshCw,
   Server,
@@ -536,21 +535,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
               </div>
 
-              {/* Setting Box 4: Identidade Visual Flash */}
-              <div className="p-4 rounded-xl bg-[#141B24] border border-[#202936] flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-bold text-white">Identidade Visual Flash Engenharia</h4>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Paleta industrial corporativa com destaque âmbar (#FFAA00) e grafite (#151C25)
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="h-4 w-4 rounded-full bg-[#FFAA00] ring-2 ring-white/20"></span>
-                  <span className="text-xs text-slate-300 font-medium">Tema Industrial Ativo</span>
-                </div>
-              </div>
-
-              {/* Setting Box 5: Consulta do espelho */}
+              {/* Setting Box 4: Consulta do espelho */}
               <div className="p-4 rounded-xl bg-[#141B24] border border-[#202936] flex items-center justify-between">
                 <div>
                   <h4 className="text-xs font-bold text-white">Atualização do painel</h4>

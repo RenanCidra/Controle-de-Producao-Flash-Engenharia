@@ -845,6 +845,53 @@ class ApiService {
   public async updateFeedbackStatus(id: number, status: FeedbackStatus) {
     return this.request<FeedbackSubmission>(`/feedback/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
   }
+
+  // Controle de Colaboradores (Planejado - Supervisores e Administradores)
+  public async getEmployees() {
+    return this.request<{ employees: Employee[]; metrics: EmployeeMetrics }>('/employees');
+  }
+
+  public async getEligibleUsersForEmployee() {
+    return this.request<Array<{ id: number; uid: string; loginName: string; name: string; role: string; employeeId: number | null }>>('/employees/eligible-users');
+  }
+
+  public async createEmployee(input: { name: string; employeeCode?: string | null; department?: string | null; status?: string; linkedUserId?: number | null }) {
+    return this.request<Employee>('/employees', { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  public async updateEmployee(id: number, input: { name?: string; employeeCode?: string | null; department?: string | null; status?: string; linkedUserId?: number | null }) {
+    return this.request<Employee>(`/employees/${id}`, { method: 'PUT', body: JSON.stringify(input) });
+  }
+
+  public async deleteEmployee(id: number) {
+    return this.request<{ success: boolean }>(`/employees/${id}`, { method: 'DELETE' });
+  }
+}
+
+export interface Employee {
+  id: number;
+  organizationId: number | null;
+  employeeCode: string | null;
+  name: string;
+  department: string | null;
+  status: 'ACTIVE' | 'INACTIVE';
+  createdAt: string;
+  updatedAt: string;
+  linkedUserId?: number | null;
+  linkedUserUid?: string | null;
+  linkedUserLogin?: string | null;
+  linkedUserRole?: string | null;
+  linkedUserAvatar?: string | null;
+}
+
+export interface EmployeeMetrics {
+  total: number;
+  active: number;
+  inactive: number;
+  linkedAccounts: number;
+  unlinkedOperators: number;
+  departmentsCount: number;
+  departments: string[];
 }
 
 export const api = new ApiService();

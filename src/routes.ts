@@ -14,6 +14,7 @@ import occurrencesRouter from './modules/occurrences/occurrences.routes.ts';
 import copilotRouter from './modules/copilot/copilot.routes.ts';
 import communicationsRouter from './modules/communications/communications.routes.ts';
 import feedbackRouter from './modules/feedback/feedback.routes.ts';
+import employeesRouter from './modules/employees/employees.routes.ts';
 import { db } from './db/index.ts';
 import {
   protheusSalesOrders,
@@ -87,6 +88,7 @@ apiRouter.use('/occurrences', occurrencesRouter);
 apiRouter.use('/copilot', copilotRouter);
 apiRouter.use('/communications', communicationsRouter);
 apiRouter.use('/feedback', feedbackRouter);
+apiRouter.use('/employees', employeesRouter);
 
 apiRouter.get('/stats', requirePermission('production-orders:read'), async (_req: Request, res: Response) => {
   try {

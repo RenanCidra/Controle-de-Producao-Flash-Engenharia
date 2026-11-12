@@ -13,6 +13,7 @@ export const PERMISSIONS = [
   'occurrences:read', 'occurrences:create', 'occurrences:comment', 'occurrences:manage',
   'communications:read', 'communications:write', 'communications:manage',
   'feedback:create', 'feedback:read', 'feedback:manage',
+  'employees:read', 'employees:manage',
 ] as const;
 
 export type Permission = typeof PERMISSIONS[number];

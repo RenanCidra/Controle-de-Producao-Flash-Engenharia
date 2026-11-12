@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useState, useEffect, useCallback, useRef } from 'react';
-import { CheckCircle2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { api, AuthUser, type FeedbackCategory } from './client/api.ts';
 import { Sidebar, ActiveTab } from './client/components/Sidebar.tsx';
@@ -81,6 +81,8 @@ export default function App() {
   const transitionTimerRef = useRef<number | null>(null);
   const pendingDashboardDataRef = useRef(false);
   const pendingDashboardStatsRef = useRef(false);
+  const [transitionSlow, setTransitionSlow] = useState(false);
+  const transitionSlowTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!currentUser) {
@@ -101,25 +103,48 @@ export default function App() {
   }, [currentUser?.uid]);
   const beginSystemEntryTransition = () => {
     if (systemEntryTimerRef.current !== null) window.clearTimeout(systemEntryTimerRef.current);
+    if (transitionSlowTimerRef.current !== null) window.clearTimeout(transitionSlowTimerRef.current);
     systemEntryStartedAtRef.current = Date.now();
+    setTransitionSlow(false);
     setSystemEntryTransitionFading(false);
     setSystemEntryTransitionLoading(true);
+
+    transitionSlowTimerRef.current = window.setTimeout(() => {
+      setTransitionSlow(true);
+    }, 3500);
+
     const minimumVisibleMs = shouldReduceMotion ? 420 : 1150;
     systemEntryTimerRef.current = window.setTimeout(() => {
       setSystemEntryTransitionFading(true);
       systemEntryTimerRef.current = window.setTimeout(() => {
         setSystemEntryTransitionLoading(false);
         systemEntryTimerRef.current = null;
+        if (transitionSlowTimerRef.current !== null) {
+          window.clearTimeout(transitionSlowTimerRef.current);
+          transitionSlowTimerRef.current = null;
+        }
+        setTransitionSlow(false);
       }, 360);
     }, Math.max(0, minimumVisibleMs - (Date.now() - systemEntryStartedAtRef.current)));
   };
   const beginCommunicationsTransition = () => {
     if (transitionTimerRef.current !== null) window.clearTimeout(transitionTimerRef.current);
+    if (transitionSlowTimerRef.current !== null) window.clearTimeout(transitionSlowTimerRef.current);
     transitionStartedAtRef.current = Date.now();
+    setTransitionSlow(false);
     setCommunicationsTransitionFading(false);
     setCommunicationsTransitionLoading(true);
+
+    transitionSlowTimerRef.current = window.setTimeout(() => {
+      setTransitionSlow(true);
+    }, 3500);
   };
   const finishCommunicationsTransition = useCallback(() => {
+    if (transitionSlowTimerRef.current !== null) {
+      window.clearTimeout(transitionSlowTimerRef.current);
+      transitionSlowTimerRef.current = null;
+    }
+    setTransitionSlow(false);
     const minimumVisibleMs = 500;
     const remainingMs = Math.max(0, minimumVisibleMs - (Date.now() - transitionStartedAtRef.current));
     if (transitionTimerRef.current !== null) window.clearTimeout(transitionTimerRef.current);
@@ -128,6 +153,42 @@ export default function App() {
       transitionTimerRef.current = window.setTimeout(() => setCommunicationsTransitionLoading(false), 300);
     }, remainingMs);
   }, []);
+
+  const handleForceLoading = () => {
+    if (transitionTimerRef.current !== null) window.clearTimeout(transitionTimerRef.current);
+    if (systemEntryTimerRef.current !== null) window.clearTimeout(systemEntryTimerRef.current);
+    if (transitionSlowTimerRef.current !== null) window.clearTimeout(transitionSlowTimerRef.current);
+    pendingDashboardDataRef.current = false;
+    pendingDashboardStatsRef.current = false;
+    setTransitionSlow(false);
+    setCommunicationsTransitionFading(true);
+    setSystemEntryTransitionFading(true);
+    window.setTimeout(() => {
+      setCommunicationsTransitionLoading(false);
+      setSystemEntryTransitionLoading(false);
+    }, 150);
+  };
+
+  const handleRetryLoading = async () => {
+    setTransitionSlow(false);
+    if (transitionSlowTimerRef.current !== null) window.clearTimeout(transitionSlowTimerRef.current);
+    transitionSlowTimerRef.current = window.setTimeout(() => {
+      setTransitionSlow(true);
+    }, 4000);
+
+    try {
+      if (activeTab === 'dashboard' || activeTab === 'home') {
+        await loadStats();
+      } else if (activeTab === 'communications') {
+        // communications settles itself
+      } else {
+        await loadTabData(activeTab);
+      }
+      finishCommunicationsTransition();
+    } catch {
+      setTransitionSlow(true);
+    }
+  };
   const navigateToCommunications = () => {
     beginCommunicationsTransition();
     setActiveTab('communications');
@@ -768,6 +829,35 @@ export default function App() {
             <div data-loading-track className="mt-6 h-2 w-64 overflow-hidden rounded-full bg-white/10 sm:w-80">
               <motion.div className="h-full w-2/5 rounded-full bg-gradient-to-r from-[#FFAA00] via-[#FFB82E] to-[#FFAA00] shadow-[0_0_12px_rgba(255,170,0,0.6)]" animate={{ x: ['-110%', '250%'] }} transition={{ duration: 1.25, repeat: Infinity, ease: 'easeInOut' }} />
             </div>
+
+            {transitionSlow && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-6 flex flex-col items-center gap-2.5 rounded-2xl border border-amber-500/30 bg-[#161E28]/95 p-4 shadow-xl text-center backdrop-blur-sm sm:max-w-md"
+              >
+                <p className="text-xs font-medium text-amber-200">
+                  {translateText('O carregamento está demorando mais do que o esperado.')}
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => void handleRetryLoading()}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20 hover:border-white/30"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5 text-amber-400" />
+                    <span>{translateText('Tentar novamente')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleForceLoading}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#FFAA00] px-3.5 py-1.5 text-xs font-bold text-[#151C25] shadow-md transition hover:bg-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                  >
+                    <span>{translateText('Forçar carregamento')}</span>
+                  </button>
+                </div>
+              </motion.div>
+            )}
           </div>
         </div>
       )}
@@ -789,6 +879,35 @@ export default function App() {
             <motion.h2 initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={shouldReduceMotion ? { duration: 0 } : { delay: 0.28, duration: 0.4 }} className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Bem-vindo, <span className="text-[#FFAA00]">{currentUser.name}</span></motion.h2>
             <motion.p initial={shouldReduceMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={shouldReduceMotion ? { duration: 0 } : { delay: 0.42, duration: 0.45 }} className="mt-2 text-sm text-slate-300">Preparando seu ambiente de produção…</motion.p>
             <div data-loading-track className="mt-7 h-1.5 w-56 overflow-hidden rounded-full bg-white/10 sm:w-72"><motion.div className="h-full w-2/5 rounded-full bg-gradient-to-r from-[#FFAA00] via-[#FFD15C] to-[#FFAA00] shadow-[0_0_12px_rgba(255,170,0,0.55)]" animate={shouldReduceMotion ? { x: 0 } : { x: ['-110%', '250%'] }} transition={shouldReduceMotion ? { duration: 0 } : { duration: 1.25, repeat: Infinity, ease: 'easeInOut' }} /></div>
+
+            {transitionSlow && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-6 flex flex-col items-center gap-2.5 rounded-2xl border border-amber-500/30 bg-[#161E28]/95 p-4 shadow-xl text-center backdrop-blur-sm sm:max-w-md"
+              >
+                <p className="text-xs font-medium text-amber-200">
+                  {translateText('O carregamento está demorando mais do que o esperado.')}
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => void handleRetryLoading()}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20 hover:border-white/30"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5 text-amber-400" />
+                    <span>{translateText('Tentar novamente')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleForceLoading}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#FFAA00] px-3.5 py-1.5 text-xs font-bold text-[#151C25] shadow-md transition hover:bg-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                  >
+                    <span>{translateText('Forçar carregamento')}</span>
+                  </button>
+                </div>
+              </motion.div>
+            )}
           </div>
         </div>
       )}

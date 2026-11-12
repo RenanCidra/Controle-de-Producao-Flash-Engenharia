@@ -449,7 +449,9 @@ export const TraceabilityView: React.FC<TraceabilityViewProps> = ({
             <button onClick={() => void loadData(initialNumeroOp || undefined)} className="mt-4 rounded-lg border border-[#CBD5E1] bg-[#F8FAFC] px-4 py-2 text-xs font-semibold text-[#263548]">Tentar novamente</button>
           </div>
         ) : loading && items.length === 0 ? (
-          <div className="p-10 text-center text-sm text-[#64748B]">Carregando dados de produção…</div>
+          <div className="p-12 text-center text-xs text-slate-500">
+            Carregando rastreabilidade…
+          </div>
         ) : items.length === 0 ? (
           <div className="p-12 text-center">
             <div className="h-12 w-12 rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] flex items-center justify-center mx-auto mb-3 text-[#64748B]">

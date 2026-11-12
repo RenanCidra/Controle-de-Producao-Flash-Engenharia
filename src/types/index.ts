@@ -59,6 +59,7 @@ export type AuditEntity =
   | 'PRODUCTION_OCCURRENCE'
   | 'COMMUNICATION'
   | 'FEEDBACK_SUBMISSION'
+  | 'EMPLOYEE'
   | 'SYSTEM';
 
 export interface AuditLogEntry {

@@ -21,7 +21,7 @@ Organização (tenant)
 ```
 
 - **Conta de acesso:** identidade que autentica e recebe permissões. Tem nome de acesso, credencial e estado; pode existir sem cadastro de colaborador. No código atual, a tabela legada `users` ainda armazena essas contas.
-- **Colaborador:** registro de gestão de pessoas. Não concede acesso por si só. A tabela independente `employees` já existe e a conta tem vínculo opcional `employee_id`; a interface de gestão de colaboradores fica para uma etapa futura.
+- **Colaborador:** registro de gestão de pessoas. Não concede acesso por si só. A tabela independente `employees` já existe e a conta tem vínculo opcional `employee_id`. O módulo operacional planejado para controle de colaboradores e seus endpoints REST estão implementados e restritos a supervisores e administradores (`ADMIN` e `SUPERVISOR`).
 - **Organização e planta:** delimitam os dados acessíveis. Toda consulta e operação deve ser limitada ao escopo autorizado no servidor.
 - **Perfil e permissão:** o perfil agrupa permissões legíveis para administração. A API verifica permissões e escopo em cada operação; a interface apenas reflete essas regras.
 - **Sessão:** autenticação de um dispositivo/navegador, com expiração e revogação individual.
@@ -99,6 +99,12 @@ A migração `src/db/migrations/20261029_access_accounts.sql` cria `organization
 - **Aplicado — Assistente Flash ("Mago do PCP"):** copiloto operacional de inteligência artificial industrial integrado ao sistema em `/api/copilot/chat` e `/api/copilot/briefing`. O acesso é estritamente autenticado pelo JWT nativo, herdando o perfil de segurança e o contexto do usuário (`ADMIN`, `SUPERVISOR`, `OPERATOR`, `AUDITOR`). As chamadas do modelo utilizam a biblioteca oficial `@google/genai` (`gemini-3.8-flash`) exclusivamente no backend Node.js, com injeção segura de dados em tempo real (espelho de OPs Protheus, ocorrências ativas, itens críticos de estoque, linhas e lotes de sincronização), garantindo zero exposição de credenciais no navegador e proteção contra alucinações via fallback determinístico industrial de alta precisão.
 - **Pendente — multiorganização:** `login_name` ainda é único globalmente e as contas não têm associação a organizações/plantas. Implementar `organization_memberships` antes de operar várias empresas no mesmo banco.
 - **Aplicado — sessões revogáveis:** access tokens JWT carregam um identificador aleatório de sessão; o servidor guarda apenas seu hash. Logout revoga a sessão do navegador atual, troca de senha revoga as demais sessões e redefinição administrativa revoga todas. Execute `npm run db:migrate:auth-sessions` antes de implantar esta versão. Contas existentes são preservadas; tokens anteriores sem identificador de sessão exigirão novo login. Refresh token rotativo continua pendente.
+- **Aplicado — Controle de Colaboradores (Módulo Planejado para ADMIN e SUPERVISOR):**
+  - Permissões granulares na API: adicionadas `employees:read` e `employees:manage` em `src/middleware/access-control.ts`, concedidas exclusivamente aos perfis `ADMIN` e `SUPERVISOR` (bloqueadas para `OPERATOR` e `AUDITOR`).
+  - Endpoints REST protegidos em `/api/employees`: listagem paginada/filtrada com indicadores de equipe (`GET /api/employees`), consulta individual (`GET /api/employees/:id`), listagem de contas de acesso elegíveis para vínculo (`GET /api/employees/eligible-users`), criação (`POST /api/employees`), atualização cadastral (`PUT /api/employees/:id`) e exclusão (`DELETE /api/employees/:id`).
+  - Trilha de auditoria imutável: todas as mutações no cadastro de colaboradores disparam eventos de auditoria com o ator autenticado e detalhes higienizados.
+  - Interface: item sinalizado como "(planejado)" na barra lateral, renderizado condicionalmente apenas para os perfis autorizados (`ADMIN` e `SUPERVISOR`) e bloqueado para acesso com estado desabilitado (assim como o PMP), aguardando detalhamento de escopo futuro.
+  - Resiliência e recuperação de carregamento: adicionado temporizador de detecção de lentidão (3,5s) com botões para "Tentar novamente" e "Forçar carregamento" para evitar bloqueios visuais na entrada do sistema e transição da Central.
 - **Pendente — autorização granular:** escopo por organização/planta e administração configurável de permissões.
 
 ### Proteções de requisição e formulários (2026-10-29 e 2026-10-30)

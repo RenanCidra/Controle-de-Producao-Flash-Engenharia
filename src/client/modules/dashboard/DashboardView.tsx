@@ -185,7 +185,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ stats, refreshing,
       </section>
 
       <section aria-label="Indicadores da produção filtrada" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {metrics.map(({ label, value, icon: Icon, color }) => <div key={label} className="flex items-center rounded-lg border border-l-4 border-[#DCE3EB] bg-white p-4 shadow-xs" style={{ borderLeftColor: color }}><span className="flex min-w-0 items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white" style={{ backgroundColor: color }}><Icon className="h-5 w-5" /></span><span><span className="block text-[11px] font-medium text-[#64748B]">{translateText(label)}</span><span className="mt-1 block font-mono text-xl font-bold leading-none text-[#263548]">{value === undefined ? '—' : typeof value === 'number' ? formatNumber(value) : value}</span></span></span></div>)}
+        {loading && !data ? (
+          <div className="col-span-full flex h-28 items-center justify-center rounded-lg border border-[#DCE3EB] bg-white text-xs text-slate-500">
+            {translateText('Carregando indicadores…')}
+          </div>
+        ) : (
+          metrics.map(({ label, value, icon: Icon, color }) => <div key={label} className="flex items-center rounded-lg border border-l-4 border-[#DCE3EB] bg-white p-4 shadow-xs" style={{ borderLeftColor: color }}><span className="flex min-w-0 items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white" style={{ backgroundColor: color }}><Icon className="h-5 w-5" /></span><span><span className="block text-[11px] font-medium text-[#64748B]">{translateText(label)}</span><span className="mt-1 block font-mono text-xl font-bold leading-none text-[#263548]">{value === undefined ? '—' : typeof value === 'number' ? formatNumber(value) : value}</span></span></span></div>)
+        )}
       </section>
 
       <section className="overflow-hidden rounded-xl border border-[#DCE3EB] bg-white shadow-xs">

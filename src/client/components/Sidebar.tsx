@@ -7,6 +7,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   X,
+  Users,
   LucideIcon,
 } from 'lucide-react';
 import type { AuthUser, FeedbackCategory } from '../api.ts';
@@ -59,10 +60,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggleCollapse,
   onCloseMobile,
 }) => {
+  const isSupervisorOrAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPERVISOR';
+
   const navItems: { id?: ActiveTab; label: string; icon: LucideIcon; badge?: string; planned?: boolean }[] = [
     { id: 'dashboard', label: 'Painel Geral', icon: Home },
     { id: 'traceability', label: 'Pedidos e OPs', icon: GitBranch },
     { id: 'occurrences', label: 'Gestão de ocorrências', icon: ClipboardList },
+    ...(isSupervisorOrAdmin
+      ? [{ label: 'Colaboradores', icon: Users, badge: 'Planejado', planned: true }]
+      : []),
     { label: 'PMP · Mestre da Produção', icon: CalendarDays, badge: 'Planejado', planned: true },
   ];
 
@@ -94,10 +100,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               data-sidebar-nav-item="true"
               data-active={isActive ? 'true' : 'false'}
               data-planned={item.planned ? 'true' : 'false'}
-              disabled={item.planned}
-              title={item.planned ? `${item.label} · planejado para uma próxima etapa` : item.label}
+              disabled={item.planned && !item.id}
+              title={item.planned && !item.id ? `${item.label} · planejado para uma próxima etapa` : item.label}
               onClick={() => { if (item.id) setActiveTab(item.id); onCloseMobile(); }}
-              className={`w-full flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-lg text-xs font-medium transition-all group ${item.planned ? 'cursor-not-allowed text-slate-500 border border-transparent' : ''} ${
+              className={`w-full flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-lg text-xs font-medium transition-all group ${item.planned && !item.id ? 'cursor-not-allowed text-slate-500 border border-transparent' : ''} ${
                 isActive
                   ? 'bg-[#2A2316] text-[#FFAA00] border border-[#FFAA00]/70 shadow-sm font-semibold'
                   : 'text-slate-300 hover:text-white hover:bg-[#1C2532] border border-transparent'

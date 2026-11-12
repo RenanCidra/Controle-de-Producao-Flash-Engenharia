@@ -7,6 +7,7 @@ import { getAppLanguage, getIntlLocale, translateText } from '../i18n/index.ts';
 import { UserAccountMenu } from './UserAccountMenu.tsx';
 import { AudioRecorderButton } from './AudioRecorderButton.tsx';
 import { EmojiPicker } from './EmojiPicker.tsx';
+import { SendPlaneIcon } from './SendPlaneIcon.tsx';
 
 export type PersonalityMode = 'direct' | 'casual' | 'formal';
 export type TypingDisplayMode = 'realtime' | 'instant';
@@ -440,76 +441,36 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
     setLoading(true);
 
     try {
-      const response = audioBlob
-        ? await api.sendCopilotAudio(audioBlob, history, getAppLanguage(), personality)
-        : await api.sendCopilotMessage(text, history, getAppLanguage(), personality);
       const assistantMessageId = `assistant-${Date.now()}`;
-      const fullText = response.reply;
-
-      if (displayMode === 'realtime') {
-        // Respostas curtas (ex: saudações, status de OP, navegações) ou do modo rápido exibem instantaneamente sem delay!
-        if (fullText.length <= 160 || response.mode === 'data_fallback') {
-          setMessages((previous) => [...previous, {
+      if (!audioBlob) {
+        const response = await api.sendCopilotMessage(text, history, getAppLanguage(), personality);
+        setMessages((previous) => [
+          ...previous,
+          {
+            id: assistantMessageId,
+            sender: 'assistant',
+            text: response.reply,
+            timestamp: currentTime(),
+            mode: response.mode,
+            actions: response.actions,
+          },
+        ]);
+        setLoading(false);
+      } else {
+        const response = await api.sendCopilotAudio(audioBlob, history, getAppLanguage(), personality);
+        const fullText = response.reply;
+        setMessages((previous) => [
+          ...previous,
+          {
             id: assistantMessageId,
             sender: 'assistant',
             text: fullText,
             timestamp: currentTime(),
             mode: response.mode,
             actions: response.actions,
-          }]);
-          setLoading(false);
-        } else {
-          // Para respostas mais longas, revelação ultra-rápida e fluida (~150-200ms no total, sem travar o usuário)
-          setMessages((previous) => [...previous, {
-            id: assistantMessageId,
-            sender: 'assistant',
-            text: '',
-            timestamp: currentTime(),
-            mode: response.mode,
-            actions: response.actions,
-          }]);
-          setLoading(false);
-          setStreamingMessageId(assistantMessageId);
-
-          await new Promise<void>((resolve) => {
-            let currentIndex = 0;
-            const totalLength = fullText.length;
-            const stepSize = Math.max(18, Math.ceil(totalLength / 14));
-            const interval = setInterval(() => {
-              currentIndex = Math.min(totalLength, currentIndex + stepSize);
-              const currentSlice = fullText.slice(0, currentIndex);
-              setMessages((previous) =>
-                previous.map((m) => (m.id === assistantMessageId ? { ...m, text: currentSlice } : m))
-              );
-              messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-
-              if (currentIndex >= totalLength) {
-                clearInterval(interval);
-                streamingAbortRef.current = null;
-                setStreamingMessageId(null);
-                resolve();
-              }
-            }, 10);
-
-            streamingAbortRef.current = () => {
-              clearInterval(interval);
-              setMessages((previous) =>
-                previous.map((m) => (m.id === assistantMessageId ? { ...m, text: fullText } : m))
-              );
-              setStreamingMessageId(null);
-              resolve();
-            };
-          });
-        }
-      } else {
-        setMessages((previous) => [...previous, {
-          id: assistantMessageId,
-          sender: 'assistant',
-          text: fullText,
-          timestamp: currentTime(),
-          mode: response.mode,
-          actions: response.actions,
-        }]);
+          },
+        ]);
+        setLoading(false);
       }
     } catch (error: any) {
       setMessages((previous) => [...previous, {
@@ -971,7 +932,7 @@ export const FlashAssistantWidget: React.FC<FlashAssistantWidgetProps> = ({
                     aria-label={loading ? t('Enviando mensagem') : t('Enviar mensagem')}
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#FFAA00] text-[#151C25] transition-colors hover:bg-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50"
                   >
-                    <Send size={17} />
+                    <SendPlaneIcon size={18} />
                   </button>
                 ) : (
                   <AudioRecorderButton

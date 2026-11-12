@@ -375,8 +375,8 @@ DIRETRIZES DE ATUAÇÃO:
         const candidateModels = [
           process.env.GEMINI_MODEL?.trim(),
           'gemini-3.8-flash',
-          'gemini-flash-latest',
           'gemini-3.1-flash-lite',
+          'gemini-flash-latest',
         ].filter((m): m is string => Boolean(m && !m.includes('gemini-2.5') && !m.includes('gemini-1.5') && !m.includes('gemini-2.0')));
 
         const callGemini = async (): Promise<string | null> => {
@@ -397,11 +397,11 @@ DIRETRIZES DE ATUAÇÃO:
                   resolve(null);
                 }, remainingMs);
               });
-              const isGemini38 = model.includes('3.8') || model.includes('flash-latest');
+              const supportsThinking = model.includes('3.8') || model.includes('4-argon');
               const config: any = {
                 systemInstruction,
                 abortSignal: abortController.signal,
-                ...(isGemini38 ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {}),
+                ...(supportsThinking ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {}),
               };
 
               const generatePromise = (async () => {
@@ -427,7 +427,12 @@ DIRETRIZES DE ATUAÇÃO:
               if (result) return result;
               if (timedOut) break;
             } catch (err: any) {
-              console.warn(`Tentativa Gemini com modelo '${model}' falhou:`, err?.message || err);
+              const is503 = /503|UNAVAILABLE|high demand|overloaded/i.test(String(err?.message || err || ''));
+              if (is503) {
+                console.info(`[Assistente Flash] Modelo '${model}' com alta demanda temporária (503). Alternando automaticamente para contingência...`);
+              } else {
+                console.warn(`Tentativa Gemini com modelo '${model}' falhou:`, err?.message || err);
+              }
             } finally {
               if (timeoutId) clearTimeout(timeoutId);
             }
@@ -445,6 +450,143 @@ DIRETRIZES DE ATUAÇÃO:
     }
 
     return { ...this.generateDataFallback(message, context, specificOp, language, personality), mode: 'data_fallback' };
+  }
+
+  public async *chatStream(options: CopilotChatOptions): AsyncGenerator<{ token?: string; done?: boolean; actions?: CopilotAction[]; mode: 'gemini' | 'data_fallback'; fullText?: string }> {
+    const message = options.message.trim();
+    const language = options.language || 'pt-BR';
+    const personality = options.personality || 'casual';
+
+    const aiClient = this.getAI();
+    const opNumber = this.extractOpNumber(message);
+    const [context, specificOp] = await Promise.all([
+      this.getOperationalContext(),
+      opNumber ? this.searchSpecificOpData(opNumber) : Promise.resolve(null),
+    ]);
+
+    if (this.isAuthorshipQuestion(message)) {
+      const reply = this.authorshipReply(language, personality);
+      const words = reply.split(/(\s+)/);
+      for (const word of words) {
+        if (word) yield { token: word, mode: 'data_fallback' };
+        await new Promise((r) => setTimeout(r, 14));
+      }
+      yield { done: true, actions: [], fullText: reply, mode: 'data_fallback' };
+      return;
+    }
+
+    const hasOperationalData = Object.values(context.sources).some(Boolean);
+    if (!hasOperationalData) {
+      const fallback = this.generateDataFallback(message, context, specificOp, language, personality);
+      const words = fallback.reply.split(/(\s+)/);
+      for (const word of words) {
+        if (word) yield { token: word, mode: 'data_fallback' };
+        await new Promise((r) => setTimeout(r, 14));
+      }
+      yield { done: true, actions: fallback.actions, fullText: fallback.reply, mode: 'data_fallback' };
+      return;
+    }
+
+    if (aiClient) {
+      try {
+        const personalityInstruction = {
+          direct: `DIRETRIZ DE PERSONALIDADE - DIRETO E OBJETIVO: Seja conciso, pragmático e direto aos fatos e números industriais.`,
+          casual: `DIRETRIZ DE PERSONALIDADE - DESPOJADO E DESCONTRAÍDO: Seja amigável, ágil e prestativo no chão de fábrica.`,
+          formal: `DIRETRIZ DE PERSONALIDADE - FORMAL E CORPORATIVO: Adote linguagem executiva, rigorosa e metódica.`,
+        }[personality];
+
+        const systemInstruction = `Você é o Assistente Flash, assistente inteligente de chão de fábrica e PCP da Flash Engenharia no sistema NexusPCP.
+${personalityInstruction}
+- Autoria: ${appAuthorship.name} idealizou e desenvolveu este sistema.
+- Seja ágil, claro e objetivo.
+- Atalhos úteis: [[ACTION:NAVIGATE:dashboard]], [[ACTION:NAVIGATE:traceability]], [[ACTION:NAVIGATE:occurrences]], [[ACTION:NAVIGATE:production-orders]].`;
+
+        const compactSnapshot = {
+          sources: context.sources,
+          personality,
+          orders: {
+            total: context.ordersTotal,
+            delayedTotal: context.delayedOrdersInSample.length,
+          },
+          occurrences: { total: context.activeOccurrencesTotal },
+          inventory: { criticalTotal: context.criticalInventoryTotal },
+          lines: context.lines.slice(0, 4).map((l: any) => ({ nome: l.name, status: l.status })),
+          lastSync: context.lastSync ? { lote: context.lastSync.batchCode, status: context.lastSync.status } : null,
+          specificOrder: specificOp,
+        };
+
+        const history = (options.history || []).slice(-6).map((turn) => ({
+          role: turn.role,
+          parts: [{ text: turn.text.slice(0, 1000) }],
+        }));
+        const currentTurn = `SNAPSHOT RESUMIDO:\n${JSON.stringify(compactSnapshot)}\n\nPERGUNTA:\n${message}`;
+
+        const candidateModels = [
+          process.env.GEMINI_MODEL?.trim(),
+          'gemini-3.8-flash',
+          'gemini-3.1-flash-lite',
+          'gemini-flash-latest',
+        ].filter((m): m is string => Boolean(m && !m.includes('gemini-2.5') && !m.includes('gemini-1.5') && !m.includes('gemini-2.0')));
+
+        let streamedAny = false;
+
+        for (const model of candidateModels) {
+          let modelAccumulatedText = '';
+          try {
+            const supportsThinking = model.includes('3.8') || model.includes('4-argon');
+            const config: any = {
+              systemInstruction,
+              ...(supportsThinking ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {}),
+            };
+
+            const responseStream = await aiClient.models.generateContentStream({
+              model,
+              contents: [
+                ...history,
+                { role: 'user', parts: [{ text: currentTurn }] },
+              ],
+              config,
+            });
+
+            for await (const chunk of responseStream) {
+              const text = chunk.text;
+              if (text) {
+                modelAccumulatedText += text;
+                streamedAny = true;
+                yield { token: text, mode: 'gemini' };
+              }
+            }
+
+            if (modelAccumulatedText.trim()) {
+              const parsed = this.parseActions(modelAccumulatedText, undefined, language);
+              yield { done: true, actions: parsed.actions, fullText: parsed.reply, mode: 'gemini' };
+              return;
+            }
+          } catch (modelErr: any) {
+            const is503 = /503|UNAVAILABLE|high demand|overloaded/i.test(String(modelErr?.message || modelErr || ''));
+            if (is503) {
+              console.info(`[Assistente Flash] Modelo '${model}' com alta demanda temporária (503). Alternando automaticamente para contingência...`);
+            } else {
+              console.warn(`[Assistente Flash] Tentativa streaming com '${model}' falhou:`, modelErr?.message || modelErr);
+            }
+            if (streamedAny) {
+              // Já transmitiu parte do conteúdo; encerra para não duplicar texto
+              break;
+            }
+          }
+        }
+      } catch (streamErr) {
+        console.error('Falha no streaming Gemini do Assistente Flash:', streamErr);
+      }
+    }
+
+    const fallback = this.generateDataFallback(message, context, specificOp, language, personality);
+    const words = fallback.reply.split(/(\s+)/);
+    for (const word of words) {
+      if (word) yield { token: word, mode: 'data_fallback' };
+      await new Promise((r) => setTimeout(r, 14));
+    }
+    yield { done: true, actions: fallback.actions, fullText: fallback.reply, mode: 'data_fallback' };
   }
 
   public async getBriefing(user: { name: string; role: UserRole }): Promise<CopilotChatResponse> {

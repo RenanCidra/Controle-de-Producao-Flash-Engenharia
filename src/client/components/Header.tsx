@@ -7,8 +7,6 @@ import {
   RefreshCw,
   ShieldCheck,
   Lock,
-  PanelLeftClose,
-  PanelLeftOpen,
 } from 'lucide-react';
 import { AuthUser } from '../api.ts';
 import { getIntlLocale } from '../i18n/index.ts';
@@ -58,12 +56,11 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         <button
           onClick={onToggleSidebar}
-          className="-ml-1 rounded-md p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
-          title={sidebarCollapsed ? 'Expandir menu lateral' : 'Recolher/abrir menu lateral'}
-          aria-label="Abrir ou recolher menu lateral"
+          className="-ml-1 rounded-md p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 md:hidden"
+          title="Abrir menu lateral"
+          aria-label="Abrir menu lateral"
         >
-          <Menu className="h-5 w-5 md:hidden" />
-          {sidebarCollapsed ? <PanelLeftOpen className="hidden h-5 w-5 md:block" /> : <PanelLeftClose className="hidden h-5 w-5 md:block" />}
+          <Menu className="h-5 w-5" />
         </button>
 
         <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">

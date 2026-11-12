@@ -8,6 +8,7 @@ import { translateText } from '../../i18n/index.ts';
 import { DataUnavailableState, LoadingState } from '../../components/DataStatus.tsx';
 import { AnimatePresence, motion } from 'motion/react';
 import { AssistantDirectChat } from './AssistantDirectChat.tsx';
+import { SendPlaneIcon } from '../../components/SendPlaneIcon.tsx';
 
 type Group = { id: number; name: string; sector: string; createdAt: string; unreadCount: number; canDelete?: boolean; lastMessage: Pick<Message, 'id' | 'body' | 'authorUid' | 'authorName' | 'createdAt' | 'deletedAt'> | null };
 type MessageReaction = { emoji: string; count: number; reactedByMe: boolean };
@@ -94,8 +95,6 @@ export const CommunicationsView: React.FC<{
   const [assistantPrompt, setAssistantPrompt] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const messagesRef = useRef<Message[]>([]);
-  const messagesRequestsInFlightRef = useRef(new Set<string>());
-  const listsRequestInFlightRef = useRef(false);
   const pendingReactionsRef = useRef(new Set<string>());
   const previewAudioUrlsRef = useRef<string[]>([]);
   const [body, setBody] = useState('');
@@ -233,14 +232,12 @@ export const CommunicationsView: React.FC<{
     }
   }, [currentUser, localPreview]);
   const refreshLists = useCallback(async () => {
-    if (listsRequestInFlightRef.current) return null;
-    listsRequestInFlightRef.current = true;
     try {
       const results = await Promise.all([loadGroups(), loadDirects()]);
       setListsError(results.some(result => !result));
       return results;
-    } finally {
-      listsRequestInFlightRef.current = false;
+    } catch {
+      return null;
     }
   }, [loadGroups, loadDirects]);
   const loadDirectory = async () => {
@@ -256,8 +253,6 @@ export const CommunicationsView: React.FC<{
   const loadMessages = useCallback(async () => {
     const conversationKey = selectedGroupId !== null ? `group:${selectedGroupId}` : selectedDirectId !== null ? `direct:${selectedDirectId}` : null;
     if (!conversationKey) { setMessages([]); loadedConversationRef.current = null; return; }
-    if (messagesRequestsInFlightRef.current.has(conversationKey)) return;
-    messagesRequestsInFlightRef.current.add(conversationKey);
     const initial = loadedConversationRef.current !== conversationKey;
     try {
       if (initial) { setMessagesLoading(true); setMessagesError(false); }
@@ -286,8 +281,10 @@ export const CommunicationsView: React.FC<{
         messageChangesCursorRef.current = pollStartedAt;
         const latest = loaded.at(-1);
         const key = `group:${selectedGroupId}`;
-        if (latest && lastSeenMessageRef.current?.conversationKey === key && latest.id !== lastSeenMessageRef.current.messageId && latest.authorUid !== api.getUser()?.uid && document.visibilityState === 'visible') {
-          void api.markCommunicationGroupRead(selectedGroupId).then(loadGroups).catch(() => undefined);
+        if (latest && lastSeenMessageRef.current?.conversationKey === key && latest.id !== lastSeenMessageRef.current.messageId && latest.authorUid !== api.getUser()?.uid) {
+          if (document.visibilityState === 'visible') {
+            void api.markCommunicationGroupRead(selectedGroupId).then(loadGroups).catch(() => undefined);
+          }
         }
         if (latest) lastSeenMessageRef.current = { conversationKey: key, messageId: latest.id };
       } else if (selectedDirectId !== null) {
@@ -300,8 +297,10 @@ export const CommunicationsView: React.FC<{
         messageChangesCursorRef.current = pollStartedAt;
         const latest = loaded.at(-1);
         const key = `direct:${selectedDirectId}`;
-        if (latest && lastSeenMessageRef.current?.conversationKey === key && latest.id !== lastSeenMessageRef.current.messageId && latest.authorUid !== api.getUser()?.uid && document.visibilityState === 'visible') {
-          void api.markCommunicationDirectRead(selectedDirectId).then(loadDirects).catch(() => undefined);
+        if (latest && lastSeenMessageRef.current?.conversationKey === key && latest.id !== lastSeenMessageRef.current.messageId && latest.authorUid !== api.getUser()?.uid) {
+          if (document.visibilityState === 'visible') {
+            void api.markCommunicationDirectRead(selectedDirectId).then(loadDirects).catch(() => undefined);
+          }
         }
         if (latest) lastSeenMessageRef.current = { conversationKey: key, messageId: latest.id };
       } else {
@@ -312,7 +311,6 @@ export const CommunicationsView: React.FC<{
       if (initial) setMessages([]);
       setMessagesError(true);
     } finally {
-      messagesRequestsInFlightRef.current.delete(conversationKey);
       if (activeConversationRef.current === conversationKey) setMessagesLoading(false);
     }
   }, [selectedGroupId, selectedDirectId, loadGroups, loadDirects, currentUser, localPreview]);
@@ -408,15 +406,15 @@ export const CommunicationsView: React.FC<{
   }, [loadMessages, localPreview]);
 
   const visibleGroups = useMemo(
-    () => (Array.isArray(groups) ? groups : []).filter(group => group && `${group.name || ''} ${group.sector || ''} ${group.lastMessage?.body || ''}`.toLowerCase().includes((search || '').toLowerCase())),
+    () => (Array.isArray(groups) ? groups : []).filter(group => group && `${group.name || ''} ${group.sector || ''} ${group.lastMessage?.body || ''}`.toLowerCase().includes(search.toLowerCase())),
     [groups, search],
   );
   const visibleDirects = useMemo(
-    () => (Array.isArray(directs) ? directs : []).filter(conversation => conversation && `${conversation.name || ''} ${conversation.department || ''} ${conversation.lastMessage?.body || ''}`.toLowerCase().includes((search || '').toLowerCase())),
+    () => (Array.isArray(directs) ? directs : []).filter(conversation => conversation && `${conversation.name || ''} ${conversation.department || ''} ${conversation.lastMessage?.body || ''}`.toLowerCase().includes(search.toLowerCase())),
     [directs, search],
   );
   const visibleUsers = useMemo(
-    () => (Array.isArray(directory) ? directory : []).filter(user => user && `${user.name || ''} ${user.department || ''}`.toLowerCase().includes((userSearch || '').toLowerCase())),
+    () => (Array.isArray(directory) ? directory : []).filter(user => user && `${user.name || ''} ${user.department || ''}`.toLowerCase().includes(userSearch.toLowerCase())),
     [directory, userSearch],
   );
   const retryLists = async () => {
@@ -739,8 +737,10 @@ export const CommunicationsView: React.FC<{
             <img src="/assets/flash-brand.svg" alt="Flash Engenharia" className="h-8 w-[132px] shrink-0 object-contain object-left" />
             {section === 'groups' && <span className="truncate border-l border-[#DCE3EB] pl-2.5 text-xs font-medium text-slate-500">{translateText('Grupos')}</span>}
           </div>
-          {section === 'groups' && canCreateGroups && <button type="button" onClick={() => void openCreateGroup()} title="Criar grupo" aria-label="Criar grupo" className="rounded-full bg-[#FFAA00] p-2 text-[#151C25] hover:bg-amber-300"><Plus size={18}/></button>}
-          {section === 'conversations' && <button type="button" onClick={() => void openNewConversation()} title="Adicionar conversa" aria-label="Adicionar conversa" className="rounded-full bg-[#FFAA00] p-2 text-[#151C25] transition hover:bg-amber-300"><MessageSquarePlus size={18}/></button>}
+          <div className="flex items-center gap-1.5">
+            {section === 'groups' && canCreateGroups && <button type="button" onClick={() => void openCreateGroup()} title="Criar grupo" aria-label="Criar grupo" className="rounded-full bg-[#FFAA00] p-2 text-[#151C25] hover:bg-amber-300"><Plus size={18}/></button>}
+            {section === 'conversations' && <button type="button" onClick={() => void openNewConversation()} title="Adicionar conversa" aria-label="Adicionar conversa" className="rounded-full bg-[#FFAA00] p-2 text-[#151C25] transition hover:bg-amber-300"><MessageSquarePlus size={18}/></button>}
+          </div>
         </header>
         <div data-theme-communications-search-region className="shrink-0 border-b border-[#E7ECF1] p-3 md:p-3">
           <div className="flex items-center gap-2">
@@ -750,7 +750,7 @@ export const CommunicationsView: React.FC<{
           </div>
         </div>
         <div data-theme-communications-list className="flex-1 overflow-y-auto">
-          {listsLoading && !groups.length && !directs.length ? <LoadingState compact label="Carregando conversas e grupos…" /> : listsError && !groups.length && !directs.length ? <DataUnavailableState compact title="Conversas indisponíveis" description="Não foi possível carregar suas conversas e grupos. Confira a conexão com o sistema e tente novamente." onRetry={() => void retryLists()} retrying={listsLoading} /> : <>
+          {listsLoading && !groups.length && !directs.length ? <LoadingState compact label={translateText('Carregando conversas e grupos…')} /> : listsError && !groups.length && !directs.length ? <DataUnavailableState compact title="Conversas indisponíveis" description="Não foi possível carregar suas conversas e grupos. Confira a conexão com o sistema e tente novamente." onRetry={() => void retryLists()} retrying={listsLoading} /> : <>
           {listsError && <div role="status" className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50/80 px-4 py-2 text-[11px] text-amber-900"><span>Sem atualização no momento. Mostrando conversas carregadas anteriormente.</span><button type="button" onClick={() => void retryLists()} className="shrink-0 font-semibold underline underline-offset-2">Tentar novamente</button></div>}
           {section === 'groups' ? (
             visibleGroups.length ? (
@@ -824,11 +824,11 @@ export const CommunicationsView: React.FC<{
           />
         ) : selectedGroup ? <>
           <GroupConversationHeader name={selectedGroup.name} sector={selectedGroup.sector} searchQuery={conversationSearchQuery} onSearchChange={setConversationSearchQuery} matchCount={activeSearchQuery ? searchResultCount : null} totalMessages={activeSearchQuery ? searchResultTotal : messages.length} canDelete={selectedGroup.canDelete ?? false} onClear={() => setConversationAction('clear')} onDeleteGroup={() => setConversationAction('delete-group')} onInfo={() => void openConversationInfo()} onBack={clearSelection}/>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{messagesLoading && !messages.length ? <LoadingState compact label="Carregando mensagens…" /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={displayedMessages} searchQuery={conversationSearchQuery} loadingSearch={displayedSearchLoading} selectedMessageId={messageDetails?.id ?? null} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={displayedHasOlder} loadingOlder={loadingOlder} groupId={selectedGroupId} conversationKey={`group:${selectedGroupId}`} currentUserUid={currentUser?.uid || api.getUser()?.uid || 'unknown'} onAskAssistant={(prompt) => selectAssistant(prompt)} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={message => { setProfileUser(null); setConversationInfoOpen(false); setMessageDetails(message); }} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}</div>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{messagesLoading && !messages.length ? <LoadingState compact label={translateText('Carregando mensagens…')} /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={displayedMessages} searchQuery={conversationSearchQuery} loadingSearch={displayedSearchLoading} selectedMessageId={messageDetails?.id ?? null} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={displayedHasOlder} loadingOlder={loadingOlder} groupId={selectedGroupId} conversationKey={`group:${selectedGroupId}`} currentUserUid={currentUser?.uid || api.getUser()?.uid || 'unknown'} onAskAssistant={(prompt) => selectAssistant(prompt)} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={message => { setProfileUser(null); setConversationInfoOpen(false); setMessageDetails(message); }} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}</div>
           <MessageComposer body={body} setBody={setBody} send={send} sending={sendingMessage} onSendAudio={sendAudioMessage} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
         </> : directTitle ? <>
           <DirectConversationHeader name={directTitle} avatarUrl={selectedDirect?.avatarUrl || draftRecipient?.avatarUrl} subtitle={draftRecipient ? translateText('Nova conversa · será criada ao enviar a primeira mensagem') : directDepartment || translateText('Conversa direta')} searchQuery={conversationSearchQuery} onSearchChange={setConversationSearchQuery} matchCount={activeSearchQuery ? searchResultCount : null} totalMessages={activeSearchQuery ? searchResultTotal : messages.length} canClear={selectedDirectId !== null} onInfo={() => void openConversationInfo()} onClear={() => setConversationAction('clear')} onBack={clearSelection}/>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{messagesLoading && !messages.length ? <LoadingState compact label="Carregando mensagens…" /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={displayedMessages} searchQuery={conversationSearchQuery} loadingSearch={displayedSearchLoading} selectedMessageId={messageDetails?.id ?? null} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={displayedHasOlder} loadingOlder={loadingOlder} directId={selectedDirectId} conversationKey={`direct:${selectedDirectId}`} currentUserUid={currentUser?.uid || api.getUser()?.uid || 'unknown'} onAskAssistant={(prompt) => selectAssistant(prompt)} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={message => { setProfileUser(null); setConversationInfoOpen(false); setMessageDetails(message); }} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}</div>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{messagesLoading && !messages.length ? <LoadingState compact label={translateText('Carregando mensagens…')} /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={displayedMessages} searchQuery={conversationSearchQuery} loadingSearch={displayedSearchLoading} selectedMessageId={messageDetails?.id ?? null} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={displayedHasOlder} loadingOlder={loadingOlder} directId={selectedDirectId} conversationKey={`direct:${selectedDirectId}`} currentUserUid={currentUser?.uid || api.getUser()?.uid || 'unknown'} onAskAssistant={(prompt) => selectAssistant(prompt)} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={message => { setProfileUser(null); setConversationInfoOpen(false); setMessageDetails(message); }} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}</div>
           <MessageComposer body={body} setBody={setBody} send={send} sending={sendingMessage} onSendAudio={sendAudioMessage} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
         </> : <div className="m-auto max-w-md px-6 text-center"><div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white text-[#916B19] shadow-sm"><MessageCircle size={28}/></div><h2 className="text-lg font-semibold text-[#263548]">Sua comunicação de produção</h2><p className="mt-2 text-sm leading-6 text-slate-500">Selecione uma conversa ou grupo. As mensagens ficam visíveis apenas para seus participantes.</p></div>}
         {error && <p role="alert" className="border-t border-slate-200/70 bg-transparent px-4 py-1.5 text-[11px] text-slate-500">{error}</p>}
@@ -1211,7 +1211,7 @@ const MessageComposer: React.FC<{ body: string; setBody: (value: string) => void
   <div data-chat-composer-pill className="flex min-h-12 w-full items-center gap-1.5 rounded-full border border-[#D0D5DC] bg-white px-2 shadow-sm transition-colors focus-within:border-[#B8891F] focus-within:ring-2 focus-within:ring-amber-400/20">
     <EmojiPicker buttonClassName="!border-transparent !bg-transparent hover:!border-transparent hover:!bg-[#F1F4F7]" onSelect={emoji => setBody(`${body}${emoji}`.slice(0, 4000))}/>
     <textarea aria-label={translateText('Digite uma mensagem')} value={body} onChange={event => setBody(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} maxLength={4000} rows={1} placeholder={translateText('Digite uma mensagem')} className="max-h-28 min-h-10 min-w-0 flex-1 resize-none overflow-y-auto border-0 bg-transparent px-1 py-2.5 text-sm leading-5 text-[#263548] outline-none placeholder:text-slate-500 focus:ring-0"/>
-    {body.trim() ? <button type="submit" disabled={sending} title={sending ? translateText('Enviando mensagem…') : translateText('Enviar mensagem')} aria-label={sending ? translateText('Enviando mensagem') : translateText('Enviar mensagem')} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#FFAA00] text-[#151C25] transition-colors hover:bg-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50"><Send size={17}/></button>
+    {body.trim() ? <button type="submit" disabled={sending} title={sending ? translateText('Enviando mensagem…') : translateText('Enviar mensagem')} aria-label={sending ? translateText('Enviando mensagem') : translateText('Enviar mensagem')} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#FFAA00] text-[#151C25] transition-colors hover:bg-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50"><SendPlaneIcon size={18}/></button>
       : <AudioRecorderButton onRecorded={onSendAudio} disabled={sending} label={translateText('Gravar áudio')} buttonClassName="!border-transparent !bg-transparent hover:!border-transparent hover:!bg-[#F1F4F7]"/>}
   </div>
 </form>;
