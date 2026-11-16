@@ -1,0 +1,33 @@
+{
+  "id": "/",
+  "name": "NexusPCP Flash Engenharia",
+  "short_name": "NexusPCP",
+  "description": "Controle de produção industrial com ocorrências inteligentes, rastreabilidade Protheus e Central de Comunicação.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#151C25",
+  "background_color": "#151C25",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

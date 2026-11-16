@@ -15,6 +15,7 @@ import copilotRouter from './modules/copilot/copilot.routes.ts';
 import communicationsRouter from './modules/communications/communications.routes.ts';
 import feedbackRouter from './modules/feedback/feedback.routes.ts';
 import employeesRouter from './modules/employees/employees.routes.ts';
+import notificationsRouter from './modules/notifications/notifications.routes.ts';
 import { db } from './db/index.ts';
 import {
   protheusSalesOrders,
@@ -31,6 +32,14 @@ import { auditHttpMiddleware } from './middleware/audit.middleware.ts';
 import { authenticateToken } from './middleware/auth.middleware.ts';
 import { mutationRateLimit, validateRequestBody } from './middleware/request-protection.ts';
 import { requirePermission } from './middleware/access-control.ts';
+import {
+  OCCURRENCE_SECTORS,
+  OCCURRENCE_TYPES,
+  type OccurrenceSector,
+  type OccurrenceType,
+} from './modules/occurrences/occurrence-engine.ts';
+import { evaluateMirrorFreshness } from './modules/occurrences/occurrence-stats.ts';
+import { OccurrencesService } from './modules/occurrences/occurrences.service.ts';
 
 const apiRouter = Router();
 
@@ -89,6 +98,7 @@ apiRouter.use('/copilot', copilotRouter);
 apiRouter.use('/communications', communicationsRouter);
 apiRouter.use('/feedback', feedbackRouter);
 apiRouter.use('/employees', employeesRouter);
+apiRouter.use('/notifications', notificationsRouter);
 
 apiRouter.get('/stats', requirePermission('production-orders:read'), async (_req: Request, res: Response) => {
   try {
@@ -127,6 +137,7 @@ apiRouter.get('/stats', requirePermission('production-orders:read'), async (_req
       }).from(organizations).limit(1),
     ]);
 
+    const latestBatch = latestImport[0] || null;
     res.json({
       totalProtheusPv: Number(protheusPvCount[0]?.count || 0),
       totalProtheusOp: Number(protheusOpCount[0]?.count || 0),
@@ -135,12 +146,48 @@ apiRouter.get('/stats', requirePermission('production-orders:read'), async (_req
       totalProtheusStructures: Number(protheusStructuresCount[0]?.count || 0),
       totalProtheusRoutings: Number(protheusRoutingsCount[0]?.count || 0),
       totalProtheusAppointments: Number(protheusAppointmentsCount[0]?.count || 0),
-      latestProtheusImport: latestImport[0] || null,
+      latestProtheusImport: latestBatch,
+      mirrorFreshness: evaluateMirrorFreshness(latestBatch),
       organization: organizationProfile[0] || null,
     });
   } catch (error: any) {
     console.error('Failed to query system stats:', error);
     res.status(500).json({ error: 'Falha ao buscar estatísticas de produção.' });
+  }
+});
+
+apiRouter.get('/stats/occurrences', requirePermission('occurrences:read'), async (req: Request, res: Response) => {
+  try {
+    const queryText = (value: unknown, maxLen = 32): string | undefined =>
+      typeof value === 'string' && value.trim() ? value.trim().slice(0, maxLen) : undefined;
+
+    const from = queryText(req.query.from, 10);
+    const to = queryText(req.query.to, 10);
+    const validDate = (value?: string) => !value || (/^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`)));
+    if (!validDate(from) || !validDate(to) || (from && to && from > to)) {
+      return res.status(400).json({ error: 'Período de consulta inválido.' });
+    }
+
+    const rawSector = queryText(req.query.sector, 20)?.toUpperCase();
+    if (rawSector && !(OCCURRENCE_SECTORS as readonly string[]).includes(rawSector)) {
+      return res.status(400).json({ error: 'Setor inválido.' });
+    }
+
+    const rawType = queryText(req.query.type, 30)?.toUpperCase();
+    if (rawType && !(OCCURRENCE_TYPES as readonly string[]).includes(rawType)) {
+      return res.status(400).json({ error: 'Tipo de ocorrência inválido.' });
+    }
+
+    const stats = await OccurrencesService.getAnalyticsStats({
+      from,
+      to,
+      sector: rawSector as OccurrenceSector | undefined,
+      type: rawType as OccurrenceType | undefined,
+    });
+    return res.json(stats);
+  } catch (error: any) {
+    console.error('Failed to query occurrence stats:', error);
+    return res.status(500).json({ error: 'Falha ao buscar indicadores de ocorrências.' });
   }
 });
 

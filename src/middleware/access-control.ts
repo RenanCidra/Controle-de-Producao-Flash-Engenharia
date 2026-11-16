@@ -10,7 +10,7 @@ export const PERMISSIONS = [
   'inventory:read', 'inventory:create', 'inventory:update', 'inventory:delete',
   'production-orders:read', 'production-orders:create', 'production-orders:update', 'production-orders:delete',
   'quality:read', 'quality:create', 'quality:delete',
-  'occurrences:read', 'occurrences:create', 'occurrences:comment', 'occurrences:manage',
+  'occurrences:read', 'occurrences:create', 'occurrences:comment', 'occurrences:assign', 'occurrences:resolve', 'occurrences:manage',
   'communications:read', 'communications:write', 'communications:manage',
   'feedback:create', 'feedback:read', 'feedback:manage',
   'employees:read', 'employees:manage',
@@ -25,7 +25,7 @@ const ROLE_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>> = {
   OPERATOR: new Set([
     'integrations:read', 'organization:read',
     'inventory:read', 'inventory:update', 'production-orders:read', 'production-orders:update', 'quality:read',
-    'occurrences:read', 'occurrences:create', 'occurrences:comment',
+    'occurrences:read', 'occurrences:create', 'occurrences:comment', 'occurrences:assign', 'occurrences:resolve',
     'communications:read', 'communications:write',
     'feedback:create',
     'protheus-data:read',

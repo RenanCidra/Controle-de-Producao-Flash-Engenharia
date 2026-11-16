@@ -12,16 +12,21 @@ if (!host || !database || !user || !password) {
 }
 
 const pool = new Pool({ host, database, user, password, max: 1, connectionTimeoutMillis: 15000 });
-const migrationPath = fileURLToPath(new URL('./20261029_production_occurrences.sql', import.meta.url));
+const migrationPaths = [
+  fileURLToPath(new URL('./20261029_production_occurrences.sql', import.meta.url)),
+  fileURLToPath(new URL('./20261113_occurrences_intelligent.sql', import.meta.url)),
+];
 
 try {
-  const migration = await readFile(migrationPath, 'utf8');
+  const migrations = await Promise.all(migrationPaths.map((path) => readFile(path, 'utf8')));
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query(migration);
+    for (const migration of migrations) {
+      await client.query(migration);
+    }
     await client.query('COMMIT');
-    console.log('Production occurrences migration applied successfully.');
+    console.log('Production occurrences migrations applied successfully.');
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

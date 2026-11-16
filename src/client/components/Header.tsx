@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Menu,
   Calendar,
-  Bell,
   MapPin,
   RefreshCw,
   ShieldCheck,
@@ -10,14 +9,19 @@ import {
 } from 'lucide-react';
 import { AuthUser } from '../api.ts';
 import { getIntlLocale } from '../i18n/index.ts';
+import { NotificationBell } from './NotificationBell.tsx';
+import { PWAInstallButton } from './PWAControls.tsx';
 
 interface HeaderProps {
   plantCode?: string | null;
   currentUser: AuthUser | null;
+  localPreview?: boolean;
   loading: boolean;
   onRefresh: () => void;
   onOpenAuth: () => void;
   onOpenAssistant?: () => void;
+  onOpenOccurrence?: (occurrenceId: number) => void;
+  onOpenOccurrencesList?: () => void;
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
 }
@@ -25,10 +29,13 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   plantCode,
   currentUser,
+  localPreview = false,
   loading,
   onRefresh,
   onOpenAuth,
   onOpenAssistant,
+  onOpenOccurrence,
+  onOpenOccurrencesList,
   sidebarCollapsed,
   onToggleSidebar,
 }) => {
@@ -82,14 +89,15 @@ export const Header: React.FC<HeaderProps> = ({
           <span>{currentDateTime}</span>
         </div>
 
-        {/* Notifications with amber badge */}
-        <button
-          className="relative hidden p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-md transition sm:block"
-          title="Notificações e Alertas"
-        >
-          <Bell className="h-4 w-4" />
-          <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-[#FFAA00] ring-2 ring-white"></span>
-        </button>
+        <PWAInstallButton compact />
+
+        <NotificationBell
+          currentUser={currentUser}
+          localPreview={localPreview}
+          variant="header"
+          onOpenOccurrence={(occId) => onOpenOccurrence?.(occId)}
+          onOpenOccurrencesList={onOpenOccurrencesList}
+        />
 
         {/* Current plant context (settings are opened only from the profile menu) */}
         <div title="Planta atual" className="hidden items-center gap-1.5 rounded-lg border border-[#DCE3EB] bg-white px-3 py-1.5 text-xs font-medium text-[#263548] shadow-xs md:flex">

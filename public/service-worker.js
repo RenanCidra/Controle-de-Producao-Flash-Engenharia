@@ -50,3 +50,67 @@ self.addEventListener('fetch', (event) => {
     }),
   );
 });
+
+self.addEventListener('push', (event) => {
+  let payload = {
+    title: 'NexusPCP · Flash Engenharia',
+    body: 'Você tem uma atualização operacional pendente. Toque para acessar.',
+    url: '/?tab=occurrences',
+    tag: 'nexuspcp-notification',
+  };
+
+  if (event.data) {
+    try {
+      const parsed = event.data.json();
+      if (parsed && typeof parsed === 'object') {
+        payload = {
+          title: typeof parsed.title === 'string' && parsed.title.trim() ? parsed.title.trim().slice(0, 100) : payload.title,
+          body: typeof parsed.body === 'string' && parsed.body.trim() ? parsed.body.trim().slice(0, 220) : payload.body,
+          url: typeof parsed.url === 'string' && parsed.url.startsWith('/') ? parsed.url : payload.url,
+          tag: typeof parsed.tag === 'string' && parsed.tag.trim() ? parsed.tag.trim().slice(0, 80) : payload.tag,
+        };
+      }
+    } catch {
+      const text = event.data.text?.();
+      if (text && text.trim()) {
+        payload.body = text.trim().slice(0, 220);
+      }
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: '/pwa-192x192.png',
+      badge: '/pwa-192x192.png',
+      tag: payload.tag,
+      renotify: true,
+      data: { url: payload.url },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = (event.notification.data && typeof event.notification.data.url === 'string' && event.notification.data.url.startsWith('/'))
+    ? event.notification.data.url
+    : '/?tab=occurrences';
+  const absoluteTarget = new URL(targetUrl, self.location.origin).href;
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clientList) => {
+      for (const client of clientList) {
+        if (client.url.startsWith(self.location.origin)) {
+          if ('focus' in client) await client.focus();
+          client.postMessage({ type: 'OPEN_NOTIFICATION_URL', url: targetUrl });
+          return;
+        }
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(absoluteTarget);
+      }
+      return undefined;
+    }),
+  );
+});
+

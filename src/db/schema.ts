@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { check, index, integer, numeric, pgTable, serial, text, timestamp, uniqueIndex, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, jsonb, numeric, pgTable, serial, text, timestamp, uniqueIndex, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 // Organizations own accounts, employee records, and operational data.
 export const organizations = pgTable("organizations", {
@@ -358,21 +358,52 @@ export const protheusCommitments = pgTable("protheus_commitments", {
 // User-entered operational occurrences are linked to, but never written back to, Protheus.
 export const productionOccurrences = pgTable("production_occurrences", {
   id: serial("id").primaryKey(),
-  numeroOp: text("numero_op").notNull().references(() => protheusProductionOrders.numeroOp),
+  code: text("code").notNull(),
+  type: text("type").notNull().default("OUTRO"),
+  numeroOp: text("numero_op"),
+  pvNumber: text("pv_number"),
+  parentProduct: text("parent_product"),
+  componentCode: text("component_code"),
+  warehouse: text("warehouse"),
+  currentBalance: numeric("current_balance", { precision: 14, scale: 4 }),
   occurrenceType: text("occurrence_type").notNull(),
   description: text("description").notNull(),
   operation: text("operation"),
   workstation: text("workstation"),
   immediateAction: text("immediate_action"),
+  requesterId: integer("requester_id").references(() => users.id, { onDelete: "set null" }),
+  assigneeId: integer("assignee_id").references(() => users.id, { onDelete: "set null" }),
+  sector: text("sector").notNull().default("PCP"),
   status: text("status").notNull().default("OPEN"),
+  priority: text("priority").notNull().default("MEDIA"),
+  slaMinutes: integer("sla_minutes").notNull().default(120),
+  slaDueAt: timestamp("sla_due_at"),
+  openedAt: timestamp("opened_at").defaultNow().notNull(),
+  firstResponseAt: timestamp("first_response_at"),
+  resolvedAt: timestamp("resolved_at"),
+  closedAt: timestamp("closed_at"),
+  resolutionText: text("resolution_text"),
+  isRecurrence: boolean("is_recurrence").notNull().default(false),
+  parentOccurrenceId: integer("parent_occurrence_id").references((): AnyPgColumn => productionOccurrences.id, { onDelete: "set null" }),
+  sourceMessageKind: text("source_message_kind"),
+  sourceMessageId: integer("source_message_id"),
+  notified30mAt: timestamp("notified_30m_at"),
+  notifiedSlaBreachAt: timestamp("notified_sla_breach_at"),
   createdByUid: text("created_by_uid").notNull(),
   createdByName: text("created_by_name").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
+  uniqueIndex("production_occurrences_code_uidx").on(table.code),
   index("production_occurrences_op_idx").on(table.numeroOp, table.createdAt),
   index("production_occurrences_status_idx").on(table.status, table.createdAt),
-  check("production_occurrences_status_check", sql`${table.status} IN ('OPEN', 'IN_PROGRESS', 'CLOSED')`),
+  index("production_occurrences_component_op_idx").on(table.componentCode, table.numeroOp, table.openedAt),
+  index("production_occurrences_assignee_status_idx").on(table.assigneeId, table.status, table.slaDueAt),
+  index("production_occurrences_sector_status_idx").on(table.sector, table.status, table.openedAt),
+  check("production_occurrences_status_check", sql`${table.status} IN ('OPEN', 'IN_PROGRESS', 'CLOSED', 'ABERTA', 'EM_ATENDIMENTO', 'AGUARDANDO', 'CONCLUIDA', 'CANCELADA')`),
+  check("production_occurrences_type_check", sql`${table.type} IN ('SEM_SALDO', 'EMPENHO', 'TRANSFERENCIA', 'BLOQUEIO_OP', 'QUALIDADE', 'OUTRO')`),
+  check("production_occurrences_sector_check", sql`${table.sector} IN ('ALMOX', 'PCP', 'PRODUCAO', 'QUALIDADE')`),
+  check("production_occurrences_priority_check", sql`${table.priority} IN ('BAIXA', 'MEDIA', 'ALTA', 'CRITICA')`),
 ]);
 
 // Follow-up notes and status changes are append-only to preserve the occurrence history.
@@ -389,6 +420,85 @@ export const productionOccurrenceEvents = pgTable("production_occurrence_events"
 }, (table) => [
   index("production_occurrence_events_occurrence_idx").on(table.occurrenceId, table.createdAt),
   check("production_occurrence_events_type_check", sql`${table.eventType} IN ('CREATED', 'NOTE', 'STATUS_CHANGED')`),
+]);
+
+// Threaded chat messages inside a specific occurrence.
+export const occurrenceMessages = pgTable("occurrence_messages", {
+  id: serial("id").primaryKey(),
+  occurrenceId: integer("occurrence_id").notNull().references(() => productionOccurrences.id, { onDelete: "cascade" }),
+  authorId: integer("author_id").references(() => users.id, { onDelete: "set null" }),
+  authorUid: text("author_uid").notNull(),
+  authorName: text("author_name").notNull(),
+  body: text("body").notNull(),
+  attachments: jsonb("attachments").$type<Array<Record<string, unknown>>>().notNull().default(sql`'[]'::jsonb`),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("occurrence_messages_occurrence_idx").on(table.occurrenceId, table.createdAt, table.id),
+]);
+
+// Private attachments and vector annotation drawings attached to occurrences or messages.
+export const occurrenceAttachments = pgTable("occurrence_attachments", {
+  id: serial("id").primaryKey(),
+  occurrenceId: integer("occurrence_id").notNull().references(() => productionOccurrences.id, { onDelete: "cascade" }),
+  messageId: integer("message_id").references(() => occurrenceMessages.id, { onDelete: "set null" }),
+  authorId: integer("author_id").references(() => users.id, { onDelete: "set null" }),
+  authorUid: text("author_uid").notNull(),
+  type: text("type").notNull(),
+  storagePath: text("storage_path"),
+  mimeType: text("mime_type"),
+  sizeBytes: integer("size_bytes"),
+  durationMs: integer("duration_ms"),
+  originalImagePath: text("original_image_path"),
+  drawingData: jsonb("drawing_data").$type<Record<string, unknown> | null>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("occurrence_attachments_occurrence_idx").on(table.occurrenceId, table.createdAt),
+  index("occurrence_attachments_message_idx").on(table.messageId),
+  check("occurrence_attachments_type_check", sql`${table.type} IN ('DRAWING', 'IMAGE', 'AUDIO', 'FILE')`),
+]);
+
+// Generic in-app notifications (never expose sensitive OP/PV/balance/component data in push payloads).
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  occurrenceId: integer("occurrence_id").references(() => productionOccurrences.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  bodyPreview: text("body_preview").notNull(),
+  isRead: boolean("is_read").notNull().default(false),
+  readAt: timestamp("read_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("notifications_user_read_created_idx").on(table.userId, table.isRead, table.createdAt),
+  index("notifications_occurrence_idx").on(table.occurrenceId),
+]);
+
+// One row per device/browser endpoint for Web Push delivery even when logged out.
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  endpoint: text("endpoint").notNull(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  deviceLabel: text("device_label"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastUsedAt: timestamp("last_used_at").defaultNow().notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+}, (table) => [
+  uniqueIndex("push_subscriptions_endpoint_uidx").on(table.endpoint),
+  index("push_subscriptions_user_active_idx").on(table.userId, table.isActive),
+]);
+
+export const notificationPreferences = pgTable("notification_preferences", {
+  userId: integer("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  scope: text("scope").notNull().default("SECTOR"),
+  quietHoursEnabled: boolean("quiet_hours_enabled").notNull().default(false),
+  quietHoursStart: text("quiet_hours_start").notNull().default("22:00"),
+  quietHoursEnd: text("quiet_hours_end").notNull().default("06:00"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  check("notification_preferences_scope_check", sql`${table.scope} IN ('MINE', 'SECTOR', 'ALL')`),
 ]);
 
 // Internal communication conversations and messages, independent from occurrences.
@@ -423,6 +533,11 @@ export const communicationMessages = pgTable("communication_messages", {
   audioStoragePath: text("audio_storage_path"),
   audioMimeType: text("audio_mime_type"),
   audioDurationMs: integer("audio_duration_ms"),
+  attachmentType: text("attachment_type"),
+  imageStoragePath: text("image_storage_path"),
+  imageMimeType: text("image_mime_type"),
+  imageSizeBytes: integer("image_size_bytes"),
+  drawingData: jsonb("drawing_data").$type<Record<string, unknown> | null>(),
   deletedAt: timestamp("deleted_at"),
   deletedByUid: text("deleted_by_uid"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -458,6 +573,11 @@ export const communicationDirectMessages = pgTable("communication_direct_message
   audioStoragePath: text("audio_storage_path"),
   audioMimeType: text("audio_mime_type"),
   audioDurationMs: integer("audio_duration_ms"),
+  attachmentType: text("attachment_type"),
+  imageStoragePath: text("image_storage_path"),
+  imageMimeType: text("image_mime_type"),
+  imageSizeBytes: integer("image_size_bytes"),
+  drawingData: jsonb("drawing_data").$type<Record<string, unknown> | null>(),
   deletedAt: timestamp("deleted_at"),
   deletedByUid: text("deleted_by_uid"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

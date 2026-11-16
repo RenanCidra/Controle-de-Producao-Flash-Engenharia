@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
-import { api, AuthUser, type FeedbackCategory } from './client/api.ts';
+import { api, AuthUser, type FeedbackCategory, type MirrorFreshness } from './client/api.ts';
 import { Sidebar, ActiveTab } from './client/components/Sidebar.tsx';
 import { Header } from './client/components/Header.tsx';
 import { AuthModal } from './client/modules/auth/AuthModal.tsx';
@@ -16,7 +16,26 @@ import { HelpInfoDialog, type HelpInfoMode } from './client/components/HelpInfoD
 import { LogoutConfirmDialog } from './client/components/LogoutConfirmDialog.tsx';
 import { LoadingState } from './client/components/DataStatus.tsx';
 import { ModuleErrorBoundary } from './client/components/ModuleErrorBoundary.tsx';
+import { OfflineIndicator } from './client/components/PWAControls.tsx';
 import { applyThemePreference, readUserPreferences, subscribeToUserPreferences } from './client/modules/auth/user-preferences.ts';
+
+function parseNotificationDeepLink(rawUrl: string): { tab: ActiveTab; occurrenceId: number | null } | null {
+  try {
+    const parsed = new URL(rawUrl, window.location.origin);
+    const tabParam = parsed.searchParams.get('tab');
+    const occParam = parsed.searchParams.get('occurrenceId');
+    const occId = occParam && /^\d+$/.test(occParam) ? Number(occParam) : null;
+    if (tabParam === 'occurrences' || occId) {
+      return { tab: 'occurrences', occurrenceId: occId };
+    }
+    if (tabParam === 'communications') {
+      return { tab: 'communications', occurrenceId: null };
+    }
+  } catch {
+    // Ignore malformed query/URL strings.
+  }
+  return null;
+}
 
 const DashboardView = lazy(() => import('./client/modules/dashboard/DashboardView.tsx').then(module => ({ default: module.DashboardView })));
 const TraceabilityView = lazy(() => import('./client/modules/traceability/TraceabilityView.tsx').then(module => ({ default: module.TraceabilityView })));
@@ -51,6 +70,11 @@ export default function App() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [previousTab, setPreviousTab] = useState<ActiveTab>('home');
   const [occurrencesOpFilter, setOccurrencesOpFilter] = useState<string | null>(null);
+  const [occurrenceRequestId, setOccurrenceRequestId] = useState<number | null>(null);
+  const [pendingDeepLink, setPendingDeepLink] = useState<{ tab: ActiveTab; occurrenceId: number | null } | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return parseNotificationDeepLink(window.location.href);
+  });
   const [traceabilityOpRequest, setTraceabilityOpRequest] = useState<string | null>(null);
   const [settingsSubTab, setSettingsSubTab] = useState<SettingsSubTab>('general');
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(DEV_PREVIEW_AUTH ? DEV_PREVIEW_USER : null);
@@ -280,6 +304,7 @@ export default function App() {
       status: string;
       createdAt: string | null;
     } | null;
+    mirrorFreshness?: MirrorFreshness;
     organization: { id: number; name: string; tradeName: string | null; plantCode: string | null; timezone: string } | null;
   } | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
@@ -318,6 +343,16 @@ export default function App() {
         totalProtheusRoutings: 57,
         totalProtheusAppointments: 214,
         latestProtheusImport: { batchCode: 'PREVIEW-LOCAL', sourceType: 'DEMONSTRAÇÃO', entityType: 'PRODUÇÃO', recordsCount: 214, status: 'PREVIEW', createdAt: new Date().toISOString() },
+        mirrorFreshness: {
+          status: 'FRESH',
+          ageMinutes: 5,
+          staleThresholdMinutes: 60,
+          latestImportAt: new Date().toISOString(),
+          latestBatchCode: 'PREVIEW-LOCAL',
+          latestEntityType: 'PRODUÇÃO',
+          latestSourceType: 'DEMONSTRAÇÃO',
+          latestRecordsCount: 214,
+        },
         organization: { id: 1, name: 'Flash Engenharia', tradeName: 'Flash Engenharia', plantCode: 'PLANTA DEMONSTRAÇÃO', timezone: 'America/Sao_Paulo' },
       });
       setStatsError(null);
@@ -434,6 +469,30 @@ export default function App() {
   useEffect(() => () => {
     if (systemEntryTimerRef.current !== null) window.clearTimeout(systemEntryTimerRef.current);
   }, []);
+
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    const handleSwMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'OPEN_NOTIFICATION_URL' && typeof event.data.url === 'string') {
+        const parsed = parseNotificationDeepLink(event.data.url);
+        if (parsed) setPendingDeepLink(parsed);
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', handleSwMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser || !pendingDeepLink) return;
+    if (pendingDeepLink.occurrenceId) {
+      setOccurrenceRequestId(pendingDeepLink.occurrenceId);
+    }
+    setActiveTab(pendingDeepLink.tab);
+    setPendingDeepLink(null);
+    if (typeof window !== 'undefined' && window.location.search) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [currentUser, pendingDeepLink]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -611,6 +670,7 @@ export default function App() {
             <Header
               plantCode={factoryProfile?.plantCode}
               currentUser={currentUser}
+              localPreview={DEV_PREVIEW_AUTH}
               loading={loading || statsLoading}
               onRefresh={() => {
                 if (activeTab === 'dashboard' || activeTab === 'home') void loadStats();
@@ -618,6 +678,14 @@ export default function App() {
               }}
               onOpenAuth={() => setAuthModalOpen(true)}
               onOpenAssistant={() => setAssistantOpen(true)}
+              onOpenOccurrence={(occId) => {
+                setOccurrenceRequestId(occId);
+                setActiveTab('occurrences');
+              }}
+              onOpenOccurrencesList={() => {
+                setOccurrenceRequestId(null);
+                setActiveTab('occurrences');
+              }}
               sidebarCollapsed={sidebarCollapsed}
               onToggleSidebar={handleToggleSidebar}
             />
@@ -655,6 +723,7 @@ export default function App() {
               {activeTab === 'occurrences' && (
                 <OccurrencesView
                   initialNumeroOp={occurrencesOpFilter}
+                  initialOccurrenceId={occurrenceRequestId}
                   onSuccess={(msg) => showToast(msg, 'success')}
                   onOpenOp={(numeroOp) => {
                     setTraceabilityOpRequest(numeroOp);
@@ -911,10 +980,19 @@ export default function App() {
           </div>
         </div>
       )}
-      <UserProfileModal isOpen={profileModalOpen} user={currentUser} onClose={() => setProfileModalOpen(false)} />
+      <UserProfileModal
+        isOpen={profileModalOpen}
+        user={currentUser}
+        onClose={() => setProfileModalOpen(false)}
+        onLogoutComplete={() => {
+          setCurrentUser(null);
+          showToast('Sessão encerrada e notificações paradas neste aparelho.');
+        }}
+      />
       <LogoutConfirmDialog isOpen={logoutConfirmOpen} userName={currentUser?.name} busy={logoutSubmitting} onCancel={() => setLogoutConfirmOpen(false)} onConfirm={() => void confirmLogout()} />
       {currentUser && feedbackDialog && <FeedbackDialog key={`${feedbackDialog}:${feedbackInitialCategory}`} user={currentUser} localPreview={DEV_PREVIEW_AUTH} initialTab={feedbackDialog} initialCategory={feedbackInitialCategory} onClose={() => setFeedbackDialog(null)} onToast={showToast} />}
       {helpInfoDialog && <HelpInfoDialog mode={helpInfoDialog} onClose={() => setHelpInfoDialog(null)} />}
+      <OfflineIndicator />
     </div>
   );
 }

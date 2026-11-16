@@ -1,18 +1,26 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ImagePlus, LockKeyhole, RefreshCw, Trash2, UserRound } from 'lucide-react';
-import { api, AuthUser } from '../../api.ts';
+import { Bell, BellOff, BellRing, ImagePlus, LockKeyhole, LogOut, RefreshCw, Trash2, UserRound } from 'lucide-react';
+import { api, AuthUser, type NotificationScope } from '../../api.ts';
 import { AppLanguage } from '../../i18n/catalog.ts';
 import { getAppLanguage, setAppLanguage, translateText } from '../../i18n/index.ts';
 import { Modal } from '../../components/Modal.tsx';
 import { applyThemePreference, readUserPreferences, saveUserPreferences, type ThemePreference } from './user-preferences.ts';
+import {
+  getBrowserNotificationPermission,
+  getExistingPushSubscription,
+  isPushSupported,
+  subscribeBrowserPush,
+  unsubscribeBrowserPush,
+} from '../notifications/push-client.ts';
 
 interface UserProfileModalProps {
   isOpen: boolean;
   user: AuthUser | null;
   onClose: () => void;
+  onLogoutComplete?: () => void;
 }
 
-export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, user, onClose }) => {
+export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, user, onClose, onLogoutComplete }) => {
   const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
   const [language, setLanguage] = useState<AppLanguage>('pt-BR');
   const [theme, setTheme] = useState<ThemePreference>('mixed');
@@ -24,6 +32,15 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, user
   const [passwordMessage, setPasswordMessage] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [preferencesLoading, setPreferencesLoading] = useState(false);
+  const [notifScope, setNotifScope] = useState<NotificationScope>('SECTOR');
+  const [quietHoursEnabled, setQuietHoursEnabled] = useState(false);
+  const [quietHoursStart, setQuietHoursStart] = useState('22:00');
+  const [quietHoursEnd, setQuietHoursEnd] = useState('06:00');
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [vapidEnabled, setVapidEnabled] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushStatusMsg, setPushStatusMsg] = useState('');
+  const [logoutStopBusy, setLogoutStopBusy] = useState(false);
   const avatarEditedRef = useRef(false);
 
   useEffect(() => {
@@ -34,10 +51,26 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, user
     setAvatarDataUrl(preferences.avatarDataUrl);
     if (user?.uid && !user.uid.startsWith('dev-preview')) {
       void api.getOwnAvatar().then(result => { if (active && !avatarEditedRef.current && result.avatarUrl) setAvatarDataUrl(result.avatarUrl); }).catch(() => undefined);
+      void api.getNotificationPreferences().then((prefs) => {
+        if (!active) return;
+        setNotifScope(prefs.scope);
+        setQuietHoursEnabled(Boolean(prefs.quietHoursEnabled));
+        setQuietHoursStart(prefs.quietHoursStart || '22:00');
+        setQuietHoursEnd(prefs.quietHoursEnd || '06:00');
+      }).catch(() => undefined);
+      void Promise.all([
+        api.getVapidPublicKey().catch(() => ({ enabled: false, publicKey: null })),
+        getExistingPushSubscription().catch(() => null),
+      ]).then(([vapid, sub]) => {
+        if (!active) return;
+        setVapidEnabled(Boolean(vapid.enabled));
+        setPushSubscribed(Boolean(sub));
+      });
     }
     setLanguage(preferences.language || getAppLanguage() as AppLanguage);
     setTheme(preferences.theme);
     setMessage('');
+    setPushStatusMsg('');
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
@@ -98,16 +131,62 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, user
     setPreferencesLoading(true);
     try {
       const isLocalPreview = user.uid.startsWith('dev-preview');
-      if (!isLocalPreview) await api.updateOwnAvatar(avatarDataUrl);
+      if (!isLocalPreview) {
+        await Promise.all([
+          api.updateOwnAvatar(avatarDataUrl),
+          api.updateNotificationPreferences({
+            scope: notifScope,
+            quietHoursEnabled,
+            quietHoursStart,
+            quietHoursEnd,
+          }),
+        ]);
+      }
       const saved = saveUserPreferences(user.uid, { avatarDataUrl, language, theme });
       if (!saved) throw new Error('Não foi possível salvar as preferências neste dispositivo.');
       if (!isLocalPreview) window.dispatchEvent(new Event('flash-contact-avatar-change'));
       setAppLanguage(language);
-      setMessage(isLocalPreview ? 'Foto local salva somente nesta prévia.' : 'Foto sincronizada para seus contatos. As demais preferências ficam neste dispositivo.');
+      setMessage(isLocalPreview ? 'Foto local salva somente nesta prévia.' : 'Foto e preferências de notificação sincronizadas.');
     } catch (error: any) {
-      setMessage(error.message || 'Não foi possível salvar a foto do perfil.');
+      setMessage(error.message || 'Não foi possível salvar a foto e preferências do perfil.');
     } finally {
       setPreferencesLoading(false);
+    }
+  };
+
+  const handleToggleDevicePush = async () => {
+    setPushBusy(true);
+    setPushStatusMsg('');
+    try {
+      if (pushSubscribed) {
+        await unsubscribeBrowserPush();
+        setPushSubscribed(false);
+        setPushStatusMsg('Notificações Push desativadas neste aparelho.');
+      } else {
+        const res = await subscribeBrowserPush();
+        setPushStatusMsg(res.message);
+        if (res.ok) setPushSubscribed(true);
+      }
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const handleLogoutAndStopNotifications = async () => {
+    if (logoutStopBusy) return;
+    setLogoutStopBusy(true);
+    try {
+      await unsubscribeBrowserPush();
+      try {
+        await api.logout();
+      } catch {
+        // Proceed clearing local session even if server logout already expired.
+      }
+      api.clearSession();
+      onClose();
+      onLogoutComplete?.();
+    } finally {
+      setLogoutStopBusy(false);
     }
   };
 
@@ -179,6 +258,107 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, user
             <option value="pt-BR">Português</option><option value="en-US">English</option><option value="es-ES">Español</option>
           </select>
         </section>
+
+        {user && !user.uid.startsWith('dev-preview') && (
+          <section className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-3">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+              <Bell className="h-4 w-4 text-amber-400" />
+              <span>{translateText('Notificações e alertas')}</span>
+            </div>
+
+            <div>
+              <label htmlFor="profile-notif-scope" className="block text-[11px] font-medium text-slate-400">
+                {translateText('Quais ocorrências notificar')}
+              </label>
+              <select
+                id="profile-notif-scope"
+                value={notifScope}
+                onChange={(event) => setNotifScope(event.target.value as NotificationScope)}
+                className="mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white"
+              >
+                <option value="MINE">{translateText('Só minhas (atribuídas ou abertas por mim)')}</option>
+                <option value="SECTOR">{translateText('Do meu setor')}</option>
+                <option value="ALL">{translateText('Todas as ocorrências da fábrica')}</option>
+              </select>
+            </div>
+
+            <div className="rounded-lg border border-slate-800/80 bg-slate-900/50 p-3">
+              <label className="flex items-center justify-between gap-3 text-xs text-slate-200">
+                <span>{translateText('Horário de silêncio (sem push)')}</span>
+                <input
+                  type="checkbox"
+                  checked={quietHoursEnabled}
+                  onChange={(event) => setQuietHoursEnabled(event.target.checked)}
+                  className="h-4 w-4 accent-amber-500"
+                />
+              </label>
+              {quietHoursEnabled && (
+                <div className="mt-2.5 grid grid-cols-2 gap-2">
+                  <label className="text-[11px] text-slate-400">
+                    {translateText('Início')}
+                    <input
+                      type="time"
+                      value={quietHoursStart}
+                      onChange={(event) => setQuietHoursStart(event.target.value)}
+                      className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-white"
+                    />
+                  </label>
+                  <label className="text-[11px] text-slate-400">
+                    {translateText('Fim')}
+                    <input
+                      type="time"
+                      value={quietHoursEnd}
+                      onChange={(event) => setQuietHoursEnd(event.target.value)}
+                      className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-white"
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+              <div className="text-[11px] text-slate-400">
+                {!isPushSupported()
+                  ? translateText('Push não suportado neste navegador.')
+                  : !vapidEnabled
+                    ? translateText('Push aguardando chaves VAPID no servidor (sino interno ativo).')
+                    : getBrowserNotificationPermission() === 'denied'
+                      ? translateText('Permissão de notificação bloqueada nas configurações do navegador.')
+                      : pushSubscribed
+                        ? translateText('Notificações Push ativas neste aparelho.')
+                        : translateText('Notificações Push desativadas neste aparelho.')}
+              </div>
+              {isPushSupported() && vapidEnabled && getBrowserNotificationPermission() !== 'denied' && (
+                <button
+                  type="button"
+                  disabled={pushBusy}
+                  onClick={() => void handleToggleDevicePush()}
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition disabled:opacity-50 ${
+                    pushSubscribed
+                      ? 'border-slate-700 text-slate-200 hover:bg-slate-800'
+                      : 'border-amber-500/40 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20'
+                  }`}
+                >
+                  {pushSubscribed ? <BellOff className="h-3.5 w-3.5" /> : <BellRing className="h-3.5 w-3.5" />}
+                  <span>{translateText(pushBusy ? 'Aguarde…' : pushSubscribed ? 'Parar push aqui' : 'Ativar push neste aparelho')}</span>
+                </button>
+              )}
+            </div>
+            {pushStatusMsg && <p role="status" className="text-[11px] text-amber-200">{translateText(pushStatusMsg)}</p>}
+
+            <div className="border-t border-slate-800 pt-3">
+              <button
+                type="button"
+                disabled={logoutStopBusy}
+                onClick={() => void handleLogoutAndStopNotifications()}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-rose-500/30 bg-rose-950/30 px-3 py-2 text-xs font-semibold text-rose-200 transition hover:bg-rose-950/60 disabled:opacity-50"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                <span>{translateText(logoutStopBusy ? 'Encerrando…' : 'Sair e parar notificações neste aparelho')}</span>
+              </button>
+            </div>
+          </section>
+        )}
 
         <div className="rounded-lg border border-slate-800 px-3 py-2 text-[11px] text-slate-400">
           <div className="flex items-center gap-2"><UserRound className="h-3.5 w-3.5" />{translateText('Nome e usuário de acesso são administrados pela equipe responsável.')}</div>

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Check, CheckCheck, ChevronDown, Copy, Forward, Home, Info, MessageCircle, MessageSquarePlus, MoreVertical, Pin, Plus, Reply, Search, Send, Smile, Sparkles, Star, Trash2, UserRound, Users, X } from 'lucide-react';
-import { api, type AuthUser, type FeedbackCategory } from '../../api.ts';
+import { AlertTriangle, ArrowLeft, Check, CheckCheck, ChevronDown, Copy, Forward, Home, ImagePlus, Info, MessageCircle, MessageSquarePlus, MoreVertical, Pin, Plus, Reply, Search, Send, Smile, Sparkles, Star, Trash2, UserRound, Users, X } from 'lucide-react';
+import { api, type AuthUser, type DrawingOverlayData, type FeedbackCategory } from '../../api.ts';
 import { UserAccountMenu } from '../../components/UserAccountMenu.tsx';
 import { AudioRecorderButton } from '../../components/AudioRecorderButton.tsx';
 import { EmojiPicker } from '../../components/EmojiPicker.tsx';
@@ -9,11 +9,28 @@ import { DataUnavailableState, LoadingState } from '../../components/DataStatus.
 import { AnimatePresence, motion } from 'motion/react';
 import { AssistantDirectChat } from './AssistantDirectChat.tsx';
 import { SendPlaneIcon } from '../../components/SendPlaneIcon.tsx';
+import { AnnotatedImagePreview } from '../../components/AnnotatedImagePreview.tsx';
+import {
+  OccurrenceContextBar,
+  OCCURRENCE_STATUS_LABELS,
+  OCCURRENCE_TYPE_LABELS,
+  computeSlaDisplay,
+} from '../../components/OccurrenceContextBar.tsx';
+import { OccurrenceThreadPanel } from '../../components/OccurrenceThreadPanel.tsx';
+import { ConvertMessageToOccurrenceModal } from '../../components/ConvertMessageToOccurrenceModal.tsx';
+import { NotificationBell } from '../../components/NotificationBell.tsx';
+import { BellRing } from 'lucide-react';
+import {
+  getBrowserNotificationPermission,
+  getExistingPushSubscription,
+  isPushSupported,
+  subscribeBrowserPush,
+} from '../notifications/push-client.ts';
 
 type Group = { id: number; name: string; sector: string; createdAt: string; unreadCount: number; canDelete?: boolean; lastMessage: Pick<Message, 'id' | 'body' | 'authorUid' | 'authorName' | 'createdAt' | 'deletedAt'> | null };
 type MessageReaction = { emoji: string; count: number; reactedByMe: boolean };
 type MessageReader = { userId: number; name: string; department: string | null; avatarUrl?: string | null; readAt: string };
-type Message = { id: number; body: string; authorUid: string; authorName: string; createdAt: string; replyToMessageId?: number | null; hasAudio?: boolean; audioDurationMs?: number | null; audioPreviewUrl?: string; deletedAt?: string | null; reactions?: MessageReaction[]; readByCount?: number; recipientCount?: number; readBy?: MessageReader[] };
+type Message = { id: number; body: string; authorUid: string; authorName: string; createdAt: string; replyToMessageId?: number | null; hasAudio?: boolean; audioDurationMs?: number | null; audioPreviewUrl?: string; hasImage?: boolean; attachmentType?: string | null; imageMimeType?: string | null; imageSizeBytes?: number | null; drawingData?: DrawingOverlayData | null; imagePreviewUrl?: string; deletedAt?: string | null; reactions?: MessageReaction[]; readByCount?: number; recipientCount?: number; readBy?: MessageReader[] };
 type DirectoryUser = { id: number; name: string; department: string | null; role?: string; avatarUrl?: string | null };
 type DirectConversation = {
   conversationId: number;
@@ -104,6 +121,7 @@ export const CommunicationsView: React.FC<{
   const [listsError, setListsError] = useState(false);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messagesError, setMessagesError] = useState(false);
+  const [messagesErrorDetail, setMessagesErrorDetail] = useState('');
   const [newGroup, setNewGroup] = useState(false);
   const [newConversation, setNewConversation] = useState(false);
   const [name, setName] = useState('');
@@ -127,7 +145,14 @@ export const CommunicationsView: React.FC<{
   const [profileUser, setProfileUser] = useState<DirectoryUser | null>(null);
   const [search, setSearch] = useState('');
   const [userSearch, setUserSearch] = useState('');
-  const [section, setSection] = useState<'conversations' | 'groups'>('conversations');
+  const [section, setSection] = useState<'conversations' | 'groups' | 'occurrences'>('conversations');
+  const [occurrences, setOccurrences] = useState<any[]>([]);
+  const [selectedOccurrenceId, setSelectedOccurrenceId] = useState<number | null>(null);
+  const [convertTarget, setConvertTarget] = useState<{
+    sourceKind?: 'group' | 'direct' | null;
+    sourceMessageId?: number | null;
+    initialText: string;
+  } | null>(null);
   const lastSeenMessageRef = useRef<{ conversationKey: string; messageId: number } | null>(null);
   const loadedConversationRef = useRef<string | null>(null);
   const messageChangesCursorRef = useRef<Date | null>(null);
@@ -138,12 +163,59 @@ export const CommunicationsView: React.FC<{
   const loadingOlderRef = useRef(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlderMessages, setHasOlderMessages] = useState(true);
+  const [pushBannerVisible, setPushBannerVisible] = useState(false);
+  const [pushBannerBusy, setPushBannerBusy] = useState(false);
+  const [pushBannerFeedback, setPushBannerFeedback] = useState<string | null>(null);
   const canCreateGroups = ['ADMIN', 'SUPERVISOR'].includes(api.getUser()?.role || '');
-  const selectedConversation = assistantActive || selectedGroupId !== null || selectedDirectId !== null || draftRecipient !== null;
+  const canCreateOccurrences = (api.getUser()?.role || '') !== 'AUDITOR';
+  const selectedConversation = assistantActive || selectedGroupId !== null || selectedDirectId !== null || draftRecipient !== null || selectedOccurrenceId !== null;
   const contactDetailsOpen = conversationInfoOpen && profileUser !== null;
   const groupDetailsOpen = conversationInfoOpen && selectedGroupId !== null && profileUser === null;
   const sidePanelOpen = Boolean(messageDetails || contactDetailsOpen || groupDetailsOpen);
   activeConversationRef.current = selectedGroupId !== null ? `group:${selectedGroupId}` : selectedDirectId !== null ? `direct:${selectedDirectId}` : null;
+
+  useEffect(() => {
+    if (localPreview || !currentUser || !isPushSupported()) return;
+    if (getBrowserNotificationPermission() !== 'default') return;
+    try {
+      if (window.sessionStorage.getItem('nexus-push-banner-dismissed') === '1') return;
+    } catch { /* ignore */ }
+    let active = true;
+    void Promise.all([
+      api.getVapidPublicKey().catch(() => ({ enabled: false, publicKey: null })),
+      getExistingPushSubscription().catch(() => null),
+    ]).then(([vapid, sub]) => {
+      if (!active) return;
+      if (vapid.enabled && !sub) setPushBannerVisible(true);
+    });
+    return () => { active = false; };
+  }, [currentUser, localPreview]);
+
+  const handleCentralPushOptIn = async () => {
+    setPushBannerBusy(true);
+    setPushBannerFeedback(null);
+    const res = await subscribeBrowserPush();
+    setPushBannerBusy(false);
+    setPushBannerFeedback(res.message);
+    if (res.ok || res.reason === 'denied') {
+      window.setTimeout(() => setPushBannerVisible(false), 1800);
+    }
+  };
+
+  const dismissPushBanner = () => {
+    setPushBannerVisible(false);
+    try { window.sessionStorage.setItem('nexus-push-banner-dismissed', '1'); } catch { /* ignore */ }
+  };
+
+  const openOccurrenceInCentral = (occId: number) => {
+    pendingLatestScrollRef.current = null;
+    setAssistantActive(false);
+    setSelectedGroupId(null);
+    setSelectedDirectId(null);
+    setDraftRecipient(null);
+    setSection('occurrences');
+    setSelectedOccurrenceId(occId);
+  };
 
   useEffect(() => { setMessageDetails(null); setConversationInfoOpen(false); setProfileUser(null); }, [selectedGroupId, selectedDirectId]);
   useEffect(() => { setConversationSearchQuery(''); }, [selectedDirectId, selectedGroupId]);
@@ -231,15 +303,71 @@ export const CommunicationsView: React.FC<{
       return false;
     }
   }, [currentUser, localPreview]);
+  const loadOccurrences = useCallback(async () => {
+    if (localPreview) {
+      setOccurrences([
+        {
+          id: 9001,
+          code: 'OC-2026-001',
+          type: 'SEM_SALDO',
+          occurrenceType: 'Sem Saldo',
+          numeroOp: '06298301002',
+          pvNumber: '012841',
+          parentProduct: '41.SIR.CTRL.00002.00',
+          componentCode: '11.ETQ.DIVE.00005.00',
+          warehouse: '50',
+          currentBalance: '-13',
+          status: 'ABERTA',
+          sector: 'ALMOX',
+          priority: 'ALTA',
+          slaMinutes: 120,
+          slaDueAt: new Date(Date.now() + 90 * 60000).toISOString(),
+          openedAt: new Date(Date.now() - 30 * 60000).toISOString(),
+          createdAt: new Date(Date.now() - 30 * 60000).toISOString(),
+          description: 'Falta saldo do componente 11.ETQ.DIVE.00005.00 no armazém 50 (-13).',
+        },
+      ]);
+      return true;
+    }
+    try {
+      const result = await api.getOccurrences({ page: 1, pageSize: 30 });
+      const flat: any[] = [];
+      const seenIds = new Set<number>();
+      for (const group of result?.items || []) {
+        for (const op of group?.ops || []) {
+          for (const occ of op?.occurrences || []) {
+            if (occ && !seenIds.has(occ.id)) {
+              seenIds.add(occ.id);
+              flat.push({
+                ...occ,
+                pvNumber: occ.pvNumber || group.numeroPv || op.numeroPv || null,
+                parentProduct: occ.parentProduct || op.codigoProduto || null,
+                op: {
+                  numeroOp: op.hasLinkedOp === false ? null : op.numeroOp,
+                  numeroPv: group.numeroPv || op.numeroPv || null,
+                  codigoProduto: op.codigoProduto || null,
+                },
+              });
+            }
+          }
+        }
+      }
+      flat.sort((a, b) => new Date(b.openedAt || b.createdAt).getTime() - new Date(a.openedAt || a.createdAt).getTime());
+      setOccurrences(flat);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [localPreview]);
   const refreshLists = useCallback(async () => {
     try {
-      const results = await Promise.all([loadGroups(), loadDirects()]);
-      setListsError(results.some(result => !result));
+      const results = await Promise.all([loadGroups(), loadDirects(), loadOccurrences()]);
+      setListsError(results.slice(0, 2).some(result => !result));
       return results;
     } catch {
       return null;
     }
-  }, [loadGroups, loadDirects]);
+  }, [loadGroups, loadDirects, loadOccurrences]);
   const loadDirectory = async () => {
     if (localPreview) { await waitForPreview(250); setDirectory(previewDirectory); return; }
     try {
@@ -255,7 +383,7 @@ export const CommunicationsView: React.FC<{
     if (!conversationKey) { setMessages([]); loadedConversationRef.current = null; return; }
     const initial = loadedConversationRef.current !== conversationKey;
     try {
-      if (initial) { setMessagesLoading(true); setMessagesError(false); }
+      if (initial) { setMessagesLoading(true); setMessagesError(false); setMessagesErrorDetail(''); }
       if (localPreview) {
         await waitForPreview();
         if (activeConversationRef.current !== conversationKey) return;
@@ -278,6 +406,7 @@ export const CommunicationsView: React.FC<{
         if (initial) { setMessages(loaded); loadedConversationRef.current = conversationKey; setHasOlderMessages(loaded.length === 30); }
         else if (loaded.length) setMessages(previous => mergeMessages(previous, loaded));
         setMessagesError(false);
+        setMessagesErrorDetail('');
         messageChangesCursorRef.current = pollStartedAt;
         const latest = loaded.at(-1);
         const key = `group:${selectedGroupId}`;
@@ -294,6 +423,7 @@ export const CommunicationsView: React.FC<{
         if (initial) { setMessages(loaded); loadedConversationRef.current = conversationKey; setHasOlderMessages(loaded.length === 30); }
         else if (loaded.length) setMessages(previous => mergeMessages(previous, loaded));
         setMessagesError(false);
+        setMessagesErrorDetail('');
         messageChangesCursorRef.current = pollStartedAt;
         const latest = loaded.at(-1);
         const key = `direct:${selectedDirectId}`;
@@ -308,8 +438,10 @@ export const CommunicationsView: React.FC<{
       }
     } catch (e: any) {
       if (activeConversationRef.current !== conversationKey) return;
+      console.error('Failed to load communication messages:', e);
       if (initial) setMessages([]);
       setMessagesError(true);
+      setMessagesErrorDetail(typeof e?.message === 'string' ? e.message.trim() : '');
     } finally {
       if (activeConversationRef.current === conversationKey) setMessagesLoading(false);
     }
@@ -536,6 +668,7 @@ export const CommunicationsView: React.FC<{
     pendingLatestScrollRef.current = null;
     setSelectedGroupId(null);
     setSelectedDirectId(null);
+    setSelectedOccurrenceId(null);
     setDraftRecipient(null);
     setMessages([]);
     setBody('');
@@ -551,6 +684,7 @@ export const CommunicationsView: React.FC<{
     pendingLatestScrollRef.current = null;
     setSelectedGroupId(null);
     setSelectedDirectId(null);
+    setSelectedOccurrenceId(null);
     setDraftRecipient(null);
     setAssistantActive(false);
     setMessages([]);
@@ -605,6 +739,80 @@ export const CommunicationsView: React.FC<{
     }
     if (selectedGroupId !== null) { const created = await api.sendCommunicationGroupAudio(selectedGroupId, audio, duration); setMessages(previous => [...previous, created]); await loadGroups(); }
     else if (selectedDirectId !== null) { const created = await api.sendCommunicationDirectAudio(selectedDirectId, audio, duration); setMessages(previous => [...previous, created]); await loadDirects(); }
+  };
+  const sendImageMessage = async (file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      setError(translateText('A imagem excede o limite máximo de 5 MB.'));
+      return;
+    }
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      setError(translateText('Formato não suportado. Envie uma imagem PNG, JPEG ou WebP.'));
+      return;
+    }
+    setError('');
+    setSendingMessage(true);
+    try {
+      const caption = body.trim() || undefined;
+      if (localPreview) {
+        const imagePreviewUrl = URL.createObjectURL(file);
+        previewAudioUrlsRef.current.push(imagePreviewUrl);
+        const message: Message = {
+          id: Date.now(),
+          body: caption || 'Imagem anexada',
+          authorUid: currentUser?.uid || 'dev-preview-admin',
+          authorName: currentUser?.name || 'Administrador local',
+          createdAt: new Date().toISOString(),
+          hasImage: true,
+          attachmentType: 'IMAGE',
+          imageMimeType: file.type,
+          imageSizeBytes: file.size,
+          imagePreviewUrl,
+        };
+        setMessages((previous) => [...previous, message]);
+        if (selectedGroupId !== null) setGroups((previous) => previous.map((group) => group.id === selectedGroupId ? { ...group, lastMessage: message } : group));
+        if (selectedDirectId !== null) setDirects((previous) => previous.map((conversation) => conversation.conversationId === selectedDirectId ? { ...conversation, lastMessage: message } : conversation));
+        if (caption) setBody('');
+        return;
+      }
+      if (selectedGroupId !== null) {
+        const created = await api.sendCommunicationGroupImage(selectedGroupId, file, caption);
+        setMessages((previous) => mergeMessages(previous, [created]));
+        if (caption) setBody('');
+        await loadGroups();
+      } else if (selectedDirectId !== null) {
+        const created = await api.sendCommunicationDirectImage(selectedDirectId, file, caption);
+        setMessages((previous) => mergeMessages(previous, [created]));
+        if (caption) setBody('');
+        await loadDirects();
+      } else if (draftRecipient) {
+        const started = await api.startCommunicationDirectMessage(draftRecipient.id, caption || 'Print anexado');
+        setSelectedDirectId(started.conversationId);
+        setDraftRecipient(null);
+        const created = await api.sendCommunicationDirectImage(started.conversationId, file, caption);
+        setMessages((previous) => mergeMessages(previous, [started.message, created]));
+        if (caption) setBody('');
+        await loadDirects();
+      }
+    } catch (e: any) {
+      setError(e.message || translateText('Não foi possível enviar a imagem.'));
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+  const saveMessageDrawing = async (messageId: number, drawingData: DrawingOverlayData) => {
+    if (localPreview) {
+      setMessages((previous) => previous.map((item) => item.id === messageId
+        ? { ...item, attachmentType: drawingData.strokes.length ? 'DRAWING' : 'IMAGE', drawingData }
+        : item));
+      return;
+    }
+    if (selectedGroupId !== null) {
+      const updated = await api.saveCommunicationGroupDrawing(selectedGroupId, messageId, drawingData);
+      setMessages((previous) => previous.map((item) => item.id === messageId ? { ...item, ...updated } : item));
+    } else if (selectedDirectId !== null) {
+      const updated = await api.saveCommunicationDirectDrawing(selectedDirectId, messageId, drawingData);
+      setMessages((previous) => previous.map((item) => item.id === messageId ? { ...item, ...updated } : item));
+    }
   };
   const startConversation = (user: DirectoryUser) => {
     const existing = directs.find(conversation => conversation.userId === user.id);
@@ -707,6 +915,50 @@ export const CommunicationsView: React.FC<{
     }
   };
 
+  const visibleOccurrences = useMemo(
+    () => occurrences.filter((occ) => {
+      const q = search.trim().toLowerCase();
+      if (!q) return true;
+      return `${occ.code || ''} ${occ.numeroOp || ''} ${occ.pvNumber || ''} ${occ.componentCode || ''} ${occ.sector || ''} ${occ.occurrenceType || ''} ${occ.description || ''}`
+        .toLowerCase()
+        .includes(q);
+    }),
+    [occurrences, search],
+  );
+  const openOccurrencesCount = useMemo(
+    () => occurrences.filter((occ) => !['CLOSED', 'CONCLUIDA', 'CANCELADA'].includes(occ.status)).length,
+    [occurrences],
+  );
+  const linkedOccurrence = useMemo(() => {
+    const kind = selectedGroupId !== null ? 'group' : selectedDirectId !== null ? 'direct' : null;
+    if (!kind || !messages.length || !occurrences.length) return null;
+    const messageIds = new Set(messages.map((m) => m.id));
+    const directMatch = occurrences.find(
+      (occ) => occ.sourceMessageKind === kind && occ.sourceMessageId && messageIds.has(occ.sourceMessageId),
+    );
+    if (directMatch) return directMatch;
+    const recentBodies = messages.slice(-15).map((m) => m.body || '').join(' ');
+    return occurrences.find(
+      (occ) =>
+        !['CLOSED', 'CONCLUIDA', 'CANCELADA'].includes(occ.status)
+        && ((occ.numeroOp && recentBodies.includes(occ.numeroOp)) || (occ.code && recentBodies.includes(occ.code))),
+    ) || null;
+  }, [occurrences, messages, selectedGroupId, selectedDirectId]);
+
+  const openConvertFromConversation = () => {
+    const latestTextMessage = [...messages].reverse().find((m) => !m.deletedAt && !m.hasAudio && m.body?.trim());
+    const fallbackSnippet = messages
+      .filter((m) => !m.deletedAt && !m.hasAudio && m.body?.trim())
+      .slice(-3)
+      .map((m) => `${m.authorName}: ${m.body}`)
+      .join('\n');
+    setConvertTarget({
+      sourceKind: selectedGroupId !== null ? 'group' : selectedDirectId !== null ? 'direct' : null,
+      sourceMessageId: latestTextMessage?.id ?? null,
+      initialText: latestTextMessage?.body || fallbackSnippet || '',
+    });
+  };
+
   const selectedGroup = groups.find(group => group.id === selectedGroupId);
   const selectedDirect = directs.find(conversation => (conversation.conversationId || (conversation as any).id) === selectedDirectId);
   const directTitle = selectedDirect?.name || draftRecipient?.name;
@@ -727,8 +979,19 @@ export const CommunicationsView: React.FC<{
         <button type="button" onClick={onBack} title={translateText('Voltar ao sistema')} aria-label={translateText('Voltar ao sistema')} className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl text-slate-300 transition-colors hover:bg-[#263548] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"><ArrowLeft size={19}/></button>
         <div className="mb-3 w-8 border-t border-[#263548]" />
         <button type="button" onClick={() => { setSection('conversations'); clearSelection(); }} aria-current={section === 'conversations' && !assistantActive ? 'page' : undefined} title={translateText('Conversas')} aria-label={translateText('Conversas')} className={`mb-2 flex h-10 w-10 items-center justify-center rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${section === 'conversations' && !assistantActive ? 'bg-[#263548] text-[#FFAA00]' : 'text-slate-300 hover:bg-[#263548] hover:text-white'}`}><MessageCircle size={19}/></button>
-        <button type="button" onClick={() => { setSection('groups'); clearSelection(); }} aria-current={section === 'groups' && !assistantActive ? 'page' : undefined} title={translateText('Grupos')} aria-label={translateText('Grupos')} className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${section === 'groups' && !assistantActive ? 'bg-[#263548] text-[#FFAA00]' : 'text-slate-300 hover:bg-[#263548] hover:text-white'}`}><Users size={19}/></button>
+        <button type="button" onClick={() => { setSection('groups'); clearSelection(); }} aria-current={section === 'groups' && !assistantActive ? 'page' : undefined} title={translateText('Grupos')} aria-label={translateText('Grupos')} className={`mb-2 flex h-10 w-10 items-center justify-center rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${section === 'groups' && !assistantActive ? 'bg-[#263548] text-[#FFAA00]' : 'text-slate-300 hover:bg-[#263548] hover:text-white'}`}><Users size={19}/></button>
+        <button type="button" onClick={() => { setSection('occurrences'); clearSelection(); }} aria-current={section === 'occurrences' && !assistantActive ? 'page' : undefined} title={translateText('Ocorrências')} aria-label={translateText('Ocorrências')} className={`relative flex h-10 w-10 items-center justify-center rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${section === 'occurrences' && !assistantActive ? 'bg-[#263548] text-[#FFAA00]' : 'text-slate-300 hover:bg-[#263548] hover:text-white'}`}><AlertTriangle size={19}/>{openOccurrencesCount > 0 && <b className="absolute -right-1 -top-1 min-w-4 rounded-full bg-[#FFAA00] px-1 text-center text-[9px] leading-4 text-[#151C25]">{openOccurrencesCount}</b>}</button>
         <button type="button" onClick={() => selectAssistant()} title={translateText('Assistente Flash')} aria-label={translateText('Assistente Flash')} className={`mt-2 flex h-10 w-10 items-center justify-center rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${assistantActive ? 'bg-[#263548] text-[#FFAA00]' : 'text-slate-300 hover:bg-[#263548] hover:text-[#FFAA00]'}`}><Sparkles size={19}/></button>
+        <div className="mt-2">
+          <NotificationBell
+            currentUser={currentUser}
+            localPreview={localPreview}
+            variant="rail"
+            allowPushOptIn
+            onOpenOccurrence={openOccurrenceInCentral}
+            onOpenOccurrencesList={() => { setSection('occurrences'); clearSelection(); }}
+          />
+        </div>
         <div className="mt-auto"><UserAccountMenu compact currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenFeedback={onOpenFeedback} onOpenHelpInfo={onOpenHelpInfo} onOpenShortcuts={onOpenShortcuts} onLogout={onLogout}/></div>
       </nav>
       <aside className={`${selectedConversation ? 'hidden md:flex' : 'flex'} w-full min-w-0 shrink-0 flex-col border-r border-[#DCE3EB] bg-white md:w-[340px] md:max-w-[340px]`}>
@@ -736,23 +999,125 @@ export const CommunicationsView: React.FC<{
           <div className="flex min-w-0 items-center gap-2.5">
             <img src="/assets/flash-brand.svg" alt="Flash Engenharia" className="h-8 w-[132px] shrink-0 object-contain object-left" />
             {section === 'groups' && <span className="truncate border-l border-[#DCE3EB] pl-2.5 text-xs font-medium text-slate-500">{translateText('Grupos')}</span>}
+            {section === 'occurrences' && <span className="truncate border-l border-[#DCE3EB] pl-2.5 text-xs font-medium text-slate-500">{translateText('Ocorrências')}</span>}
           </div>
           <div className="flex items-center gap-1.5">
+            <div className="md:hidden">
+              <NotificationBell
+                currentUser={currentUser}
+                localPreview={localPreview}
+                variant="header"
+                allowPushOptIn
+                onOpenOccurrence={openOccurrenceInCentral}
+                onOpenOccurrencesList={() => { setSection('occurrences'); clearSelection(); }}
+              />
+            </div>
             {section === 'groups' && canCreateGroups && <button type="button" onClick={() => void openCreateGroup()} title="Criar grupo" aria-label="Criar grupo" className="rounded-full bg-[#FFAA00] p-2 text-[#151C25] hover:bg-amber-300"><Plus size={18}/></button>}
             {section === 'conversations' && <button type="button" onClick={() => void openNewConversation()} title="Adicionar conversa" aria-label="Adicionar conversa" className="rounded-full bg-[#FFAA00] p-2 text-[#151C25] transition hover:bg-amber-300"><MessageSquarePlus size={18}/></button>}
+            {section === 'occurrences' && canCreateOccurrences && <button type="button" onClick={() => setConvertTarget({ initialText: '' })} title={translateText('Nova ocorrência')} aria-label={translateText('Nova ocorrência')} className="rounded-full bg-[#FFAA00] p-2 text-[#151C25] transition hover:bg-amber-300"><Plus size={18}/></button>}
           </div>
         </header>
+        {pushBannerVisible && (
+          <div className="shrink-0 border-b border-amber-200 bg-[#FFF9EB] px-4 py-2.5">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-start gap-2 text-xs text-[#263548]">
+                <BellRing className="mt-0.5 h-4 w-4 shrink-0 text-[#D97706]" />
+                <div>
+                  <p className="font-semibold text-[#151C25]">{translateText('Ativar notificações neste aparelho?')}</p>
+                  <p className="mt-0.5 text-[11px] text-slate-600">
+                    {translateText('Receba avisos de ocorrências do seu setor mesmo quando o site estiver fechado.')}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={dismissPushBanner}
+                aria-label={translateText('Agora não')}
+                className="rounded p-1 text-slate-400 hover:bg-amber-100 hover:text-slate-700"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                disabled={pushBannerBusy}
+                onClick={() => void handleCentralPushOptIn()}
+                className="rounded-md bg-[#151C25] px-3 py-1 text-[11px] font-semibold text-[#FFAA00] hover:bg-slate-800 disabled:opacity-60"
+              >
+                {translateText(pushBannerBusy ? 'Ativando…' : 'Ativar agora')}
+              </button>
+              <button
+                type="button"
+                onClick={dismissPushBanner}
+                className="rounded-md px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-amber-100"
+              >
+                {translateText('Depois')}
+              </button>
+            </div>
+            {pushBannerFeedback && <p className="mt-1.5 text-[11px] font-medium text-slate-700">{translateText(pushBannerFeedback)}</p>}
+          </div>
+        )}
         <div data-theme-communications-search-region className="shrink-0 border-b border-[#E7ECF1] p-3 md:p-3">
           <div className="flex items-center gap-2">
-            <label data-theme-communications-search className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-[#C8D0DA] bg-[#F1F4F7] px-3 py-2 text-slate-500 transition-colors focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/20"><Search size={15}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder={section === 'groups' ? 'Pesquisar grupos' : 'Pesquisar conversas'} className="min-w-0 flex-1 bg-transparent text-sm text-[#263548] outline-none placeholder:text-slate-400 sm:text-xs"/></label>
+            <label data-theme-communications-search className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-[#C8D0DA] bg-[#F1F4F7] px-3 py-2 text-slate-500 transition-colors focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/20"><Search size={15}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder={section === 'groups' ? 'Pesquisar grupos' : section === 'occurrences' ? translateText('Pesquisar OP, PV, código ou setor') : 'Pesquisar conversas'} className="min-w-0 flex-1 bg-transparent text-sm text-[#263548] outline-none placeholder:text-slate-400 sm:text-xs"/></label>
             {section === 'conversations' && <button type="button" onClick={() => void openNewConversation()} title="Adicionar conversa" aria-label="Adicionar conversa" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#FFAA00] text-[#151C25] transition hover:bg-amber-300 md:hidden"><MessageSquarePlus size={18}/></button>}
             {section === 'groups' && canCreateGroups && <button type="button" onClick={() => void openCreateGroup()} title="Criar grupo" aria-label="Criar grupo" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#FFAA00] text-[#151C25] transition hover:bg-amber-300 md:hidden"><Plus size={18}/></button>}
+            {section === 'occurrences' && canCreateOccurrences && <button type="button" onClick={() => setConvertTarget({ initialText: '' })} title={translateText('Nova ocorrência')} aria-label={translateText('Nova ocorrência')} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#FFAA00] text-[#151C25] transition hover:bg-amber-300 md:hidden"><Plus size={18}/></button>}
           </div>
         </div>
         <div data-theme-communications-list className="flex-1 overflow-y-auto">
-          {listsLoading && !groups.length && !directs.length ? <LoadingState compact label={translateText('Carregando conversas e grupos…')} /> : listsError && !groups.length && !directs.length ? <DataUnavailableState compact title="Conversas indisponíveis" description="Não foi possível carregar suas conversas e grupos. Confira a conexão com o sistema e tente novamente." onRetry={() => void retryLists()} retrying={listsLoading} /> : <>
-          {listsError && <div role="status" className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50/80 px-4 py-2 text-[11px] text-amber-900"><span>Sem atualização no momento. Mostrando conversas carregadas anteriormente.</span><button type="button" onClick={() => void retryLists()} className="shrink-0 font-semibold underline underline-offset-2">Tentar novamente</button></div>}
-          {section === 'groups' ? (
+          {listsLoading && !groups.length && !directs.length && section !== 'occurrences' ? <LoadingState compact label={translateText('Carregando conversas e grupos…')} /> : listsError && !groups.length && !directs.length && section !== 'occurrences' ? <DataUnavailableState compact title="Conversas indisponíveis" description="Não foi possível carregar suas conversas e grupos. Confira a conexão com o sistema e tente novamente." onRetry={() => void retryLists()} retrying={listsLoading} /> : <>
+          {listsError && section !== 'occurrences' && <div role="status" className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50/80 px-4 py-2 text-[11px] text-amber-900"><span>Sem atualização no momento. Mostrando conversas carregadas anteriormente.</span><button type="button" onClick={() => void retryLists()} className="shrink-0 font-semibold underline underline-offset-2">Tentar novamente</button></div>}
+          {section === 'occurrences' ? (
+            visibleOccurrences.length ? (
+              visibleOccurrences.map((occ) => {
+                const sla = computeSlaDisplay(occ, Date.now());
+                const statusLabel = translateText(OCCURRENCE_STATUS_LABELS[occ.status] || occ.status);
+                const typeLabel = translateText(OCCURRENCE_TYPE_LABELS[occ.type] || occ.occurrenceType || 'Ocorrência');
+                return (
+                  <button
+                    key={`occ-${occ.id}`}
+                    type="button"
+                    data-communications-list-item
+                    data-selected={selectedOccurrenceId === occ.id && !assistantActive ? 'true' : 'false'}
+                    onClick={() => {
+                      pendingLatestScrollRef.current = null;
+                      setAssistantActive(false);
+                      setSelectedGroupId(null);
+                      setSelectedDirectId(null);
+                      setDraftRecipient(null);
+                      setSelectedOccurrenceId(occ.id);
+                    }}
+                    className={`flex w-full items-start gap-3 border-b border-[#F1F4F7] px-4 py-3.5 text-left ${selectedOccurrenceId === occ.id && !assistantActive ? 'bg-[#F1F4F7]' : 'hover:bg-slate-50'}`}
+                  >
+                    <span className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${sla.breached ? 'bg-rose-100 text-rose-700' : 'bg-[#263548] text-[#FFAA00]'}`}>
+                      <AlertTriangle size={17} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center justify-between gap-2">
+                        <b className="truncate font-mono text-xs text-[#263548]">{occ.code || `OC #${occ.id}`} · {typeLabel}</b>
+                        <span className={`shrink-0 text-[10px] font-semibold ${sla.breached ? 'text-rose-700' : 'text-slate-500'}`}>{statusLabel}</span>
+                      </span>
+                      <small className="mt-1 block truncate text-xs text-slate-500">
+                        {[
+                          occ.numeroOp ? `OP ${occ.numeroOp}` : null,
+                          occ.pvNumber ? `PV ${occ.pvNumber}` : null,
+                          occ.componentCode || null,
+                        ].filter(Boolean).join(' · ') || occ.description}
+                      </small>
+                      <small className="mt-1 flex items-center justify-between gap-2 text-[10px] text-slate-400">
+                        <span className="truncate">{occ.sector || 'PCP'}{occ.assigneeName ? ` · ${occ.assigneeName}` : ''}</span>
+                        <span className={sla.breached ? 'font-semibold text-rose-700' : ''}>{sla.label}</span>
+                      </small>
+                    </span>
+                  </button>
+                );
+              })
+            ) : (
+              <p className="p-5 text-xs text-slate-500">{translateText('Nenhuma ocorrência encontrada.')}</p>
+            )
+          ) : section === 'groups' ? (
             visibleGroups.length ? (
               visibleGroups.map((group, index) => (
                 <button
@@ -760,7 +1125,7 @@ export const CommunicationsView: React.FC<{
                   type="button"
                   data-communications-list-item
                   data-selected={selectedGroupId === group.id && !assistantActive ? 'true' : 'false'}
-                  onClick={() => { pendingLatestScrollRef.current = `group:${group.id}`; setAssistantActive(false); setSelectedGroupId(group.id); setSelectedDirectId(null); setDraftRecipient(null); setMessages([]); setMessagesLoading(true); setMessagesError(false); setReplyingTo(null); lastSeenMessageRef.current = null; if (!localPreview) void api.markCommunicationGroupRead(group.id).then(loadGroups).catch(() => undefined); }}
+                  onClick={() => { pendingLatestScrollRef.current = `group:${group.id}`; setAssistantActive(false); setSelectedOccurrenceId(null); setSelectedGroupId(group.id); setSelectedDirectId(null); setDraftRecipient(null); setMessages([]); setMessagesLoading(true); setMessagesError(false); setReplyingTo(null); lastSeenMessageRef.current = null; if (!localPreview) void api.markCommunicationGroupRead(group.id).then(loadGroups).catch(() => undefined); }}
                   className={`flex w-full items-center gap-3 border-b border-[#F1F4F7] px-4 py-3.5 text-left ${selectedGroupId === group.id && !assistantActive ? 'bg-[#F1F4F7]' : 'hover:bg-slate-50'}`}
                 >
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#263548] text-[#FFAA00]">
@@ -786,7 +1151,7 @@ export const CommunicationsView: React.FC<{
                     type="button"
                     data-communications-list-item
                     data-selected={selectedDirectId === directId && !assistantActive ? 'true' : 'false'}
-                    onClick={() => { pendingLatestScrollRef.current = `direct:${directId}`; setAssistantActive(false); setSelectedGroupId(null); setSelectedDirectId(directId); setDraftRecipient(null); setMessages([]); setMessagesLoading(true); setMessagesError(false); setReplyingTo(null); lastSeenMessageRef.current = null; if (!localPreview) void api.markCommunicationDirectRead(directId).then(loadDirects).catch(() => undefined); }}
+                    onClick={() => { pendingLatestScrollRef.current = `direct:${directId}`; setAssistantActive(false); setSelectedOccurrenceId(null); setSelectedGroupId(null); setSelectedDirectId(directId); setDraftRecipient(null); setMessages([]); setMessagesLoading(true); setMessagesError(false); setReplyingTo(null); lastSeenMessageRef.current = null; if (!localPreview) void api.markCommunicationDirectRead(directId).then(loadDirects).catch(() => undefined); }}
                     className={`flex w-full items-center gap-3 border-b border-[#F1F4F7] px-4 py-3.5 text-left ${selectedDirectId === directId && !assistantActive ? 'bg-[#F1F4F7]' : 'hover:bg-slate-50'}`}
                   >
                     <ContactAvatar name={conversation.name} avatarUrl={conversation.avatarUrl} size="list" />
@@ -807,6 +1172,7 @@ export const CommunicationsView: React.FC<{
         <nav data-theme-communications-rail aria-label={translateText('Seções da comunicação')} className="flex shrink-0 items-stretch justify-around border-t border-[#263548] bg-[#151C25] pb-[env(safe-area-inset-bottom)] md:hidden">
           <button type="button" onClick={() => { setSection('conversations'); clearSelection(); }} aria-current={section === 'conversations' && !assistantActive ? 'page' : undefined} className={`relative flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-semibold transition ${section === 'conversations' && !assistantActive ? 'text-[#FFAA00]' : 'text-slate-300'}`}><MessageCircle size={18}/><span>{translateText('Conversas')}</span>{unreadDirectTotal > 0 && <b className="absolute left-1/2 top-1 ml-2 min-w-4 rounded-full bg-[#FFAA00] px-1 text-center text-[9px] leading-4 text-[#151C25]">{unreadDirectTotal}</b>}</button>
           <button type="button" onClick={() => { setSection('groups'); clearSelection(); }} aria-current={section === 'groups' && !assistantActive ? 'page' : undefined} className={`relative flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-semibold transition ${section === 'groups' && !assistantActive ? 'text-[#FFAA00]' : 'text-slate-300'}`}><Users size={18}/><span>{translateText('Grupos')}</span>{unreadGroupTotal > 0 && <b className="absolute left-1/2 top-1 ml-2 min-w-4 rounded-full bg-[#FFAA00] px-1 text-center text-[9px] leading-4 text-[#151C25]">{unreadGroupTotal}</b>}</button>
+          <button type="button" onClick={() => { setSection('occurrences'); clearSelection(); }} aria-current={section === 'occurrences' && !assistantActive ? 'page' : undefined} className={`relative flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-semibold transition ${section === 'occurrences' && !assistantActive ? 'text-[#FFAA00]' : 'text-slate-300'}`}><AlertTriangle size={18}/><span>{translateText('Ocorrências')}</span>{openOccurrencesCount > 0 && <b className="absolute left-1/2 top-1 ml-2 min-w-4 rounded-full bg-[#FFAA00] px-1 text-center text-[9px] leading-4 text-[#151C25]">{openOccurrencesCount}</b>}</button>
           <button type="button" onClick={() => selectAssistant()} aria-label={translateText('Assistente Flash')} title={translateText('Assistente Flash')} className={`flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-semibold transition ${assistantActive ? 'text-[#FFAA00]' : 'text-slate-300 hover:text-[#FFAA00]'}`}><Sparkles size={18}/><span className="truncate">{translateText('Assistente Flash')}</span></button>
           <div className="flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[10px] font-semibold text-slate-300"><UserAccountMenu compact currentUser={currentUser} onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} onOpenFeedback={onOpenFeedback} onOpenHelpInfo={onOpenHelpInfo} onOpenShortcuts={onOpenShortcuts} onLogout={onLogout}/><span>{translateText('Meu perfil')}</span></div>
           <button type="button" onClick={onBack} aria-label={translateText('Voltar ao sistema')} title={translateText('Voltar ao sistema')} className="flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-semibold text-slate-300 transition hover:text-[#FFAA00]"><Home size={18}/><span>{translateText('Sistema')}</span></button>
@@ -822,15 +1188,50 @@ export const CommunicationsView: React.FC<{
             onNavigate={onNavigate}
             onBackMobile={() => setAssistantActive(false)}
           />
+        ) : selectedOccurrenceId !== null ? (
+          <OccurrenceThreadPanel
+            occurrenceId={selectedOccurrenceId}
+            onBack={clearSelection}
+            onOpenOp={(op) => onNavigate?.('traceability', { search: op })}
+            onUpdated={() => void loadOccurrences()}
+          />
         ) : selectedGroup ? <>
-          <GroupConversationHeader name={selectedGroup.name} sector={selectedGroup.sector} searchQuery={conversationSearchQuery} onSearchChange={setConversationSearchQuery} matchCount={activeSearchQuery ? searchResultCount : null} totalMessages={activeSearchQuery ? searchResultTotal : messages.length} canDelete={selectedGroup.canDelete ?? false} onClear={() => setConversationAction('clear')} onDeleteGroup={() => setConversationAction('delete-group')} onInfo={() => void openConversationInfo()} onBack={clearSelection}/>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{messagesLoading && !messages.length ? <LoadingState compact label={translateText('Carregando mensagens…')} /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={displayedMessages} searchQuery={conversationSearchQuery} loadingSearch={displayedSearchLoading} selectedMessageId={messageDetails?.id ?? null} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={displayedHasOlder} loadingOlder={loadingOlder} groupId={selectedGroupId} conversationKey={`group:${selectedGroupId}`} currentUserUid={currentUser?.uid || api.getUser()?.uid || 'unknown'} onAskAssistant={(prompt) => selectAssistant(prompt)} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={message => { setProfileUser(null); setConversationInfoOpen(false); setMessageDetails(message); }} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}</div>
-          <MessageComposer body={body} setBody={setBody} send={send} sending={sendingMessage} onSendAudio={sendAudioMessage} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
+          <GroupConversationHeader name={selectedGroup.name} sector={selectedGroup.sector} searchQuery={conversationSearchQuery} onSearchChange={setConversationSearchQuery} matchCount={activeSearchQuery ? searchResultCount : null} totalMessages={activeSearchQuery ? searchResultTotal : messages.length} canDelete={selectedGroup.canDelete ?? false} canConvert={canCreateOccurrences} onConvertToOccurrence={openConvertFromConversation} onClear={() => setConversationAction('clear')} onDeleteGroup={() => setConversationAction('delete-group')} onInfo={() => void openConversationInfo()} onBack={clearSelection}/>
+          {linkedOccurrence && (
+            <OccurrenceContextBar
+              occurrence={linkedOccurrence}
+              compact
+              onOpenOccurrence={() => {
+                setSection('occurrences');
+                setSelectedGroupId(null);
+                setSelectedDirectId(null);
+                setDraftRecipient(null);
+                setSelectedOccurrenceId(linkedOccurrence.id);
+              }}
+              onOpenOp={(op) => onNavigate?.('traceability', { search: op })}
+            />
+          )}
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{messagesLoading && !messages.length ? <LoadingState compact label={translateText('Carregando mensagens…')} /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description={messagesErrorDetail || 'Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente.'} onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={displayedMessages} searchQuery={conversationSearchQuery} loadingSearch={displayedSearchLoading} selectedMessageId={messageDetails?.id ?? null} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={displayedHasOlder} loadingOlder={loadingOlder} groupId={selectedGroupId} conversationKey={`group:${selectedGroupId}`} currentUserUid={currentUser?.uid || api.getUser()?.uid || 'unknown'} canConvert={canCreateOccurrences} onSaveDrawing={saveMessageDrawing} onConvertToOccurrence={(message) => setConvertTarget({ sourceKind: 'group', sourceMessageId: message.id, initialText: message.body })} onAskAssistant={(prompt) => selectAssistant(prompt)} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={message => { setProfileUser(null); setConversationInfoOpen(false); setMessageDetails(message); }} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}</div>
+          <MessageComposer body={body} setBody={setBody} send={send} sending={sendingMessage} onSendAudio={sendAudioMessage} onSendImage={sendImageMessage} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
         </> : directTitle ? <>
-          <DirectConversationHeader name={directTitle} avatarUrl={selectedDirect?.avatarUrl || draftRecipient?.avatarUrl} subtitle={draftRecipient ? translateText('Nova conversa · será criada ao enviar a primeira mensagem') : directDepartment || translateText('Conversa direta')} searchQuery={conversationSearchQuery} onSearchChange={setConversationSearchQuery} matchCount={activeSearchQuery ? searchResultCount : null} totalMessages={activeSearchQuery ? searchResultTotal : messages.length} canClear={selectedDirectId !== null} onInfo={() => void openConversationInfo()} onClear={() => setConversationAction('clear')} onBack={clearSelection}/>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{messagesLoading && !messages.length ? <LoadingState compact label={translateText('Carregando mensagens…')} /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description="Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente." onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={displayedMessages} searchQuery={conversationSearchQuery} loadingSearch={displayedSearchLoading} selectedMessageId={messageDetails?.id ?? null} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={displayedHasOlder} loadingOlder={loadingOlder} directId={selectedDirectId} conversationKey={`direct:${selectedDirectId}`} currentUserUid={currentUser?.uid || api.getUser()?.uid || 'unknown'} onAskAssistant={(prompt) => selectAssistant(prompt)} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={message => { setProfileUser(null); setConversationInfoOpen(false); setMessageDetails(message); }} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}</div>
-          <MessageComposer body={body} setBody={setBody} send={send} sending={sendingMessage} onSendAudio={sendAudioMessage} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
-        </> : <div className="m-auto max-w-md px-6 text-center"><div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white text-[#916B19] shadow-sm"><MessageCircle size={28}/></div><h2 className="text-lg font-semibold text-[#263548]">Sua comunicação de produção</h2><p className="mt-2 text-sm leading-6 text-slate-500">Selecione uma conversa ou grupo. As mensagens ficam visíveis apenas para seus participantes.</p></div>}
+          <DirectConversationHeader name={directTitle} avatarUrl={selectedDirect?.avatarUrl || draftRecipient?.avatarUrl} subtitle={draftRecipient ? translateText('Nova conversa · será criada ao enviar a primeira mensagem') : directDepartment || translateText('Conversa direta')} searchQuery={conversationSearchQuery} onSearchChange={setConversationSearchQuery} matchCount={activeSearchQuery ? searchResultCount : null} totalMessages={activeSearchQuery ? searchResultTotal : messages.length} canClear={selectedDirectId !== null} canConvert={canCreateOccurrences} onConvertToOccurrence={openConvertFromConversation} onInfo={() => void openConversationInfo()} onClear={() => setConversationAction('clear')} onBack={clearSelection}/>
+          {linkedOccurrence && (
+            <OccurrenceContextBar
+              occurrence={linkedOccurrence}
+              compact
+              onOpenOccurrence={() => {
+                setSection('occurrences');
+                setSelectedGroupId(null);
+                setSelectedDirectId(null);
+                setDraftRecipient(null);
+                setSelectedOccurrenceId(linkedOccurrence.id);
+              }}
+              onOpenOp={(op) => onNavigate?.('traceability', { search: op })}
+            />
+          )}
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{messagesLoading && !messages.length ? <LoadingState compact label={translateText('Carregando mensagens…')} /> : messagesError && !messages.length ? <DataUnavailableState compact title="Mensagens indisponíveis" description={messagesErrorDetail || 'Não foi possível carregar esta conversa. Verifique sua conexão e tente novamente.'} onRetry={() => { loadedConversationRef.current = null; void loadMessages(); }} /> : <div className="flex min-h-0 flex-1 flex-col">{messagesError && <div role="status" className="flex items-center justify-between gap-3 bg-transparent px-4 py-1.5 text-[11px] text-slate-500"><span>Sem conexão com o servidor. Mantendo as mensagens já carregadas.</span><button type="button" onClick={() => void loadMessages()} className="shrink-0 font-semibold text-[#916B19] underline underline-offset-2">Tentar atualizar</button></div>}<MessageList messages={displayedMessages} searchQuery={conversationSearchQuery} loadingSearch={displayedSearchLoading} selectedMessageId={messageDetails?.id ?? null} scrollerRef={messageListRef} loadOlder={loadOlderMessages} hasOlder={displayedHasOlder} loadingOlder={loadingOlder} directId={selectedDirectId} conversationKey={`direct:${selectedDirectId}`} currentUserUid={currentUser?.uid || api.getUser()?.uid || 'unknown'} canConvert={canCreateOccurrences} onSaveDrawing={saveMessageDrawing} onConvertToOccurrence={(message) => setConvertTarget({ sourceKind: 'direct', sourceMessageId: message.id, initialText: message.body })} onAskAssistant={(prompt) => selectAssistant(prompt)} onReply={setReplyingTo} onForward={setForwardingMessage} onDetails={message => { setProfileUser(null); setConversationInfoOpen(false); setMessageDetails(message); }} onDelete={setMessageToDelete} onToggleReaction={toggleMessageReaction}/></div>}</div>
+          <MessageComposer body={body} setBody={setBody} send={send} sending={sendingMessage} onSendAudio={sendAudioMessage} onSendImage={sendImageMessage} replyingTo={replyingTo} cancelReply={() => setReplyingTo(null)}/>
+        </> : <div className="m-auto max-w-md px-6 text-center"><div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white text-[#916B19] shadow-sm"><MessageCircle size={28}/></div><h2 className="text-lg font-semibold text-[#263548]">Sua comunicação de produção</h2><p className="mt-2 text-sm leading-6 text-slate-500">Selecione uma conversa, grupo ou ocorrência. As mensagens ficam visíveis apenas para seus participantes.</p></div>}
         {error && <p role="alert" className="border-t border-slate-200/70 bg-transparent px-4 py-1.5 text-[11px] text-slate-500">{error}</p>}
         <AnimatePresence>
           {messageDetails && <>
@@ -866,6 +1267,23 @@ export const CommunicationsView: React.FC<{
         <h3 className="font-semibold text-[#263548]">Criar grupo</h3><input required minLength={2} maxLength={80} value={name} onChange={event => setName(event.target.value)} placeholder="Nome do grupo" className="w-full rounded-lg border border-[#DCE3EB] p-2.5 text-sm"/><input required minLength={2} maxLength={80} value={sector} onChange={event => setSector(event.target.value)} placeholder="Setor" className="w-full rounded-lg border border-[#DCE3EB] p-2.5 text-sm"/><label className="block text-xs font-semibold text-[#263548]">Participantes</label><input value={userSearch} onChange={event => setUserSearch(event.target.value)} placeholder="Pesquisar usuários" className="w-full rounded-lg border border-[#DCE3EB] p-2.5 text-sm"/>{error && <p role="alert" className="bg-transparent px-1 py-1 text-xs text-rose-700">{error}</p>}<div className="max-h-44 overflow-y-auto rounded-lg border border-[#E7ECF1]">{visibleUsers.map((user, index) => <label key={`member-${user.id || index}`} className="flex cursor-pointer items-center gap-2 border-b border-[#F1F4F7] px-3 py-2 last:border-0"><input type="checkbox" checked={memberIds.includes(user.id)} onChange={event => setMemberIds(ids => event.target.checked ? [...ids, user.id] : ids.filter(id => id !== user.id))}/><span className="text-sm text-[#263548]">{user.name}<small className="ml-2 text-xs text-slate-500">{user.department || 'Sem setor informado'}</small></span></label>)}</div><div className="flex justify-end gap-2 pt-1"><button type="button" onClick={() => setNewGroup(false)} className="rounded-lg border border-[#DCE3EB] px-3 py-2 text-sm">Cancelar</button><button className="rounded-lg bg-[#FFAA00] px-3 py-2 text-sm font-semibold text-[#151C25]">Criar grupo</button></div>
       </form>}
     </div>}
+
+    <ConvertMessageToOccurrenceModal
+      open={Boolean(convertTarget)}
+      sourceKind={convertTarget?.sourceKind}
+      sourceMessageId={convertTarget?.sourceMessageId}
+      initialText={convertTarget?.initialText || ''}
+      onClose={() => setConvertTarget(null)}
+      onCreated={(created) => {
+        setConvertTarget(null);
+        void loadOccurrences();
+        if (created?.id) {
+          setSection('occurrences');
+          clearSelection();
+          setSelectedOccurrenceId(created.id);
+        }
+      }}
+    />
   </section>;
 };
 
@@ -878,7 +1296,7 @@ const readLocalMessageActions = (uid: string, conversationKey: string): LocalMes
   } catch { return { pinnedId: null, favoriteIds: [] }; }
 };
 
-const DirectConversationHeader: React.FC<{ name: string; avatarUrl?: string | null; subtitle: string; searchQuery: string; onSearchChange: (query: string) => void; matchCount: number | null; totalMessages: number; canClear: boolean; onInfo: () => void; onClear: () => void; onBack: () => void }> = ({ name, avatarUrl, subtitle, searchQuery, onSearchChange, matchCount, totalMessages, canClear, onInfo, onClear, onBack }) => {
+const DirectConversationHeader: React.FC<{ name: string; avatarUrl?: string | null; subtitle: string; searchQuery: string; onSearchChange: (query: string) => void; matchCount: number | null; totalMessages: number; canClear: boolean; canConvert?: boolean; onConvertToOccurrence: () => void; onInfo: () => void; onClear: () => void; onBack: () => void }> = ({ name, avatarUrl, subtitle, searchQuery, onSearchChange, matchCount, totalMessages, canClear, canConvert = true, onConvertToOccurrence, onInfo, onClear, onBack }) => {
   const [searchOpen, setSearchOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -899,11 +1317,23 @@ const DirectConversationHeader: React.FC<{ name: string; avatarUrl?: string | nu
         <span className="min-w-0"><b className="block truncate text-sm font-semibold text-[#263548]">{name}</b><small className="mt-0.5 block truncate text-xs text-slate-500">{subtitle}</small></span>
       </button>
       <div className="flex shrink-0 items-center gap-1">
+        {canConvert && (
+          <button
+            type="button"
+            onClick={onConvertToOccurrence}
+            title={translateText('Transformar em ocorrência')}
+            className="hidden items-center gap-1.5 rounded-lg border border-amber-300/70 bg-[#FFF9E9] px-2.5 py-1.5 text-[11px] font-semibold text-[#76530B] transition hover:bg-[#FFF1C8] sm:inline-flex"
+          >
+            <AlertTriangle size={14} />
+            <span>{translateText('Transformar em ocorrência')}</span>
+          </button>
+        )}
         <button type="button" onClick={toggleSearch} aria-label={translateText('Pesquisar mensagens')} aria-pressed={searchOpen} title={translateText('Pesquisar mensagens')} className={`rounded-full p-2.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${searchOpen ? 'bg-[#FFF4D6] text-[#76530B]' : 'text-slate-500 hover:bg-[#F1F4F7] hover:text-[#263548]'}`}><Search size={19}/></button>
         <div ref={menuRef} className="relative">
           <button type="button" onClick={() => setMenuOpen(open => !open)} aria-label={translateText('Mais opções do contato')} aria-haspopup="menu" aria-expanded={menuOpen} title={translateText('Mais opções')} className="rounded-full p-2.5 text-slate-500 transition-colors hover:bg-[#F1F4F7] hover:text-[#263548] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"><MoreVertical size={19}/></button>
           <AnimatePresence>
             {menuOpen && <motion.div role="menu" initial={{ opacity: 0, y: -5, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.98 }} transition={{ duration: 0.13 }} className="absolute right-0 top-[calc(100%+8px)] z-50 w-56 overflow-hidden rounded-xl border border-[#DCE3EB] bg-white py-1.5 text-[#263548] shadow-xl">
+              {canConvert && <button type="button" role="menuitem" onClick={() => { onConvertToOccurrence(); setMenuOpen(false); }} className="flex min-h-10 w-full items-center gap-3 px-3.5 py-2 text-left text-xs font-semibold text-[#76530B] transition-colors hover:bg-[#FFF9E9]"><AlertTriangle size={16}/>{translateText('Transformar em ocorrência')}</button>}
               <button type="button" role="menuitem" onClick={() => { onInfo(); setMenuOpen(false); }} className="flex min-h-10 w-full items-center gap-3 px-3.5 py-2 text-left text-xs font-medium transition-colors hover:bg-[#F1F4F7]"><Info size={16} className="text-slate-500"/>{translateText('Dados do contato')}</button>
               <button type="button" role="menuitem" onClick={toggleSearch} className="flex min-h-10 w-full items-center gap-3 px-3.5 py-2 text-left text-xs font-medium transition-colors hover:bg-[#F1F4F7]"><Search size={16} className="text-slate-500"/>{translateText('Pesquisar mensagens')}</button>
               {canClear && <button type="button" role="menuitem" onClick={() => { onClear(); setMenuOpen(false); }} className="flex min-h-10 w-full items-center gap-3 px-3.5 py-2 text-left text-xs font-medium transition-colors hover:bg-[#F1F4F7]"><Trash2 size={16} className="text-slate-500"/>{translateText('Limpar conversa')}</button>}
@@ -922,7 +1352,7 @@ const DirectConversationHeader: React.FC<{ name: string; avatarUrl?: string | nu
   </>;
 };
 
-const GroupConversationHeader: React.FC<{ name: string; sector: string; searchQuery: string; onSearchChange: (query: string) => void; matchCount: number | null; totalMessages: number; canDelete: boolean; onInfo: () => void; onClear: () => void; onDeleteGroup: () => void; onBack: () => void }> = ({ name, sector, searchQuery, onSearchChange, matchCount, totalMessages, canDelete, onInfo, onClear, onDeleteGroup, onBack }) => {
+const GroupConversationHeader: React.FC<{ name: string; sector: string; searchQuery: string; onSearchChange: (query: string) => void; matchCount: number | null; totalMessages: number; canDelete: boolean; canConvert?: boolean; onConvertToOccurrence: () => void; onInfo: () => void; onClear: () => void; onDeleteGroup: () => void; onBack: () => void }> = ({ name, sector, searchQuery, onSearchChange, matchCount, totalMessages, canDelete, canConvert = true, onConvertToOccurrence, onInfo, onClear, onDeleteGroup, onBack }) => {
   const [searchOpen, setSearchOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -943,11 +1373,23 @@ const GroupConversationHeader: React.FC<{ name: string; sector: string; searchQu
         <span className="min-w-0"><b className="block truncate text-sm font-semibold text-[#263548]">{name}</b><small className="mt-0.5 block truncate text-xs text-slate-500">{sector || translateText('Grupo de produção')}</small></span>
       </button>
       <div className="flex shrink-0 items-center gap-1">
+        {canConvert && (
+          <button
+            type="button"
+            onClick={onConvertToOccurrence}
+            title={translateText('Transformar em ocorrência')}
+            className="hidden items-center gap-1.5 rounded-lg border border-amber-300/70 bg-[#FFF9E9] px-2.5 py-1.5 text-[11px] font-semibold text-[#76530B] transition hover:bg-[#FFF1C8] sm:inline-flex"
+          >
+            <AlertTriangle size={14} />
+            <span>{translateText('Transformar em ocorrência')}</span>
+          </button>
+        )}
         <button type="button" onClick={toggleSearch} aria-label={translateText('Pesquisar mensagens')} aria-pressed={searchOpen} title={translateText('Pesquisar mensagens')} className={`rounded-full p-2.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${searchOpen ? 'bg-[#FFF4D6] text-[#76530B]' : 'text-slate-500 hover:bg-[#F1F4F7] hover:text-[#263548]'}`}><Search size={19}/></button>
         <div ref={menuRef} className="relative">
           <button type="button" onClick={() => setMenuOpen(open => !open)} aria-label={translateText('Mais opções do grupo')} aria-haspopup="menu" aria-expanded={menuOpen} title={translateText('Mais opções')} className="rounded-full p-2.5 text-slate-500 transition-colors hover:bg-[#F1F4F7] hover:text-[#263548] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"><MoreVertical size={19}/></button>
           <AnimatePresence>
             {menuOpen && <motion.div role="menu" initial={{ opacity: 0, y: -5, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.98 }} transition={{ duration: 0.13 }} className="absolute right-0 top-[calc(100%+8px)] z-50 w-56 overflow-hidden rounded-xl border border-[#DCE3EB] bg-white py-1.5 text-[#263548] shadow-xl">
+              {canConvert && <button type="button" role="menuitem" onClick={() => { onConvertToOccurrence(); setMenuOpen(false); }} className="flex min-h-10 w-full items-center gap-3 px-3.5 py-2 text-left text-xs font-semibold text-[#76530B] transition-colors hover:bg-[#FFF9E9]"><AlertTriangle size={16}/>{translateText('Transformar em ocorrência')}</button>}
               <button type="button" role="menuitem" onClick={() => { onInfo(); setMenuOpen(false); }} className="flex min-h-10 w-full items-center gap-3 px-3.5 py-2 text-left text-xs font-medium transition-colors hover:bg-[#F1F4F7]"><Info size={16} className="text-slate-500"/>{translateText('Dados do grupo')}</button>
               <button type="button" role="menuitem" onClick={toggleSearch} className="flex min-h-10 w-full items-center gap-3 px-3.5 py-2 text-left text-xs font-medium transition-colors hover:bg-[#F1F4F7]"><Search size={16} className="text-slate-500"/>{translateText('Pesquisar mensagens')}</button>
               <button type="button" role="menuitem" onClick={() => { onClear(); setMenuOpen(false); }} className="flex min-h-10 w-full items-center gap-3 px-3.5 py-2 text-left text-xs font-medium transition-colors hover:bg-[#F1F4F7]"><Trash2 size={16} className="text-slate-500"/>{translateText('Limpar conversa')}</button>
@@ -995,7 +1437,7 @@ const GroupDetailsPanel: React.FC<{ group: Group; members: DirectoryUser[]; onCl
   </div>
 </motion.aside>;
 
-const MessageList: React.FC<{ messages: Message[]; searchQuery?: string; loadingSearch?: boolean; selectedMessageId: number | null; scrollerRef: React.RefObject<HTMLDivElement | null>; loadOlder: () => void; hasOlder: boolean; loadingOlder: boolean; groupId?: number | null; directId?: number | null; conversationKey: string; currentUserUid: string; onAskAssistant: (prompt: string) => void; onReply: (message: Message) => void; onForward: (message: Message) => void; onDetails: (message: Message) => void; onDelete: (message: Message) => void; onToggleReaction: (message: Message, emoji: string) => void }> = ({ messages, searchQuery = '', loadingSearch = false, selectedMessageId, scrollerRef, loadOlder, hasOlder, loadingOlder, groupId, directId, conversationKey, currentUserUid, onAskAssistant, onReply, onForward, onDetails, onDelete, onToggleReaction }) => {
+const MessageList: React.FC<{ messages: Message[]; searchQuery?: string; loadingSearch?: boolean; selectedMessageId: number | null; scrollerRef: React.RefObject<HTMLDivElement | null>; loadOlder: () => void; hasOlder: boolean; loadingOlder: boolean; groupId?: number | null; directId?: number | null; conversationKey: string; currentUserUid: string; canConvert?: boolean; onSaveDrawing: (messageId: number, drawingData: DrawingOverlayData) => Promise<void>; onConvertToOccurrence: (message: Message) => void; onAskAssistant: (prompt: string) => void; onReply: (message: Message) => void; onForward: (message: Message) => void; onDetails: (message: Message) => void; onDelete: (message: Message) => void; onToggleReaction: (message: Message, emoji: string) => void }> = ({ messages, searchQuery = '', loadingSearch = false, selectedMessageId, scrollerRef, loadOlder, hasOlder, loadingOlder, groupId, directId, conversationKey, currentUserUid, canConvert = true, onSaveDrawing, onConvertToOccurrence, onAskAssistant, onReply, onForward, onDetails, onDelete, onToggleReaction }) => {
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [reactionMenuId, setReactionMenuId] = useState<number | null>(null);
   const [menuAbove, setMenuAbove] = useState(false);
@@ -1109,6 +1551,7 @@ const MessageList: React.FC<{ messages: Message[]; searchQuery?: string; loading
                 </motion.div>}
               </AnimatePresence>
               <MessageMenuItem icon={<Forward size={15}/>} label="Encaminhar" onClick={() => { onForward(message); setOpenMenuId(null); }} />
+              {canConvert && !message.hasAudio && <MessageMenuItem icon={<AlertTriangle size={15}/>} label="Transformar em ocorrência" onClick={() => { onConvertToOccurrence(message); setOpenMenuId(null); }} />}
               <MessageMenuItem icon={<Pin size={15}/>} label={messageActions.pinnedId === message.id ? 'Desafixar mensagem' : 'Fixar mensagem'} onClick={() => { togglePinned(message); setOpenMenuId(null); }} />
               <MessageMenuItem icon={<Sparkles size={15}/>} label="Perguntar ao Assistente Flash" onClick={() => openAssistantWithMessage(message)} />
               <MessageMenuItem icon={<Star size={15} className={messageActions.favoriteIds.includes(message.id) ? 'fill-current text-amber-300' : ''}/>} label={messageActions.favoriteIds.includes(message.id) ? 'Remover dos favoritos' : 'Favoritar mensagem'} onClick={() => { toggleFavorite(message); setOpenMenuId(null); }} />
@@ -1118,7 +1561,25 @@ const MessageList: React.FC<{ messages: Message[]; searchQuery?: string; loading
         </AnimatePresence>
         <div className="mb-1 flex min-h-8 items-center gap-1.5"><p className="min-w-0 truncate text-[10px] font-semibold text-[#916B19]">{message.authorName}</p>{messageActions.pinnedId === message.id && <span title={translateText('Fixada neste dispositivo')} className="inline-flex shrink-0 items-center gap-0.5 text-[9px] text-slate-500"><Pin size={10}/>{translateText('Fixada')}</span>}<button type="button" data-message-action-trigger aria-haspopup="menu" onClick={event => toggleMenu(event, message.id)} aria-label={translateText('Ações da mensagem')} title={translateText('Ações da mensagem')} aria-expanded={openMenuId === message.id} className={`ml-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${openMenuId === message.id ? 'border-amber-500 bg-amber-100 text-[#573900]' : 'border-slate-300 bg-white/90 text-slate-600 hover:border-amber-500 hover:bg-amber-50 hover:text-[#573900] md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100'}`}><ChevronDown className={`transition-transform ${openMenuId === message.id && menuAbove ? 'rotate-180' : ''}`} size={18}/></button></div>
         {message.replyToMessageId && <div className="mb-2 border-l-2 border-[#FFAA00] bg-[#F1F4F7]/80 px-2.5 py-1.5"><p className="text-[10px] font-semibold text-[#916B19]">{quoted?.authorName || 'Mensagem anterior'}</p><p className="line-clamp-2 whitespace-pre-wrap break-words text-xs text-slate-600">{quoted?.body || 'Conteúdo fora do histórico carregado'}</p></div>}
-        {message.audioPreviewUrl ? <audio controls preload="metadata" src={message.audioPreviewUrl} className="max-w-full"/> : message.hasAudio && groupId !== undefined && groupId !== null ? <PrivateAudioPlayer message={message} load={() => api.getCommunicationGroupAudio(groupId, message.id)}/> : message.hasAudio && directId !== undefined && directId !== null ? <PrivateAudioPlayer message={message} load={() => api.getCommunicationDirectAudio(directId, message.id)}/> : <p className={`whitespace-pre-wrap break-words text-sm ${message.deletedAt ? 'italic text-slate-500' : 'text-[#263548]'}`}>{message.body}</p>}
+        {(message.imagePreviewUrl || (message.hasImage && !message.deletedAt)) && (
+          <div className="mb-1.5">
+            <AnnotatedImagePreview
+              cacheKey={`${conversationKey}:${message.id}`}
+              loadImageUrl={
+                message.imagePreviewUrl
+                  ? () => Promise.resolve(message.imagePreviewUrl!)
+                  : groupId !== undefined && groupId !== null
+                    ? () => api.getCommunicationGroupImage(groupId, message.id)
+                    : () => api.getCommunicationDirectImage(directId!, message.id)
+              }
+              drawingData={message.drawingData}
+              canDraw={!message.deletedAt}
+              caption={message.body}
+              onSaveDrawing={(nextDrawing) => onSaveDrawing(message.id, nextDrawing)}
+            />
+          </div>
+        )}
+        {message.audioPreviewUrl ? <audio controls preload="metadata" src={message.audioPreviewUrl} className="max-w-full"/> : message.hasAudio && groupId !== undefined && groupId !== null ? <PrivateAudioPlayer message={message} load={() => api.getCommunicationGroupAudio(groupId, message.id)}/> : message.hasAudio && directId !== undefined && directId !== null ? <PrivateAudioPlayer message={message} load={() => api.getCommunicationDirectAudio(directId, message.id)}/> : (message.hasImage && message.body === 'Imagem anexada' && !message.deletedAt) ? null : <p className={`whitespace-pre-wrap break-words text-sm ${message.deletedAt ? 'italic text-slate-500' : 'text-[#263548]'}`}>{message.body}</p>}
         {message.hasAudio && <p className="mt-1 text-[10px] text-slate-500">Áudio · {Math.max(1, Math.round((message.audioDurationMs || 0) / 1000))}s</p>}
         {!!message.reactions?.length && <div className="mt-2 flex flex-wrap gap-1.5">{message.reactions.map(reaction => <button key={reaction.emoji} type="button" onClick={() => onToggleReaction(message, reaction.emoji)} aria-label={`${reaction.emoji}, ${reaction.count} reações${reaction.reactedByMe ? ', sua reação' : ''}`} aria-pressed={reaction.reactedByMe} className={`rounded-full border px-2 py-0.5 text-xs transition ${reaction.reactedByMe ? 'border-[#D59A12] bg-[#FFF1C8]' : 'border-[#DCE3EB] bg-white hover:bg-[#F1F4F7]'}`}>{reaction.emoji} <span className="text-[10px] text-slate-600">{reaction.count}</span></button>)}</div>}
         <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-slate-400">{messageActions.favoriteIds.includes(message.id) && <Star size={11} className="fill-amber-400 text-amber-500" aria-label={translateText('Favorita')} />}<time>{formatMessageTime(message.createdAt)}</time>{own && recipientCount > 0 && <span title={readByCount ? `Lida por ${readByCount} de ${recipientCount}` : 'Enviada'} aria-label={readByCount ? `Lida por ${readByCount} de ${recipientCount}` : 'Enviada'} className={readByCount ? 'text-sky-600' : 'text-slate-400'}>{readByCount ? <CheckCheck size={13}/> : <Check size={13}/>}</span>}</div>
@@ -1206,15 +1667,39 @@ const MessageMenuItem: React.FC<{ icon: React.ReactNode; label: string; onClick:
   <span className="message-menu-icon">{icon}</span><span>{translateText(label)}</span>
 </button>;
 
-const MessageComposer: React.FC<{ body: string; setBody: (value: string) => void; send: () => void; sending: boolean; onSendAudio: (audio: Blob, durationMs: number) => Promise<void>; replyingTo: Message | null; cancelReply: () => void }> = ({ body, setBody, send, sending, onSendAudio, replyingTo, cancelReply }) => <form data-chat-composer onSubmit={event => { event.preventDefault(); void send(); }} className="relative z-10 flex shrink-0 flex-col gap-2 border-t border-[#DCE3EB] bg-[#F1F4F7] p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-4">
+const MessageComposer: React.FC<{ body: string; setBody: (value: string) => void; send: () => void; sending: boolean; onSendAudio: (audio: Blob, durationMs: number) => Promise<void>; onSendImage: (file: File) => Promise<void>; replyingTo: Message | null; cancelReply: () => void }> = ({ body, setBody, send, sending, onSendAudio, onSendImage, replyingTo, cancelReply }) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  return <form data-chat-composer onSubmit={event => { event.preventDefault(); void send(); }} className="relative z-10 flex shrink-0 flex-col gap-2 border-t border-[#DCE3EB] bg-[#F1F4F7] p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-4">
   {replyingTo && <div className="flex items-center gap-2 rounded-xl border-l-2 border-[#FFAA00] bg-white px-3 py-2 shadow-sm"><span className="min-w-0 flex-1"><b className="block text-[10px] text-[#916B19]">{translateText('Respondendo a')} {replyingTo.authorName}</b><small className="block truncate text-xs text-slate-600">{replyingTo.body}</small></span><button type="button" onClick={cancelReply} aria-label={translateText('Cancelar resposta')} className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-[#F1F4F7]"><X size={16}/></button></div>}
-  <div data-chat-composer-pill className="flex min-h-12 w-full items-center gap-1.5 rounded-full border border-[#D0D5DC] bg-white px-2 shadow-sm transition-colors focus-within:border-[#B8891F] focus-within:ring-2 focus-within:ring-amber-400/20">
+  <div data-chat-composer-pill className="flex min-h-12 w-full items-center gap-1 rounded-full border border-[#D0D5DC] bg-white px-2 shadow-sm transition-colors focus-within:border-[#B8891F] focus-within:ring-2 focus-within:ring-amber-400/20">
     <EmojiPicker buttonClassName="!border-transparent !bg-transparent hover:!border-transparent hover:!bg-[#F1F4F7]" onSelect={emoji => setBody(`${body}${emoji}`.slice(0, 4000))}/>
+    <input
+      ref={fileInputRef}
+      type="file"
+      accept="image/png,image/jpeg,image/webp"
+      className="hidden"
+      onChange={(event) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (file) void onSendImage(file);
+      }}
+    />
+    <button
+      type="button"
+      disabled={sending}
+      onClick={() => fileInputRef.current?.click()}
+      title={translateText('Anexar print/imagem (até 5 MB)')}
+      aria-label={translateText('Anexar print ou imagem')}
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-[#F1F4F7] hover:text-[#263548] disabled:opacity-40"
+    >
+      <ImagePlus size={18} />
+    </button>
     <textarea aria-label={translateText('Digite uma mensagem')} value={body} onChange={event => setBody(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} maxLength={4000} rows={1} placeholder={translateText('Digite uma mensagem')} className="max-h-28 min-h-10 min-w-0 flex-1 resize-none overflow-y-auto border-0 bg-transparent px-1 py-2.5 text-sm leading-5 text-[#263548] outline-none placeholder:text-slate-500 focus:ring-0"/>
     {body.trim() ? <button type="submit" disabled={sending} title={sending ? translateText('Enviando mensagem…') : translateText('Enviar mensagem')} aria-label={sending ? translateText('Enviando mensagem') : translateText('Enviar mensagem')} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#FFAA00] text-[#151C25] transition-colors hover:bg-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50"><SendPlaneIcon size={18}/></button>
       : <AudioRecorderButton onRecorded={onSendAudio} disabled={sending} label={translateText('Gravar áudio')} buttonClassName="!border-transparent !bg-transparent hover:!border-transparent hover:!bg-[#F1F4F7]"/>}
   </div>
 </form>;
+};
 
 const ContactAvatar: React.FC<{ name: string; avatarUrl?: string | null; size: 'list' | 'header' | 'profile' }> = ({ name, avatarUrl, size }) => {
   const [failed, setFailed] = useState(false);

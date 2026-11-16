@@ -29,17 +29,40 @@ export const createPool = () => {
   return global._postgresPool;
 };
 
-export async function withDbRetry<T>(operation: () => Promise<T>): Promise<T> {
-  try {
-    return await operation();
-  } catch (error: any) {
-    const message = String(error?.message || error?.cause?.message || '');
-    const isTransient = /connection terminated|econnreset|epipe|closed|broken pipe/i.test(message);
-    if (isTransient) {
-      console.warn('Transient PostgreSQL connection error, retrying query with fresh connection...');
+const TRANSIENT_PG_CODES = new Set([
+  'ECONNRESET',
+  'EPIPE',
+  'ETIMEDOUT',
+  'ECONNREFUSED',
+  '57P01',
+  '57P02',
+  '57P03',
+  '08000',
+  '08003',
+  '08006',
+]);
+
+function isTransientDbError(error: any): boolean {
+  const code = String(error?.code || error?.cause?.code || '');
+  if (TRANSIENT_PG_CODES.has(code)) return true;
+  const message = String(error?.message || error?.cause?.message || '');
+  return /connection terminated|econnreset|epipe|closed|broken pipe|timeout exceeded when trying to connect|connection error/i.test(message);
+}
+
+export async function withDbRetry<T>(operation: () => Promise<T>, maxRetries = 2): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    try {
       return await operation();
+    } catch (error: any) {
+      if (attempt < maxRetries && isTransientDbError(error)) {
+        attempt += 1;
+        console.warn(`Transient PostgreSQL connection error (attempt ${attempt}/${maxRetries}), retrying query...`, error?.code || error?.cause?.code || error?.message || error);
+        await new Promise((resolve) => setTimeout(resolve, 120 * attempt));
+        continue;
+      }
+      throw error;
     }
-    throw error;
   }
 }
 

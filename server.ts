@@ -6,6 +6,8 @@ import { fileURLToPath } from 'url';
 import apiRouter from './src/routes.ts';
 import { apiRateLimit } from './src/middleware/request-protection.ts';
 import { TokenService } from './src/services/token.service.ts';
+import { startNotificationEscalationWorker } from './src/modules/notifications/notifications.service.ts';
+import { ensureIncrementalMigrations } from './src/db/ensure-migrations.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -112,10 +114,21 @@ async function startServer() {
     res.status(500).json({ error: 'Erro interno no servidor. Consulte os logs do sistema.' });
   });
 
+  if (!localPreviewAuth) {
+    try {
+      await ensureIncrementalMigrations();
+    } catch (err) {
+      console.error('Startup incremental schema check failed (continuing startup):', err);
+    }
+  }
+
   const bindAddress = process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1';
   app.listen(PORT, bindAddress, () => {
     console.log(`🚀 NexusERP Fullstack Server running at http://${bindAddress}:${PORT}`);
     console.log('📦 Database connectivity is reported by GET /api/health.');
+    if (!localPreviewAuth) {
+      startNotificationEscalationWorker(60_000);
+    }
   });
 }
 

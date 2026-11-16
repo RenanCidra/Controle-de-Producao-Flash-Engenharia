@@ -11,6 +11,7 @@ import {
 } from '../../db/schema.ts';
 import type { UserRole } from '../../types/index.ts';
 import { appAuthorship } from '../../client/appMetadata.ts';
+import { evaluateMirrorFreshness, type MirrorFreshnessSnapshot } from '../occurrences/occurrence-stats.ts';
 
 export type CopilotPersonality = 'direct' | 'casual' | 'formal';
 
@@ -43,12 +44,14 @@ type OperationalContext = {
   recentOrders: any[];
   delayedOrdersInSample: any[];
   activeOccurrencesTotal: number | null;
+  slaBreachedTotal: number | null;
   activeOccurrences: any[];
   criticalInventoryTotal: number | null;
   criticalInventory: any[];
   linesTotal: number | null;
   lines: any[];
   lastSync: any | null;
+  mirrorFreshness: MirrorFreshnessSnapshot;
 };
 
 type SpecificOpResult =
@@ -57,7 +60,7 @@ type SpecificOpResult =
   | { candidate: string; status: 'found'; op: any; occurrences: any[]; occurrencesAvailable: boolean; routings: any[] };
 
 const RECENT_ORDER_LIMIT = 50;
-const ACTIVE_OCCURRENCE_STATUSES = ['OPEN', 'IN_PROGRESS'];
+const ACTIVE_OCCURRENCE_STATUSES = ['ABERTA', 'EM_ATENDIMENTO', 'AGUARDANDO', 'OPEN', 'IN_PROGRESS'];
 
 function asCount(value: unknown): number | null {
   const count = Number(value);
@@ -118,7 +121,7 @@ export class CopilotService {
       return this.cachedContext.data;
     }
 
-    const [orders, orderCount, occurrences, occurrenceCount, stock, stockCount, lines, lineCount, sync] = await Promise.all([
+    const [orders, orderCount, occurrences, occurrenceCount, slaBreachCount, stock, stockCount, lines, lineCount, sync] = await Promise.all([
       this.safeSelect('orders', db.select({
         numeroOp: protheusProductionOrders.numeroOp,
         codigoProduto: protheusProductionOrders.codigoProduto,
@@ -135,16 +138,28 @@ export class CopilotService {
       this.safeSelect('orders', db.select({ value: sql<number>`count(*)` }).from(protheusProductionOrders)),
       this.safeSelect('occurrences', db.select({
         id: productionOccurrences.id,
+        code: productionOccurrences.code,
+        type: productionOccurrences.type,
+        sector: productionOccurrences.sector,
+        priority: productionOccurrences.priority,
         numeroOp: productionOccurrences.numeroOp,
+        pvNumber: productionOccurrences.pvNumber,
+        componentCode: productionOccurrences.componentCode,
         occurrenceType: productionOccurrences.occurrenceType,
         description: productionOccurrences.description,
         workstation: productionOccurrences.workstation,
         status: productionOccurrences.status,
+        slaDueAt: productionOccurrences.slaDueAt,
+        isRecurrence: productionOccurrences.isRecurrence,
         createdAt: productionOccurrences.createdAt,
       }).from(productionOccurrences)
         .where(inArray(productionOccurrences.status, ACTIVE_OCCURRENCE_STATUSES))
-        .orderBy(desc(productionOccurrences.createdAt)).limit(10)),
+        .orderBy(desc(productionOccurrences.openedAt), desc(productionOccurrences.createdAt)).limit(10)),
       this.safeSelect('occurrences', db.select({ value: sql<number>`count(*)` }).from(productionOccurrences)
+        .where(inArray(productionOccurrences.status, ACTIVE_OCCURRENCE_STATUSES))),
+      this.safeSelect('occurrences', db.select({
+        value: sql<number>`count(*) FILTER (WHERE ${productionOccurrences.slaDueAt} IS NOT NULL AND ${productionOccurrences.slaDueAt} < NOW())`,
+      }).from(productionOccurrences)
         .where(inArray(productionOccurrences.status, ACTIVE_OCCURRENCE_STATUSES))),
       this.safeSelect('inventory', db.select({
         sku: inventoryItems.sku,
@@ -167,6 +182,7 @@ export class CopilotService {
       this.safeSelect('lines', db.select({ value: sql<number>`count(*)` }).from(productionLines)),
       this.safeSelect('sync', db.select({
         batchCode: protheusImportBatches.batchCode,
+        sourceType: protheusImportBatches.sourceType,
         entityType: protheusImportBatches.entityType,
         recordsCount: protheusImportBatches.recordsCount,
         status: protheusImportBatches.status,
@@ -174,6 +190,7 @@ export class CopilotService {
       }).from(protheusImportBatches).orderBy(desc(protheusImportBatches.createdAt)).limit(1)),
     ]);
 
+    const latestBatch = sync.rows[0] || null;
     const result: OperationalContext = {
       sources: {
         orders: orders.available && orderCount.available,
@@ -186,12 +203,14 @@ export class CopilotService {
       recentOrders: orders.rows,
       delayedOrdersInSample: orders.rows.filter(isOverdue),
       activeOccurrencesTotal: occurrenceCount.available ? asCount(occurrenceCount.rows[0]?.value) : null,
+      slaBreachedTotal: slaBreachCount.available ? asCount(slaBreachCount.rows[0]?.value) : null,
       activeOccurrences: occurrences.rows,
       criticalInventoryTotal: stockCount.available ? asCount(stockCount.rows[0]?.value) : null,
       criticalInventory: stock.rows,
       linesTotal: lineCount.available ? asCount(lineCount.rows[0]?.value) : null,
       lines: lines.rows,
-      lastSync: sync.rows[0] || null,
+      lastSync: latestBatch,
+      mirrorFreshness: evaluateMirrorFreshness(latestBatch),
     };
 
     this.cachedContext = { data: result, expiresAt: now + this.CONTEXT_TTL_MS };
@@ -345,10 +364,14 @@ DIRETRIZES DE ATUAÇÃO:
           },
           occurrences: {
             total: context.activeOccurrencesTotal,
+            slaBreached: context.slaBreachedTotal,
             items: context.activeOccurrences.slice(0, 4).map((occ) => ({
+              codigo: occ.code,
               op: occ.numeroOp,
+              setor: occ.sector,
+              prioridade: occ.priority,
               tipo: occ.occurrenceType,
-              posto: occ.workstation,
+              componente: occ.componentCode,
               status: occ.status,
             })),
           },
@@ -362,7 +385,12 @@ DIRETRIZES DE ATUAÇÃO:
             })),
           },
           lines: context.lines.slice(0, 4).map((l) => ({ nome: l.name, status: l.status })),
-          sync: context.lastSync ? { lote: context.lastSync.batchCode, status: context.lastSync.status } : null,
+          sync: context.lastSync ? {
+            lote: context.lastSync.batchCode,
+            status: context.lastSync.status,
+            frescor: context.mirrorFreshness.status,
+            idadeMinutos: context.mirrorFreshness.ageMinutes,
+          } : { frescor: context.mirrorFreshness.status },
           specificOrder: specificOp,
         };
 
@@ -508,10 +536,15 @@ ${personalityInstruction}
             total: context.ordersTotal,
             delayedTotal: context.delayedOrdersInSample.length,
           },
-          occurrences: { total: context.activeOccurrencesTotal },
+          occurrences: { total: context.activeOccurrencesTotal, slaBreached: context.slaBreachedTotal },
           inventory: { criticalTotal: context.criticalInventoryTotal },
           lines: context.lines.slice(0, 4).map((l: any) => ({ nome: l.name, status: l.status })),
-          lastSync: context.lastSync ? { lote: context.lastSync.batchCode, status: context.lastSync.status } : null,
+          lastSync: context.lastSync ? {
+            lote: context.lastSync.batchCode,
+            status: context.lastSync.status,
+            frescor: context.mirrorFreshness.status,
+            idadeMinutos: context.mirrorFreshness.ageMinutes,
+          } : { frescor: context.mirrorFreshness.status },
           specificOrder: specificOp,
         };
 
@@ -915,14 +948,23 @@ ${personalityInstruction}
     if (saysOccurrences) {
       actions.push(nav('occurrences', copy('Abrir Gestão de Ocorrências', 'Open Occurrences', 'Abrir Incidencias')));
       if (unavailable('occurrences')) return { reply: copy('A consulta de ocorrências está indisponível no momento.', 'Occurrences query is currently unavailable.', 'Consulta de incidencias no disponible.'), actions };
-      const list = context.activeOccurrences.slice(0, 5).map((item) => `* **OP ${item.numeroOp}** (${item.occurrenceType}): ${item.description}`).join('\n');
+      const list = context.activeOccurrences.slice(0, 5).map((item) => {
+        const prefix = item.code ? `${item.code}` : `#${item.id}`;
+        const target = item.numeroOp ? `OP ${item.numeroOp}` : copy('sem OP', 'no WO', 'sin OP');
+        const sector = item.sector ? ` · ${item.sector}` : '';
+        const priority = item.priority ? ` (${item.priority})` : '';
+        return `* **${prefix}** · ${target}${sector}${priority} — ${item.occurrenceType}: ${item.description}`;
+      }).join('\n');
+      const slaNote = context.slaBreachedTotal && context.slaBreachedTotal > 0
+        ? copy(` (${context.slaBreachedTotal} com SLA estourado)`, ` (${context.slaBreachedTotal} SLA breached)`, ` (${context.slaBreachedTotal} con SLA vencido)`)
+        : '';
 
       if (personality === 'direct') {
         return {
           reply: copy(
-            `**${context.activeOccurrencesTotal ?? 0} ocorrência(s) ativas**:\n\n${list || 'Nenhuma ocorrência em aberto no momento.'}`,
-            `**${context.activeOccurrencesTotal ?? 0} active occurrence(s)**:\n\n${list || 'No open occurrences.'}`,
-            `**${context.activeOccurrencesTotal ?? 0} incidencia(s) activas**:\n\n${list || 'Sin incidencias abiertas.'}`
+            `**${context.activeOccurrencesTotal ?? 0} ocorrência(s) ativas**${slaNote}:\n\n${list || 'Nenhuma ocorrência em aberto no momento.'}`,
+            `**${context.activeOccurrencesTotal ?? 0} active occurrence(s)**${slaNote}:\n\n${list || 'No open occurrences.'}`,
+            `**${context.activeOccurrencesTotal ?? 0} incidencia(s) activas**${slaNote}:\n\n${list || 'Sin incidencias abiertas.'}`
           ),
           actions,
         };
@@ -931,9 +973,9 @@ ${personalityInstruction}
       if (personality === 'formal') {
         return {
           reply: copy(
-            `O sistema computa atualmente **${context.activeOccurrencesTotal ?? 0} ocorrência(s)** fabris em tramitação ativa:\n\n${list || 'Inexistência de ocorrências ativas no presente ciclo.'}\n\nRecomenda-se o acompanhamento tempestivo na Gestão de Ocorrências.`,
-            `The system currently records **${context.activeOccurrencesTotal ?? 0} active shop-floor occurrence(s)**:\n\n${list || 'No active occurrences in the current cycle.'}\n\nPrompt monitoring in Occurrence Management is advised.`,
-            `El sistema registra actualmente **${context.activeOccurrencesTotal ?? 0} incidencia(s)** activas en planta:\n\n${list || 'Sin incidencias activas en el ciclo presente.'}`
+            `O sistema computa atualmente **${context.activeOccurrencesTotal ?? 0} ocorrência(s)** fabris em tramitação ativa${slaNote}:\n\n${list || 'Inexistência de ocorrências ativas no presente ciclo.'}\n\nRecomenda-se o acompanhamento tempestivo na Gestão de Ocorrências.`,
+            `The system currently records **${context.activeOccurrencesTotal ?? 0} active shop-floor occurrence(s)**${slaNote}:\n\n${list || 'No active occurrences in the current cycle.'}\n\nPrompt monitoring in Occurrence Management is advised.`,
+            `El sistema registra actualmente **${context.activeOccurrencesTotal ?? 0} incidencia(s)** activas en planta${slaNote}:\n\n${list || 'Sin incidencias activas en el ciclo presente.'}`
           ),
           actions,
         };
@@ -941,9 +983,9 @@ ${personalityInstruction}
 
       return {
         reply: copy(
-          `Temos **${context.activeOccurrencesTotal ?? 0} ocorrência(s)** abertas no chão de fábrica:\n\n${list || 'Nenhuma ocorrência pendente no momento!'}\n\nQuer abrir a tela para registrar uma atualização ou nova ocorrência?`,
-          `We have **${context.activeOccurrencesTotal ?? 0} active occurrence(s)** on the shop floor:\n\n${list || 'No open occurrences right now!'}\n\nWould you like to open the management screen?`,
-          `Tenemos **${context.activeOccurrencesTotal ?? 0} incidencia(s)** activas en planta:\n\n${list || '¡Sin incidencias pendientes!'}`
+          `Temos **${context.activeOccurrencesTotal ?? 0} ocorrência(s)** abertas no chão de fábrica${slaNote}:\n\n${list || 'Nenhuma ocorrência pendente no momento!'}\n\nQuer abrir a tela para registrar uma atualização ou nova ocorrência?`,
+          `We have **${context.activeOccurrencesTotal ?? 0} active occurrence(s)** on the shop floor${slaNote}:\n\n${list || 'No open occurrences right now!'}\n\nWould you like to open the management screen?`,
+          `Tenemos **${context.activeOccurrencesTotal ?? 0} incidencia(s)** activas en planta${slaNote}:\n\n${list || '¡Sin incidencias pendientes!'}`
         ),
         actions,
       };
@@ -989,20 +1031,33 @@ ${personalityInstruction}
     if (saysSync) {
       actions.push(nav('settings?sub=protheus-sync', copy('Ver Sincronização Protheus', 'View Protheus Sync', 'Ver Sincronización Protheus')));
       if (unavailable('sync')) return { reply: copy('Histórico de sincronização em atualização.', 'Sync history updating.', 'Historial de sincronización actualizando.'), actions };
+      const freshnessHint = context.mirrorFreshness.status === 'STALE'
+        ? copy(
+            ` ⚠️ **Alerta de frescor:** última carga recebida há ${context.mirrorFreshness.ageMinutes ?? '—'} min (limite: ${context.mirrorFreshness.staleThresholdMinutes} min).`,
+            ` ⚠️ **Freshness alert:** last sync was ${context.mirrorFreshness.ageMinutes ?? '—'} min ago (threshold: ${context.mirrorFreshness.staleThresholdMinutes} min).`,
+            ` ⚠️ **Alerta de frescura:** última carga hace ${context.mirrorFreshness.ageMinutes ?? '—'} min (límite: ${context.mirrorFreshness.staleThresholdMinutes} min).`,
+          )
+        : context.mirrorFreshness.status === 'FRESH'
+          ? copy(
+              ` Frescor: **atualizado** (${context.mirrorFreshness.ageMinutes ?? 0} min).`,
+              ` Freshness: **up to date** (${context.mirrorFreshness.ageMinutes ?? 0} min).`,
+              ` Frescura: **actualizado** (${context.mirrorFreshness.ageMinutes ?? 0} min).`,
+            )
+          : '';
       return {
         reply: copy(
           context.lastSync
             ? (personality === 'direct'
-                ? `Último lote Protheus: **${context.lastSync.batchCode}** (${context.lastSync.recordsCount} registros, status: \`${context.lastSync.status}\`).`
+                ? `Último lote Protheus: **${context.lastSync.batchCode}** (${context.lastSync.recordsCount} registros, status: \`${context.lastSync.status}\`).${freshnessHint}`
                 : personality === 'formal'
-                  ? `O último lote de sincronização Protheus processado foi o de código **${context.lastSync.batchCode}**, compreendendo **${context.lastSync.recordsCount} registros** com status \`${context.lastSync.status}\`.`
-                  : `A última sincronização do Protheus foi com o lote **${context.lastSync.batchCode}**, contendo **${context.lastSync.recordsCount} registros** e situação \`${context.lastSync.status}\`.`)
+                  ? `O último lote de sincronização Protheus processado foi o de código **${context.lastSync.batchCode}**, compreendendo **${context.lastSync.recordsCount} registros** com status \`${context.lastSync.status}\`.${freshnessHint}`
+                  : `A última sincronização do Protheus foi com o lote **${context.lastSync.batchCode}**, contendo **${context.lastSync.recordsCount} registros** e situação \`${context.lastSync.status}\`.${freshnessHint}`)
             : `Ainda não há lotes de importação registrados no banco. Você pode executar uma sincronização na tela de integrações.`,
           context.lastSync
-            ? `Latest Protheus sync was batch **${context.lastSync.batchCode}** with **${context.lastSync.recordsCount} records** (\`${context.lastSync.status}\`).`
+            ? `Latest Protheus sync was batch **${context.lastSync.batchCode}** with **${context.lastSync.recordsCount} records** (\`${context.lastSync.status}\`).${freshnessHint}`
             : `No import batches recorded yet.`,
           context.lastSync
-            ? `Última sincronización Protheus: lote **${context.lastSync.batchCode}** con **${context.lastSync.recordsCount} registros** (\`${context.lastSync.status}\`).`
+            ? `Última sincronización Protheus: lote **${context.lastSync.batchCode}** con **${context.lastSync.recordsCount} registros** (\`${context.lastSync.status}\`).${freshnessHint}`
             : `Sin lotes registrados todavía.`
         ),
         actions,

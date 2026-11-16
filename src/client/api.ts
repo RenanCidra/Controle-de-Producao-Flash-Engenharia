@@ -105,6 +105,127 @@ export interface ProtheusMockFlowCheck {
   warnings: string[];
 }
 
+export interface MirrorFreshness {
+  status: 'FRESH' | 'STALE' | 'EMPTY';
+  ageMinutes: number | null;
+  staleThresholdMinutes: number;
+  latestImportAt: string | null;
+  latestBatchCode: string | null;
+  latestEntityType: string | null;
+  latestSourceType: string | null;
+  latestRecordsCount: number | null;
+}
+
+export interface OccurrenceAnalyticsStats {
+  period: {
+    from: string | null;
+    to: string | null;
+    sector: string | null;
+    type: string | null;
+  };
+  summary: {
+    total: number;
+    open: number;
+    inProgress: number;
+    resolved: number;
+    cancelled: number;
+    activeBacklog: number;
+    recurrenceCount: number;
+    recurrenceRatePercent: number | null;
+    slaBreachedActive: number;
+    slaCompliancePercent: number | null;
+  };
+  responseMetrics: {
+    avgFirstResponseMinutes: number | null;
+    medianFirstResponseMinutes: number | null;
+    firstResponseSampleCount: number;
+    avgMttrMinutes: number | null;
+    medianMttrMinutes: number | null;
+    mttrSampleCount: number;
+  };
+  backlogBySector: Array<{
+    sector: string;
+    open: number;
+    inProgress: number;
+    totalActive: number;
+    slaBreached: number;
+    avgAgeMinutes: number | null;
+  }>;
+  backlogByPriority: Array<{
+    priority: string;
+    totalActive: number;
+    slaBreached: number;
+  }>;
+  byType: Array<{
+    type: string;
+    total: number;
+    active: number;
+    resolved: number;
+  }>;
+  topComponents: Array<{
+    componentCode: string;
+    total: number;
+    active: number;
+    recurrences: number;
+    impactedOps: number;
+  }>;
+  topPvs: Array<{
+    pvNumber: string;
+    clienteNome: string | null;
+    total: number;
+    active: number;
+    impactedOps: number;
+  }>;
+  weeklyTrend: Array<{
+    week: string;
+    opened: number;
+    resolved: number;
+  }>;
+  mirrorFreshness: MirrorFreshness;
+}
+
+export interface OccurrenceImportRowPreview {
+  rowNumber: number;
+  validationStatus: 'VALID' | 'DUPLICATE' | 'ERROR';
+  opFoundInMirror: boolean | null;
+  duplicateOfCode: string | null;
+  issues: string[];
+  warnings: string[];
+  normalized: {
+    legacyCode: string | null;
+    type: string;
+    occurrenceType: string;
+    sector: string;
+    priority: string;
+    status: string;
+    numeroOp: string | null;
+    pvNumber: string | null;
+    parentProduct: string | null;
+    componentCode: string | null;
+    warehouse: string | null;
+    currentBalance: string | null;
+    description: string;
+    openedAt: string;
+  } | null;
+}
+
+export interface OccurrenceImportPreviewResult {
+  delimiter: '\t' | ';' | ',';
+  totalRows: number;
+  validCount: number;
+  duplicateCount: number;
+  errorCount: number;
+  missingOpInMirrorCount: number;
+  rows: OccurrenceImportRowPreview[];
+}
+
+export interface OccurrenceImportConfirmResult {
+  insertedCount: number;
+  skippedDuplicates: number;
+  missingOpInMirrorCount: number;
+  codes: string[];
+}
+
 class ApiService {
   private token: string | null = null;
   private user: AuthUser | null = null;
@@ -258,6 +379,7 @@ class ApiService {
         status: string;
         createdAt: string | null;
       } | null;
+      mirrorFreshness?: MirrorFreshness;
       organization: { id: number; name: string; tradeName: string | null; plantCode: string | null; timezone: string } | null;
     }>('/stats');
   }
@@ -662,6 +784,15 @@ class ApiService {
     return this.request<any>(`/occurrences?${query.toString()}`);
   }
 
+  public getOccurrenceStats(params?: { from?: string; to?: string; sector?: string; type?: string }) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') query.append(key, String(value));
+    });
+    const suffix = query.size ? `?${query.toString()}` : '';
+    return this.request<OccurrenceAnalyticsStats>(`/stats/occurrences${suffix}`);
+  }
+
   public getCommunicationDirectory() { return this.request<Array<{ id: number; name: string; department: string | null; role?: string; avatarUrl?: string | null }>>('/communications/directory'); }
   public getCommunicationDirectConversations() { return this.request<any[]>('/communications/direct'); }
   private communicationMessagePage(path: string, params?: { beforeId?: number; afterId?: number; changedAfter?: string; limit?: number }) {
@@ -685,6 +816,14 @@ class ApiService {
   public removeCommunicationDirectReaction(conversationId: number, messageId: number, emoji: string) { return this.request<{ success: boolean }>(`/communications/direct/${conversationId}/messages/${messageId}/reactions`, { method: 'DELETE', body: JSON.stringify({ emoji }) }); }
   public sendCommunicationDirectAudio(conversationId: number, audio: Blob, durationMs: number) { return this.uploadCommunicationAudio(`/communications/direct/${conversationId}/audio`, audio, durationMs); }
   public getCommunicationDirectAudio(conversationId: number, messageId: number) { return this.getPrivateAudio(`/communications/direct/${conversationId}/messages/${messageId}/audio`); }
+  public sendCommunicationDirectImage(conversationId: number, file: Blob, caption?: string) { return this.uploadPrivateImage(`/communications/direct/${conversationId}/image`, file, caption); }
+  public getCommunicationDirectImage(conversationId: number, messageId: number) { return this.getPrivateBlobUrl(`/communications/direct/${conversationId}/messages/${messageId}/image`, 'Não foi possível carregar a imagem.'); }
+  public saveCommunicationDirectDrawing(conversationId: number, messageId: number, drawingData: DrawingOverlayData) {
+    return this.request<any>(`/communications/direct/${conversationId}/messages/${messageId}/drawing`, {
+      method: 'PUT',
+      body: JSON.stringify({ drawingData }),
+    });
+  }
   public getCommunicationDirectProfile(conversationId: number) { return this.request<{ id: number; name: string; department: string | null; role: string; status: string; avatarUrl?: string | null }>(`/communications/direct/${conversationId}/profile`); }
   public getCommunicationGroups() { return this.request<any[]>('/communications/groups'); }
   public getCommunicationMessages(groupId: number, params?: { beforeId?: number; afterId?: number; changedAfter?: string; limit?: number }) { return this.communicationMessagePage(`/communications/groups/${groupId}/messages`, params); }
@@ -700,6 +839,14 @@ class ApiService {
   public removeCommunicationGroupReaction(groupId: number, messageId: number, emoji: string) { return this.request<{ success: boolean }>(`/communications/groups/${groupId}/messages/${messageId}/reactions`, { method: 'DELETE', body: JSON.stringify({ emoji }) }); }
   public sendCommunicationGroupAudio(groupId: number, audio: Blob, durationMs: number) { return this.uploadCommunicationAudio(`/communications/groups/${groupId}/audio`, audio, durationMs); }
   public getCommunicationGroupAudio(groupId: number, messageId: number) { return this.getPrivateAudio(`/communications/groups/${groupId}/messages/${messageId}/audio`); }
+  public sendCommunicationGroupImage(groupId: number, file: Blob, caption?: string) { return this.uploadPrivateImage(`/communications/groups/${groupId}/image`, file, caption); }
+  public getCommunicationGroupImage(groupId: number, messageId: number) { return this.getPrivateBlobUrl(`/communications/groups/${groupId}/messages/${messageId}/image`, 'Não foi possível carregar a imagem.'); }
+  public saveCommunicationGroupDrawing(groupId: number, messageId: number, drawingData: DrawingOverlayData) {
+    return this.request<any>(`/communications/groups/${groupId}/messages/${messageId}/drawing`, {
+      method: 'PUT',
+      body: JSON.stringify({ drawingData }),
+    });
+  }
 
   private async uploadCommunicationAudio(path: string, audio: Blob, durationMs: number) {
     const response = await fetch(`/api${path}?durationMs=${Math.round(durationMs)}`, {
@@ -710,9 +857,31 @@ class ApiService {
     return data;
   }
 
+  private async uploadPrivateImage(path: string, file: Blob, caption?: string) {
+    if (file.size > 5 * 1024 * 1024) {
+      throw new Error('A imagem excede o limite máximo de 5 MB.');
+    }
+    const query = caption?.trim() ? `?caption=${encodeURIComponent(caption.trim().slice(0, 500))}` : '';
+    const response = await fetch(`/api${path}${query}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.token || ''}`,
+        'Content-Type': file.type.split(';')[0] || 'image/png',
+      },
+      body: file,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Não foi possível enviar a imagem.');
+    return data;
+  }
+
   private async getPrivateAudio(path: string): Promise<string> {
+    return this.getPrivateBlobUrl(path, 'Não foi possível carregar o áudio.');
+  }
+
+  private async getPrivateBlobUrl(path: string, fallbackMessage: string): Promise<string> {
     const response = await fetch(`/api${path}`, { headers: { Authorization: `Bearer ${this.token || ''}` } });
-    if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data.error || 'Não foi possível carregar o áudio.'); }
+    if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data.error || fallbackMessage); }
     return URL.createObjectURL(await response.blob());
   }
 
@@ -730,18 +899,161 @@ class ApiService {
   }
 
   public createOccurrence(payload: {
-    numeroOp: string; occurrenceType: string; description: string;
+    numeroOp?: string; opNumber?: string; pvNumber?: string; parentProduct?: string; componentCode?: string;
+    warehouse?: string; currentBalance?: number | string; type?: string; sector?: string; priority?: string;
+    assigneeId?: number; slaMinutes?: number;
+    occurrenceType?: string; description: string;
     operation?: string; workstation?: string; immediateAction?: string;
   }) {
     return this.request<any>('/occurrences', { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  public createOccurrenceFromMessage(payload: {
+    messageKind?: 'group' | 'direct'; messageId?: number; body?: string;
+    type?: string; opNumber?: string; numeroOp?: string; pvNumber?: string; parentProduct?: string;
+    componentCode?: string; warehouse?: string; currentBalance?: number | string;
+    sector?: string; priority?: string; assigneeId?: number;
+    occurrenceType?: string; description?: string;
+  }) {
+    return this.request<any>('/occurrences/from-message', { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  public getOccurrenceAssignees() {
+    return this.request<Array<{ id: number; uid: string; name: string; role: string; department: string | null; avatarUrl: string | null }>>('/occurrences/assignees');
+  }
+
+  public assignOccurrence(id: number, assigneeId: number | 'me', message?: string) {
+    return this.request<any>(`/occurrences/${id}/assign`, { method: 'PATCH', body: JSON.stringify({ assigneeId, message }) });
+  }
+
+  public getOccurrenceMessages(id: number) {
+    return this.request<{ messages: any[]; attachments: any[] }>(`/occurrences/${id}/messages`);
+  }
+
+  public addOccurrenceMessage(id: number, body: string) {
+    return this.request<{ message: any; occurrence: any }>(`/occurrences/${id}/messages`, { method: 'POST', body: JSON.stringify({ body }) });
+  }
+
+  public completeOccurrence(id: number, resolutionText: string) {
+    return this.request<any>(`/occurrences/${id}/complete`, { method: 'PATCH', body: JSON.stringify({ resolutionText }) });
   }
 
   public addOccurrenceEvent(id: number, message: string) {
     return this.request<any>(`/occurrences/${id}/events`, { method: 'POST', body: JSON.stringify({ message }) });
   }
 
-  public changeOccurrenceStatus(id: number, status: string, message: string) {
-    return this.request<any>(`/occurrences/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, message }) });
+  public changeOccurrenceStatus(id: number, status: string, message: string, resolutionText?: string) {
+    return this.request<any>(`/occurrences/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, message, resolutionText }) });
+  }
+
+  public uploadOccurrenceImage(occurrenceId: number, file: Blob, caption?: string) {
+    return this.uploadPrivateImage(`/occurrences/${occurrenceId}/image`, file, caption);
+  }
+
+  public getOccurrenceAttachmentFile(occurrenceId: number, attachmentId: number) {
+    return this.getPrivateBlobUrl(`/occurrences/${occurrenceId}/attachments/${attachmentId}/file`, 'Não foi possível carregar o anexo.');
+  }
+
+  public saveOccurrenceAttachmentDrawing(occurrenceId: number, attachmentId: number, drawingData: DrawingOverlayData) {
+    return this.request<any>(`/occurrences/${occurrenceId}/attachments/${attachmentId}/drawing`, {
+      method: 'PUT',
+      body: JSON.stringify({ drawingData }),
+    });
+  }
+
+  public async downloadOccurrencesCsv(params?: Record<string, any>) {
+    const query = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, val]) => {
+        if (val !== undefined && val !== null && val !== '') {
+          query.append(key, String(val));
+        }
+      });
+    }
+    const headers: Record<string, string> = {};
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
+    const res = await fetch(`/api/occurrences/export/csv?${query.toString()}`, { headers });
+    if (!res.ok) throw new Error('Falha ao exportar CSV de ocorrências.');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `nexus_ocorrencias_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  }
+
+  public previewOccurrencesImport(content: string) {
+    return this.request<OccurrenceImportPreviewResult>('/occurrences/import/preview', {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    });
+  }
+
+  public confirmOccurrencesImport(content: string, skipDuplicates = true) {
+    return this.request<OccurrenceImportConfirmResult>('/occurrences/import/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ content, skipDuplicates }),
+    });
+  }
+
+  // Notifications & Web Push
+  public getNotifications() {
+    return this.request<NotificationInboxResponse>('/notifications');
+  }
+
+  public markNotificationRead(id: number) {
+    return this.request<AppNotification>(`/notifications/${id}/read`, { method: 'PATCH' });
+  }
+
+  public markAllNotificationsRead() {
+    return this.request<{ markedCount: number }>('/notifications/read-all', { method: 'PATCH' });
+  }
+
+  public getNotificationPreferences() {
+    return this.request<NotificationPreferencesResponse>('/notifications/preferences');
+  }
+
+  public updateNotificationPreferences(payload: {
+    scope?: NotificationScope;
+    quietHoursEnabled?: boolean;
+    quietHoursStart?: string;
+    quietHoursEnd?: string;
+  }) {
+    return this.request<NotificationPreferencesResponse>('/notifications/preferences', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  public getVapidPublicKey() {
+    return this.request<{ enabled: boolean; publicKey: string | null }>('/notifications/push/vapid-public-key');
+  }
+
+  public subscribePush(payload: {
+    endpoint: string;
+    keys: { p256dh: string; auth: string };
+    deviceLabel?: string;
+  }) {
+    return this.request<{ id: number; userId: number; deviceLabel: string | null; isActive: boolean }>('/notifications/subscribe', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  public unsubscribePush(endpoint?: string | null) {
+    return this.request<{ removed: number }>('/notifications/subscribe', {
+      method: 'DELETE',
+      body: JSON.stringify(endpoint ? { endpoint } : {}),
+    });
+  }
+
+  public getShiftSummary() {
+    return this.request<ShiftBacklogSummary>('/notifications/shift-summary');
   }
 
   public async downloadTraceabilityCsv(params?: Record<string, any>) {
@@ -882,6 +1194,64 @@ export interface Employee {
   linkedUserLogin?: string | null;
   linkedUserRole?: string | null;
   linkedUserAvatar?: string | null;
+}
+
+export type DrawingTool = 'pen' | 'arrow' | 'circle' | 'text';
+
+export interface DrawingPoint {
+  x: number;
+  y: number;
+}
+
+export interface DrawingStroke {
+  id: string;
+  tool: DrawingTool;
+  color: string;
+  width: number;
+  points?: DrawingPoint[];
+  start?: DrawingPoint;
+  end?: DrawingPoint;
+  text?: string;
+}
+
+export interface DrawingOverlayData {
+  version: 1;
+  strokes: DrawingStroke[];
+  updatedAt?: string;
+}
+
+export type NotificationScope = 'MINE' | 'SECTOR' | 'ALL';
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  occurrenceId: number | null;
+  type: string;
+  title: string;
+  bodyPreview: string;
+  isRead: boolean;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface ShiftBacklogSummary {
+  totalOpen: number;
+  slaBreached: number;
+  bySector: Array<{ sector: string; open: number; breached: number }>;
+}
+
+export interface NotificationInboxResponse {
+  items: AppNotification[];
+  unreadCount: number;
+  shiftSummary: ShiftBacklogSummary;
+}
+
+export interface NotificationPreferencesResponse {
+  scope: NotificationScope;
+  quietHoursEnabled: boolean;
+  quietHoursStart: string;
+  quietHoursEnd: string;
+  activeSubscriptionsCount: number;
 }
 
 export interface EmployeeMetrics {

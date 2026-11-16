@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  Activity, AlertTriangle, Boxes, CheckCircle2, ChevronRight, ClipboardList,
-  Database, FileText, Filter, GitBranch, Layers, RefreshCw, Search, X,
+  Activity, AlertTriangle, Boxes, CheckCircle2, ChevronRight, ClipboardList, Clock3,
+  Database, FileText, Filter, GitBranch, Layers, RefreshCw, Search, ShieldAlert, X,
 } from 'lucide-react';
 import { ActiveTab } from '../../components/Sidebar.tsx';
-import { api } from '../../api.ts';
+import { api, type MirrorFreshness, type OccurrenceAnalyticsStats } from '../../api.ts';
 import { translateText } from '../../i18n/index.ts';
 import { DataUnavailableState } from '../../components/DataStatus.tsx';
 
@@ -19,6 +19,7 @@ interface DashboardStats {
   latestProtheusImport: {
     batchCode: string; sourceType: string; entityType: string; recordsCount: number; status: string; createdAt: string | null;
   } | null;
+  mirrorFreshness?: MirrorFreshness;
 }
 
 type Filters = {
@@ -57,6 +58,17 @@ const formatDateTime = (date: string | null | undefined) => {
   return Number.isNaN(parsed.getTime()) ? 'Data não informada' : parsed.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 };
 const formatNumber = (value: number) => Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+const formatDurationMinutes = (minutes: number | null | undefined) => {
+  if (minutes === null || minutes === undefined || !Number.isFinite(minutes)) return '—';
+  const rounded = Math.round(minutes);
+  if (rounded < 60) return `${rounded} min`;
+  const hours = Math.floor(rounded / 60);
+  const mins = rounded % 60;
+  if (hours < 24) return mins > 0 ? `${hours}h ${mins}min` : `${hours}h`;
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  return remHours > 0 ? `${days}d ${remHours}h` : `${days}d`;
+};
 const situationLabels: Record<string, string> = {
   ATRASADO: 'Atrasadas', RISCO_ATRASO: 'Em risco (até 2 dias)', NO_PRAZO: 'No prazo',
   CONCLUIDO: 'Concluídas', SEM_PREVISAO: 'Sem previsão',
@@ -72,6 +84,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ stats, refreshing,
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<any | null>(null);
+  const [occurrenceStats, setOccurrenceStats] = useState<OccurrenceAnalyticsStats | null>(null);
+  const [occurrenceStatsError, setOccurrenceStatsError] = useState(false);
 
   const loadProduction = useCallback(async (filters: Filters) => {
     setLoading(true);
@@ -90,10 +104,51 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ stats, refreshing,
           items,
           summary: { totalOps: 4, totalPlanejado: 305, totalProduzido: 209, totalRefugo: 7, percentualProduzido: 68.5, porSituacao: { ATRASADO: 1, RISCO_ATRASO: 1, NO_PRAZO: 1, CONCLUIDO: 1, SEM_PREVISAO: 0 }, principaisProdutos: [{ codigoProduto: 'SINAL-LED-01', descricaoProduto: 'Conjunto sinalizador LED', quantidadeProduzida: 78 }, { codigoProduto: 'LUM-AUX-04', descricaoProduto: 'Luminária auxiliar', quantidadeProduzida: 24 }, { codigoProduto: 'PAINEL-IND-02', descricaoProduto: 'Painel industrial', quantidadeProduzida: 17 }] },
         });
+        setOccurrenceStats({
+          period: { from: null, to: null, sector: null, type: null },
+          summary: { total: 6, open: 2, inProgress: 1, resolved: 3, cancelled: 0, activeBacklog: 3, recurrenceCount: 1, recurrenceRatePercent: 16.7, slaBreachedActive: 1, slaCompliancePercent: 66.7 },
+          responseMetrics: { avgFirstResponseMinutes: 18, medianFirstResponseMinutes: 14, firstResponseSampleCount: 5, avgMttrMinutes: 95, medianMttrMinutes: 82, mttrSampleCount: 3 },
+          backlogBySector: [
+            { sector: 'ALMOX', open: 1, inProgress: 1, totalActive: 2, slaBreached: 1, avgAgeMinutes: 74 },
+            { sector: 'PCP', open: 1, inProgress: 0, totalActive: 1, slaBreached: 0, avgAgeMinutes: 35 },
+            { sector: 'PRODUCAO', open: 0, inProgress: 0, totalActive: 0, slaBreached: 0, avgAgeMinutes: null },
+            { sector: 'QUALIDADE', open: 0, inProgress: 0, totalActive: 0, slaBreached: 0, avgAgeMinutes: null },
+          ],
+          backlogByPriority: [
+            { priority: 'CRITICA', totalActive: 0, slaBreached: 0 },
+            { priority: 'ALTA', totalActive: 2, slaBreached: 1 },
+            { priority: 'MEDIA', totalActive: 1, slaBreached: 0 },
+            { priority: 'BAIXA', totalActive: 0, slaBreached: 0 },
+          ],
+          byType: [],
+          topComponents: [{ componentCode: '11.ETQ.DIVE.00005.00', total: 3, active: 2, recurrences: 1, impactedOps: 2 }],
+          topPvs: [{ pvNumber: 'PV-00842', clienteNome: 'Cliente demonstração', total: 2, active: 1, impactedOps: 1 }],
+          weeklyTrend: [],
+          mirrorFreshness: {
+            status: 'FRESH',
+            ageMinutes: 5,
+            staleThresholdMinutes: 60,
+            latestImportAt: new Date().toISOString(),
+            latestBatchCode: 'PREVIEW-LOCAL',
+            latestEntityType: 'PRODUÇÃO',
+            latestSourceType: 'DEMONSTRAÇÃO',
+            latestRecordsCount: 214,
+          },
+        });
+        setOccurrenceStatsError(false);
         return;
       }
-      const result = await api.getTraceabilityMatrix({ ...filters, situacaoPrazo: (filters.situacaoPrazo || undefined) as any, page: 1, limit: 10 });
+      const [result, occStats] = await Promise.all([
+        api.getTraceabilityMatrix({ ...filters, situacaoPrazo: (filters.situacaoPrazo || undefined) as any, page: 1, limit: 10 }),
+        api.getOccurrenceStats().catch(() => null),
+      ]);
       setData(result);
+      if (occStats) {
+        setOccurrenceStats(occStats);
+        setOccurrenceStatsError(false);
+      } else {
+        setOccurrenceStatsError(true);
+      }
     } catch (err: any) {
       setData(null);
       setError(err?.message || 'Não foi possível carregar os dados de produção.');
@@ -145,19 +200,54 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ stats, refreshing,
     </div>;
   }
 
+  const mirrorFreshness = stats?.mirrorFreshness || occurrenceStats?.mirrorFreshness || null;
+
   return (
     <div className="mx-auto max-w-[1520px] space-y-5 select-none">
       {localPreview && <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">Prévia local: indicadores e OPs demonstrativos, sem consulta ao banco.</p>}
       <section className="rounded-lg border border-[#DCE3EB] bg-white p-4 shadow-xs">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-sm font-semibold text-[#263548]">Atualização do espelho</h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-sm font-semibold text-[#263548]">Atualização do espelho</h3>
+              {mirrorFreshness && (
+                <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                  mirrorFreshness.status === 'FRESH'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                    : mirrorFreshness.status === 'STALE'
+                      ? 'border-amber-300 bg-amber-50 text-amber-800'
+                      : 'border-slate-200 bg-slate-100 text-slate-600'
+                }`}>
+                  {mirrorFreshness.status === 'FRESH'
+                    ? translateText('Espelho atualizado')
+                    : mirrorFreshness.status === 'STALE'
+                      ? translateText('Espelho desatualizado')
+                      : translateText('Sem cargas no espelho')}
+                </span>
+              )}
+            </div>
             <p className="mt-1 text-xs text-[#64748B]">Painel consultado {statsUpdatedAt ? `às ${formatDateTime(statsUpdatedAt)}` : 'aguardando a primeira consulta'} · atualização automática a cada 5 minutos.</p>
             <p className="mt-1 text-xs text-[#64748B]">Última carga recebida: {stats?.latestProtheusImport ? `${formatDateTime(stats.latestProtheusImport.createdAt)} · ${stats.latestProtheusImport.sourceType} · ${stats.latestProtheusImport.entityType} · ${stats.latestProtheusImport.recordsCount} registros` : 'nenhuma carga registrada'}.</p>
           </div>
           <button onClick={() => { onRefresh(); void loadProduction(applied); }} disabled={refreshing || loading} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-[#CBD5E1] bg-white px-3 py-2 text-xs font-semibold text-[#263548] transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"><RefreshCw className={`h-3.5 w-3.5 ${refreshing || loading ? 'animate-spin' : ''}`} />{refreshing || loading ? 'Atualizando…' : 'Atualizar painel'}</button>
         </div>
         {(refreshError || error) && <div role="alert" className="mt-3 flex flex-col gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="text-xs font-semibold text-rose-800">{translateText('Dados do espelho indisponíveis')}</p><p className="mt-0.5 text-xs text-rose-700">{translateText(error || refreshError || '')}</p></div><button type="button" onClick={onNavigateToConnectors} className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-md border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-rose-800 transition hover:bg-rose-100 sm:self-auto">{translateText('Ver Conectores Protheus')} <ChevronRight className="h-3.5 w-3.5" /></button></div>}
+        {mirrorFreshness?.status === 'STALE' && !refreshError && !error && (
+          <div role="status" className="mt-3 flex flex-col gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-amber-900">{translateText('Alerta de frescor do espelho Protheus')}</p>
+                <p className="mt-0.5 text-xs text-amber-800">
+                  {translateText('Última sincronização recebida há')} {formatDurationMinutes(mirrorFreshness.ageMinutes)} ({translateText('limite configurado')}: {formatDurationMinutes(mirrorFreshness.staleThresholdMinutes)}).
+                </p>
+              </div>
+            </div>
+            <button type="button" onClick={onNavigateToConnectors} className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-md border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-amber-900 transition hover:bg-amber-100 sm:self-auto">
+              {translateText('Ver Conectores Protheus')} <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
         {stats && stats.totalProtheusBatches === 0 && !refreshError && !error && <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Ainda não há cargas recebidas. Os indicadores serão preenchidos quando existirem dados no espelho Protheus.</p>}
       </section>
 
@@ -234,6 +324,114 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ stats, refreshing,
       <section className="overflow-hidden rounded-lg border border-[#DCE3EB] bg-white shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E2E8F0] px-4 py-3"><div><h3 className="text-sm font-semibold text-[#263548]">Ordens correspondentes</h3><p className="text-[11px] text-[#64748B]">{data ? `${formatNumber(data.total)} OPs encontradas · exibindo até 10 nesta lista` : 'Aguardando dados'}</p></div>{loading && <span className="text-xs text-[#64748B]">Consultando espelho…</span>}</div>
         {data?.items?.length ? <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-xs"><thead className="bg-[#F8FAFC] text-[10px] uppercase tracking-wide text-[#64748B]"><tr><th className="px-4 py-3">OP / situação</th><th className="px-4 py-3">Produto</th><th className="px-4 py-3">Cliente / PV</th><th className="px-4 py-3 text-right">Planejado</th><th className="px-4 py-3 text-right">Produzido</th><th className="px-4 py-3">Prazo</th></tr></thead><tbody className="divide-y divide-[#E2E8F0]">{data.items.map((item: any) => <tr key={item.idOp} className="text-[#334155]"><td className="px-4 py-3"><span className="block font-semibold text-[#263548]">{item.numeroOp}</span><span className="text-[10px] text-[#64748B]">{item.statusProtheusOp}</span></td><td className="px-4 py-3"><span className="block font-medium">{item.codigoProduto}</span><span className="text-[10px] text-[#64748B]">{item.descricaoProduto}</span></td><td className="px-4 py-3"><span className="block">{item.clienteNome || translateText('Sem vínculo de PV')}</span><span className="text-[10px] text-[#64748B]">{item.numeroPv || '—'}</span></td><td className="px-4 py-3 text-right font-mono">{formatNumber(item.quantidadePlanejada)}</td><td className="px-4 py-3 text-right font-mono">{formatNumber(item.quantidadeProduzida)}</td><td className="px-4 py-3"><span className="inline-flex items-center gap-1" style={{ color: situationColors[item.statusPrazo] || '#64748B' }}>{item.statusPrazo === 'CONCLUIDO' ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}{translateText(situationLabels[item.statusPrazo] || item.statusPrazo)}</span></td></tr>)}</tbody></table></div> : data && <div className="p-8 text-center text-xs text-[#64748B]">Nenhuma OP encontrada com os filtros selecionados.</div>}
+      </section>
+
+      <section className="overflow-hidden rounded-xl border border-[#DCE3EB] bg-white shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E2E8F0] px-5 py-4">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#C27803]">SLA &amp; Tratativa</p>
+            <h3 className="mt-1 text-base font-semibold text-[#263548]">Ocorrências, backlog e tempo de resposta</h3>
+            <p className="mt-1 text-xs text-[#64748B]">Métricas calculadas a partir dos atendimentos reais registrados na fábrica.</p>
+          </div>
+          <button type="button" onClick={() => onNavigate('occurrences')} className="inline-flex items-center gap-1.5 rounded-md border border-[#CBD5E1] bg-white px-3 py-2 text-xs font-semibold text-[#263548] transition hover:bg-slate-50">
+            {translateText('Abrir Gestão de ocorrências')} <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        {occurrenceStats ? (
+          <div className="space-y-4 p-5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+              <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3">
+                <span className="flex items-center justify-between text-[11px] text-[#64748B]"><span>{translateText('Backlog ativo')}</span><ClipboardList className="h-3.5 w-3.5 text-amber-700" /></span>
+                <strong className="mt-1.5 block font-mono text-xl text-[#263548]">{formatNumber(occurrenceStats.summary.activeBacklog)}</strong>
+                <span className="mt-0.5 block text-[10px] text-[#64748B]">{formatNumber(occurrenceStats.summary.open)} {translateText('abertas')} · {formatNumber(occurrenceStats.summary.inProgress)} {translateText('em atendimento')}</span>
+              </div>
+              <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3">
+                <span className="flex items-center justify-between text-[11px] text-[#64748B]"><span>{translateText('SLA estourado')}</span><ShieldAlert className="h-3.5 w-3.5 text-rose-600" /></span>
+                <strong className={`mt-1.5 block font-mono text-xl ${occurrenceStats.summary.slaBreachedActive > 0 ? 'text-rose-700' : 'text-[#263548]'}`}>{formatNumber(occurrenceStats.summary.slaBreachedActive)}</strong>
+                <span className="mt-0.5 block text-[10px] text-[#64748B]">{translateText('Ocorrências ativas vencidas')}</span>
+              </div>
+              <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3">
+                <span className="flex items-center justify-between text-[11px] text-[#64748B]"><span>{translateText('1ª resposta (média)')}</span><Clock3 className="h-3.5 w-3.5 text-sky-700" /></span>
+                <strong className="mt-1.5 block font-mono text-xl text-[#263548]">{formatDurationMinutes(occurrenceStats.responseMetrics.avgFirstResponseMinutes)}</strong>
+                <span className="mt-0.5 block text-[10px] text-[#64748B]">{translateText('Mediana')}: {formatDurationMinutes(occurrenceStats.responseMetrics.medianFirstResponseMinutes)}</span>
+              </div>
+              <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3">
+                <span className="flex items-center justify-between text-[11px] text-[#64748B]"><span>{translateText('MTTR médio')}</span><Activity className="h-3.5 w-3.5 text-emerald-700" /></span>
+                <strong className="mt-1.5 block font-mono text-xl text-[#263548]">{formatDurationMinutes(occurrenceStats.responseMetrics.avgMttrMinutes)}</strong>
+                <span className="mt-0.5 block text-[10px] text-[#64748B]">{translateText('Mediana')}: {formatDurationMinutes(occurrenceStats.responseMetrics.medianMttrMinutes)}</span>
+              </div>
+              <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3">
+                <span className="flex items-center justify-between text-[11px] text-[#64748B]"><span>{translateText('Cumprimento SLA')}</span><CheckCircle2 className="h-3.5 w-3.5 text-emerald-700" /></span>
+                <strong className="mt-1.5 block font-mono text-xl text-[#159B72]">{occurrenceStats.summary.slaCompliancePercent === null ? '—' : `${occurrenceStats.summary.slaCompliancePercent}%`}</strong>
+                <span className="mt-0.5 block text-[10px] text-[#64748B]">{formatNumber(occurrenceStats.summary.resolved)} {translateText('concluídas')}</span>
+              </div>
+              <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3">
+                <span className="flex items-center justify-between text-[11px] text-[#64748B]"><span>{translateText('Reincidências')}</span><AlertTriangle className="h-3.5 w-3.5 text-amber-700" /></span>
+                <strong className="mt-1.5 block font-mono text-xl text-[#263548]">{formatNumber(occurrenceStats.summary.recurrenceCount)}</strong>
+                <span className="mt-0.5 block text-[10px] text-[#64748B]">{occurrenceStats.summary.recurrenceRatePercent === null ? '—' : `${occurrenceStats.summary.recurrenceRatePercent}%`} {translateText('do total')}</span>
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div className="rounded-lg border border-[#E2E8F0] p-3.5">
+                <h4 className="text-xs font-semibold text-[#263548]">{translateText('Backlog por setor')}</h4>
+                <div className="mt-2.5 space-y-2">
+                  {occurrenceStats.backlogBySector.map((item) => (
+                    <div key={item.sector} className="flex items-center justify-between text-xs">
+                      <span className="font-mono font-semibold text-[#334155]">{item.sector}</span>
+                      <span className="flex items-center gap-2 font-mono text-[#263548]">
+                        <span>{formatNumber(item.totalActive)}</span>
+                        {item.slaBreached > 0 && <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700">{item.slaBreached} SLA</span>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-[#E2E8F0] p-3.5">
+                <h4 className="text-xs font-semibold text-[#263548]">{translateText('Top componentes')}</h4>
+                {occurrenceStats.topComponents.length > 0 ? (
+                  <div className="mt-2.5 space-y-2">
+                    {occurrenceStats.topComponents.slice(0, 4).map((item) => (
+                      <div key={item.componentCode} className="flex items-center justify-between gap-2 text-xs">
+                        <span className="truncate font-mono text-[#334155]" title={item.componentCode}>{item.componentCode}</span>
+                        <span className="shrink-0 font-mono text-[11px] text-[#263548]">
+                          {item.active} {translateText('ativas')} / {item.total}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2.5 text-[11px] text-[#64748B]">{translateText('Nenhum componente vinculado ainda.')}</p>
+                )}
+              </div>
+
+              <div className="rounded-lg border border-[#E2E8F0] p-3.5">
+                <h4 className="text-xs font-semibold text-[#263548]">{translateText('Top PVs afetados')}</h4>
+                {occurrenceStats.topPvs.length > 0 ? (
+                  <div className="mt-2.5 space-y-2">
+                    {occurrenceStats.topPvs.slice(0, 4).map((item) => (
+                      <div key={item.pvNumber} className="flex items-center justify-between gap-2 text-xs">
+                        <span className="truncate text-[#334155]" title={item.clienteNome || item.pvNumber}>
+                          <strong className="font-mono">{item.pvNumber}</strong>{item.clienteNome ? ` · ${item.clienteNome}` : ''}
+                        </span>
+                        <span className="shrink-0 font-mono text-[11px] text-[#263548]">
+                          {item.active} {translateText('ativas')} / {item.total}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2.5 text-[11px] text-[#64748B]">{translateText('Nenhum PV vinculado ainda.')}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="p-5 text-xs text-[#64748B]">
+            {occurrenceStatsError ? translateText('Indicadores de ocorrências indisponíveis no momento.') : translateText('Carregando indicadores de ocorrências…')}
+          </div>
+        )}
       </section>
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
