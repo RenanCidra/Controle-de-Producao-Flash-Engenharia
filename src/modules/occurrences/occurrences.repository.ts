@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { and, asc, desc, eq, gte, ilike, inArray, isNull, lte, ne, or, sql, type SQL } from 'drizzle-orm';
-import { db } from '../../db/index.ts';
+import { createPool, db, withDbRetry } from '../../db/index.ts';
 import {
   communicationDirectMembers,
   communicationDirectMessages,
@@ -405,12 +405,42 @@ export class OccurrencesRepository {
   }
 
   static async findSourceMessage(kind: 'group' | 'direct', messageId: number, userId: number) {
+    const tableName = kind === 'group' ? 'communication_messages' : 'communication_direct_messages';
+    const { rows: colRows } = await withDbRetry(() =>
+      createPool().query<{ column_name: string }>(
+        `SELECT column_name
+         FROM information_schema.columns
+         WHERE table_schema = current_schema() AND table_name = $1`,
+        [tableName],
+      ),
+    );
+    const cols = new Set(colRows.map((row) => row.column_name));
+    const hasDeletedAt = cols.has('deleted_at');
+    const hasImageStoragePath = cols.has('image_storage_path');
+    const hasImageMimeType = cols.has('image_mime_type');
+    const hasImageSizeBytes = cols.has('image_size_bytes');
+    const hasDrawingData = cols.has('drawing_data');
+
     if (kind === 'group') {
-      const [message] = await db.select().from(communicationMessages)
-        .where(and(eq(communicationMessages.id, messageId), isNull(communicationMessages.deletedAt)))
+      const [message] = await db.select({
+        id: communicationMessages.id,
+        groupId: communicationMessages.groupId,
+        body: communicationMessages.body,
+        authorUid: communicationMessages.authorUid,
+        authorName: communicationMessages.authorName,
+        createdAt: communicationMessages.createdAt,
+        ...(hasImageStoragePath ? { imageStoragePath: communicationMessages.imageStoragePath } : {}),
+        ...(hasImageMimeType ? { imageMimeType: communicationMessages.imageMimeType } : {}),
+        ...(hasImageSizeBytes ? { imageSizeBytes: communicationMessages.imageSizeBytes } : {}),
+        ...(hasDrawingData ? { drawingData: communicationMessages.drawingData } : {}),
+      }).from(communicationMessages)
+        .where(and(
+          eq(communicationMessages.id, messageId),
+          ...(hasDeletedAt ? [isNull(communicationMessages.deletedAt)] : []),
+        ))
         .limit(1);
       if (!message) return null;
-      const [member] = await db.select().from(communicationGroupMembers)
+      const [member] = await db.select({ id: communicationGroupMembers.id }).from(communicationGroupMembers)
         .where(and(eq(communicationGroupMembers.groupId, message.groupId), eq(communicationGroupMembers.userId, userId)))
         .limit(1);
       if (!member) return { forbidden: true as const };
@@ -420,21 +450,35 @@ export class OccurrencesRepository {
         messageId: message.id,
         conversationId: message.groupId,
         body: message.body,
-        imageStoragePath: message.imageStoragePath,
-        imageMimeType: message.imageMimeType,
-        imageSizeBytes: message.imageSizeBytes,
-        drawingData: message.drawingData,
+        imageStoragePath: 'imageStoragePath' in message ? (message.imageStoragePath ?? null) : null,
+        imageMimeType: 'imageMimeType' in message ? (message.imageMimeType ?? null) : null,
+        imageSizeBytes: 'imageSizeBytes' in message ? (message.imageSizeBytes ?? null) : null,
+        drawingData: 'drawingData' in message ? (message.drawingData ?? null) : null,
         authorUid: message.authorUid,
         authorName: message.authorName,
         createdAt: message.createdAt,
       };
     }
 
-    const [message] = await db.select().from(communicationDirectMessages)
-      .where(and(eq(communicationDirectMessages.id, messageId), isNull(communicationDirectMessages.deletedAt)))
+    const [message] = await db.select({
+      id: communicationDirectMessages.id,
+      conversationId: communicationDirectMessages.conversationId,
+      body: communicationDirectMessages.body,
+      authorUid: communicationDirectMessages.authorUid,
+      authorName: communicationDirectMessages.authorName,
+      createdAt: communicationDirectMessages.createdAt,
+      ...(hasImageStoragePath ? { imageStoragePath: communicationDirectMessages.imageStoragePath } : {}),
+      ...(hasImageMimeType ? { imageMimeType: communicationDirectMessages.imageMimeType } : {}),
+      ...(hasImageSizeBytes ? { imageSizeBytes: communicationDirectMessages.imageSizeBytes } : {}),
+      ...(hasDrawingData ? { drawingData: communicationDirectMessages.drawingData } : {}),
+    }).from(communicationDirectMessages)
+      .where(and(
+        eq(communicationDirectMessages.id, messageId),
+        ...(hasDeletedAt ? [isNull(communicationDirectMessages.deletedAt)] : []),
+      ))
       .limit(1);
     if (!message) return null;
-    const [member] = await db.select().from(communicationDirectMembers)
+    const [member] = await db.select({ id: communicationDirectMembers.id }).from(communicationDirectMembers)
       .where(and(eq(communicationDirectMembers.conversationId, message.conversationId), eq(communicationDirectMembers.userId, userId)))
       .limit(1);
     if (!member) return { forbidden: true as const };
@@ -444,10 +488,10 @@ export class OccurrencesRepository {
       messageId: message.id,
       conversationId: message.conversationId,
       body: message.body,
-      imageStoragePath: message.imageStoragePath,
-      imageMimeType: message.imageMimeType,
-      imageSizeBytes: message.imageSizeBytes,
-      drawingData: message.drawingData,
+      imageStoragePath: 'imageStoragePath' in message ? (message.imageStoragePath ?? null) : null,
+      imageMimeType: 'imageMimeType' in message ? (message.imageMimeType ?? null) : null,
+      imageSizeBytes: 'imageSizeBytes' in message ? (message.imageSizeBytes ?? null) : null,
+      drawingData: 'drawingData' in message ? (message.drawingData ?? null) : null,
       authorUid: message.authorUid,
       authorName: message.authorName,
       createdAt: message.createdAt,

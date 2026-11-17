@@ -1,12 +1,11 @@
 import express, { Router, type Request, type RequestHandler, type Response, type NextFunction } from 'express';
 import { randomUUID } from 'node:crypto';
-import { and, asc, count, desc, eq, gt, ilike, inArray, isNull, lt, ne, or, type AnyColumn } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, ilike, inArray, isNull, lt, ne, or, sql, type AnyColumn, type SQL } from 'drizzle-orm';
 import { createPool, db, withDbRetry } from '../../db/index.ts';
 import { communicationDirectConversations, communicationDirectMembers, communicationDirectMessages, communicationGroupMembers, communicationGroups, communicationMessages, communicationMessageReactions, users } from '../../db/schema.ts';
 import { requirePermission } from '../../middleware/access-control.ts';
 import type { AuthenticatedRequest } from '../../middleware/auth.middleware.ts';
 import { allowBodyFields } from '../../middleware/request-protection.ts';
-import { communicationStorageBucket } from '../../lib/communication-storage.ts';
 import {
   MAX_IMAGE_BYTES,
   MediaValidationError,
@@ -114,7 +113,7 @@ async function getCommunicationSchemaSupport(): Promise<CommunicationSchemaSuppo
     pool.query<{ table_name: string; column_name: string }>(
       `SELECT table_name, column_name
        FROM information_schema.columns
-       WHERE table_schema = 'public' AND table_name = ANY($1::text[])`,
+       WHERE table_schema = current_schema() AND table_name = ANY($1::text[])`,
       [tables],
     ),
   );
@@ -201,6 +200,149 @@ function groupMessageSelectCols(cols: MessageTableCols) {
     ...(cols.imageSizeBytes ? { imageSizeBytes: communicationMessages.imageSizeBytes } : {}),
     ...(cols.drawingData ? { drawingData: communicationMessages.drawingData } : {}),
   };
+}
+
+type DbExecutor = Pick<typeof db, 'execute'>;
+
+type MessageInsertFields = {
+  body: string;
+  authorUid: string;
+  authorName: string;
+  replyToMessageId?: number | null;
+  audioStoragePath?: string;
+  audioMimeType?: string;
+  audioDurationMs?: number;
+  attachmentType?: string;
+  imageStoragePath?: string;
+  imageMimeType?: string;
+  imageSizeBytes?: number;
+};
+
+type InsertedMessageRow = {
+  id: number;
+  conversationId?: number;
+  groupId?: number;
+  authorUid: string;
+  authorName: string;
+  body: string;
+  createdAt: Date;
+  replyToMessageId?: number | null;
+  audioStoragePath?: string | null;
+  audioMimeType?: string | null;
+  audioDurationMs?: number | null;
+  deletedAt?: Date | null;
+  deletedByUid?: string | null;
+  updatedAt?: Date;
+  attachmentType?: string | null;
+  imageStoragePath?: string | null;
+  imageMimeType?: string | null;
+  imageSizeBytes?: number | null;
+  drawingData?: Record<string, unknown> | null;
+};
+
+function messageReturningSql(cols: MessageTableCols, parentAliasSql: string): SQL {
+  const parts: SQL[] = [
+    sql.raw('id'),
+    sql.raw(parentAliasSql),
+    sql.raw('author_uid AS "authorUid"'),
+    sql.raw('author_name AS "authorName"'),
+    sql.raw('body'),
+    sql.raw('created_at AS "createdAt"'),
+  ];
+  if (cols.replyToMessageId) parts.push(sql.raw('reply_to_message_id AS "replyToMessageId"'));
+  if (cols.audioStoragePath) parts.push(sql.raw('audio_storage_path AS "audioStoragePath"'));
+  if (cols.audioMimeType) parts.push(sql.raw('audio_mime_type AS "audioMimeType"'));
+  if (cols.audioDurationMs) parts.push(sql.raw('audio_duration_ms AS "audioDurationMs"'));
+  if (cols.deletedAt) parts.push(sql.raw('deleted_at AS "deletedAt"'));
+  if (cols.deletedByUid) parts.push(sql.raw('deleted_by_uid AS "deletedByUid"'));
+  if (cols.updatedAt) parts.push(sql.raw('updated_at AS "updatedAt"'));
+  if (cols.attachmentType) parts.push(sql.raw('attachment_type AS "attachmentType"'));
+  if (cols.imageStoragePath) parts.push(sql.raw('image_storage_path AS "imageStoragePath"'));
+  if (cols.imageMimeType) parts.push(sql.raw('image_mime_type AS "imageMimeType"'));
+  if (cols.imageSizeBytes) parts.push(sql.raw('image_size_bytes AS "imageSizeBytes"'));
+  if (cols.drawingData) parts.push(sql.raw('drawing_data AS "drawingData"'));
+  return sql.join(parts, sql.raw(', '));
+}
+
+async function insertMessageRow(
+  executor: DbExecutor,
+  tableName: 'communication_direct_messages' | 'communication_messages',
+  parentColName: 'conversation_id' | 'group_id',
+  parentAliasSql: 'conversation_id AS "conversationId"' | 'group_id AS "groupId"',
+  parentId: number,
+  cols: MessageTableCols,
+  fields: MessageInsertFields,
+): Promise<InsertedMessageRow> {
+  const columnNames: SQL[] = [
+    sql.raw(parentColName),
+    sql.raw('body'),
+    sql.raw('author_uid'),
+    sql.raw('author_name'),
+  ];
+  const columnValues: SQL[] = [
+    sql`${parentId}`,
+    sql`${fields.body}`,
+    sql`${fields.authorUid}`,
+    sql`${fields.authorName}`,
+  ];
+  if (cols.replyToMessageId && fields.replyToMessageId !== undefined) {
+    columnNames.push(sql.raw('reply_to_message_id'));
+    columnValues.push(sql`${fields.replyToMessageId}`);
+  }
+  if (cols.audioStoragePath && fields.audioStoragePath !== undefined) {
+    columnNames.push(sql.raw('audio_storage_path'));
+    columnValues.push(sql`${fields.audioStoragePath}`);
+  }
+  if (cols.audioMimeType && fields.audioMimeType !== undefined) {
+    columnNames.push(sql.raw('audio_mime_type'));
+    columnValues.push(sql`${fields.audioMimeType}`);
+  }
+  if (cols.audioDurationMs && fields.audioDurationMs !== undefined) {
+    columnNames.push(sql.raw('audio_duration_ms'));
+    columnValues.push(sql`${fields.audioDurationMs}`);
+  }
+  if (cols.attachmentType && fields.attachmentType !== undefined) {
+    columnNames.push(sql.raw('attachment_type'));
+    columnValues.push(sql`${fields.attachmentType}`);
+  }
+  if (cols.imageStoragePath && fields.imageStoragePath !== undefined) {
+    columnNames.push(sql.raw('image_storage_path'));
+    columnValues.push(sql`${fields.imageStoragePath}`);
+  }
+  if (cols.imageMimeType && fields.imageMimeType !== undefined) {
+    columnNames.push(sql.raw('image_mime_type'));
+    columnValues.push(sql`${fields.imageMimeType}`);
+  }
+  if (cols.imageSizeBytes && fields.imageSizeBytes !== undefined) {
+    columnNames.push(sql.raw('image_size_bytes'));
+    columnValues.push(sql`${fields.imageSizeBytes}`);
+  }
+
+  const query = sql`
+    INSERT INTO ${sql.raw(tableName)} (${sql.join(columnNames, sql.raw(', '))})
+    VALUES (${sql.join(columnValues, sql.raw(', '))})
+    RETURNING ${messageReturningSql(cols, parentAliasSql)}
+  `;
+  const result = await executor.execute(query);
+  return result.rows[0] as InsertedMessageRow;
+}
+
+async function insertDirectMembers(executor: DbExecutor, conversationId: number, userIds: number[]) {
+  const valueTuples = userIds.map((userId) => sql`(${conversationId}, ${userId})`);
+  await executor.execute(sql`
+    INSERT INTO communication_direct_members (conversation_id, user_id)
+    VALUES ${sql.join(valueTuples, sql.raw(', '))}
+    ON CONFLICT (conversation_id, user_id) DO NOTHING
+  `);
+}
+
+async function insertGroupMembers(executor: DbExecutor, groupId: number, userIds: number[], addedByUid: string) {
+  const valueTuples = userIds.map((userId) => sql`(${groupId}, ${userId}, ${addedByUid})`);
+  await executor.execute(sql`
+    INSERT INTO communication_group_members (group_id, user_id, added_by_uid)
+    VALUES ${sql.join(valueTuples, sql.raw(', '))}
+    ON CONFLICT (group_id, user_id) DO NOTHING
+  `);
 }
 
 function publicMessage<T extends {
@@ -329,17 +471,7 @@ function validatedAudioBody(req: AuthenticatedRequest, res: Response) {
 }
 
 async function streamAudio(objectPath: string, mimeType: string, res: Response, onError: (error: unknown) => void) {
-  try {
-    const file = communicationStorageBucket().file(objectPath);
-    const [metadata] = await file.getMetadata();
-    res.setHeader('Content-Type', mimeType);
-    res.setHeader('Content-Length', String(metadata.size || 0));
-    res.setHeader('Content-Disposition', 'inline; filename="voice-message"');
-    res.setHeader('Cache-Control', 'private, no-store');
-    const stream = file.createReadStream();
-    stream.on('error', onError);
-    stream.pipe(res);
-  } catch (error) { onError(error); }
+  return streamPrivateFile(objectPath, mimeType, 'voice-message', res, onError);
 }
 async function isGroupMember(groupId: number, userId: number) {
   const [member] = await db.select({ id: communicationGroupMembers.id }).from(communicationGroupMembers)
@@ -488,8 +620,16 @@ router.get('/direct/:id/messages', asyncHandler(async (req, res) => {
 router.patch('/direct/:id/clear', requirePermission('communications:write'), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'Conversa inválida.' });
+  const support = await getCommunicationSchemaSupport();
+  if (!await isDirectMember(id, req.user!.userId)) return res.status(404).json({ error: 'Conversa não encontrada.' });
+  if (!support.directMembersHistoryClearedAt) {
+    return res.status(503).json({ error: 'Limpar histórico não está disponível antes da atualização do banco de dados.' });
+  }
   const clearedAt = new Date();
-  const [membership] = await db.update(communicationDirectMembers).set({ historyClearedAt: clearedAt, lastReadAt: clearedAt }).where(and(
+  const [membership] = await db.update(communicationDirectMembers).set({
+    historyClearedAt: clearedAt,
+    ...(support.directMembersLastReadAt ? { lastReadAt: clearedAt } : {}),
+  }).where(and(
     eq(communicationDirectMembers.conversationId, id), eq(communicationDirectMembers.userId, req.user!.userId),
   )).returning({ id: communicationDirectMembers.id });
   if (!membership) return res.status(404).json({ error: 'Conversa não encontrada.' });
@@ -500,12 +640,19 @@ router.put('/direct/:id/messages/:messageId/reactions', requirePermission('commu
   const conversationId = Number(req.params.id), messageId = Number(req.params.messageId);
   const emoji = typeof req.body.emoji === 'string' ? req.body.emoji : '';
   if (!Number.isSafeInteger(conversationId) || conversationId < 1 || !Number.isSafeInteger(messageId) || messageId < 1 || !REACTION_EMOJIS.has(emoji)) return res.status(400).json({ error: 'Reação inválida.' });
+  const support = await getCommunicationSchemaSupport();
+  if (!support.hasReactionsTable) return res.status(503).json({ error: 'Reações não estão disponíveis no momento.' });
   if (!await isDirectMember(conversationId, req.user!.userId)) return res.status(404).json({ error: 'Conversa não encontrada.' });
-  const [message] = await db.select({ id: communicationDirectMessages.id, deletedAt: communicationDirectMessages.deletedAt }).from(communicationDirectMessages)
+  const [message] = await db.select({
+    id: communicationDirectMessages.id,
+    ...(support.directMessages.deletedAt ? { deletedAt: communicationDirectMessages.deletedAt } : {}),
+  }).from(communicationDirectMessages)
     .where(and(eq(communicationDirectMessages.id, messageId), eq(communicationDirectMessages.conversationId, conversationId))).limit(1);
-  if (!message || message.deletedAt) return res.status(404).json({ error: 'Mensagem não encontrada.' });
+  if (!message || ('deletedAt' in message && message.deletedAt)) return res.status(404).json({ error: 'Mensagem não encontrada.' });
   await db.insert(communicationMessageReactions).values({ directMessageId: messageId, userId: req.user!.userId, emoji }).onConflictDoNothing();
-  await db.update(communicationDirectMessages).set({ updatedAt: new Date() }).where(eq(communicationDirectMessages.id, messageId));
+  if (support.directMessages.updatedAt) {
+    await db.update(communicationDirectMessages).set({ updatedAt: new Date() }).where(eq(communicationDirectMessages.id, messageId));
+  }
   return res.json({ success: true });
 }));
 
@@ -513,46 +660,64 @@ router.delete('/direct/:id/messages/:messageId/reactions', requirePermission('co
   const conversationId = Number(req.params.id), messageId = Number(req.params.messageId);
   const emoji = typeof req.body.emoji === 'string' ? req.body.emoji : '';
   if (!Number.isSafeInteger(conversationId) || conversationId < 1 || !Number.isSafeInteger(messageId) || messageId < 1 || !REACTION_EMOJIS.has(emoji)) return res.status(400).json({ error: 'Reação inválida.' });
+  const support = await getCommunicationSchemaSupport();
+  if (!support.hasReactionsTable) return res.status(503).json({ error: 'Reações não estão disponíveis no momento.' });
   if (!await isDirectMember(conversationId, req.user!.userId)) return res.status(404).json({ error: 'Conversa não encontrada.' });
   const [message] = await db.select({ id: communicationDirectMessages.id }).from(communicationDirectMessages)
     .where(and(eq(communicationDirectMessages.id, messageId), eq(communicationDirectMessages.conversationId, conversationId))).limit(1);
   if (!message) return res.status(404).json({ error: 'Mensagem não encontrada.' });
   await db.delete(communicationMessageReactions).where(and(eq(communicationMessageReactions.directMessageId, messageId), eq(communicationMessageReactions.userId, req.user!.userId), eq(communicationMessageReactions.emoji, emoji)));
-  await db.update(communicationDirectMessages).set({ updatedAt: new Date() }).where(and(eq(communicationDirectMessages.id, messageId), eq(communicationDirectMessages.conversationId, conversationId)));
+  if (support.directMessages.updatedAt) {
+    await db.update(communicationDirectMessages).set({ updatedAt: new Date() }).where(and(eq(communicationDirectMessages.id, messageId), eq(communicationDirectMessages.conversationId, conversationId)));
+  }
   return res.json({ success: true });
 }));
 
 router.delete('/direct/:id/messages/:messageId', requirePermission('communications:write'), asyncHandler(async (req, res) => {
   const conversationId = Number(req.params.id), messageId = Number(req.params.messageId);
   if (!Number.isSafeInteger(conversationId) || conversationId < 1 || !Number.isSafeInteger(messageId) || messageId < 1) return res.status(400).json({ error: 'Mensagem ou conversa inválida.' });
+  const support = await getCommunicationSchemaSupport();
+  const cols = support.directMessages;
   if (!await isDirectMember(conversationId, req.user!.userId)) return res.status(404).json({ error: 'Conversa não encontrada.' });
   const [message] = await db.select({
     id: communicationDirectMessages.id,
     authorUid: communicationDirectMessages.authorUid,
-    audioStoragePath: communicationDirectMessages.audioStoragePath,
-    imageStoragePath: communicationDirectMessages.imageStoragePath,
-    deletedAt: communicationDirectMessages.deletedAt,
+    ...(cols.audioStoragePath ? { audioStoragePath: communicationDirectMessages.audioStoragePath } : {}),
+    ...(cols.imageStoragePath ? { imageStoragePath: communicationDirectMessages.imageStoragePath } : {}),
+    ...(cols.deletedAt ? { deletedAt: communicationDirectMessages.deletedAt } : {}),
   }).from(communicationDirectMessages).where(and(eq(communicationDirectMessages.id, messageId), eq(communicationDirectMessages.conversationId, conversationId))).limit(1);
-  if (!message || message.authorUid !== req.user!.uid || message.deletedAt) return res.status(404).json({ error: 'Mensagem não encontrada ou sem permissão para apagá-la.' });
+  if (!message || message.authorUid !== req.user!.uid || ('deletedAt' in message && message.deletedAt)) {
+    return res.status(404).json({ error: 'Mensagem não encontrada ou sem permissão para apagá-la.' });
+  }
   const deletedAt = new Date();
-  const [deleted] = await db.update(communicationDirectMessages).set({
-    body: 'Mensagem apagada',
-    deletedAt,
-    deletedByUid: req.user!.uid,
-    audioStoragePath: null,
-    audioMimeType: null,
-    audioDurationMs: null,
-    attachmentType: null,
-    imageStoragePath: null,
-    imageMimeType: null,
-    imageSizeBytes: null,
-    drawingData: null,
-    updatedAt: deletedAt,
-  })
-    .where(and(eq(communicationDirectMessages.id, messageId), eq(communicationDirectMessages.conversationId, conversationId), eq(communicationDirectMessages.authorUid, req.user!.uid), isNull(communicationDirectMessages.deletedAt))).returning({ id: communicationDirectMessages.id });
+  let deleted: { id: number } | undefined;
+  if (cols.deletedAt) {
+    [deleted] = await db.update(communicationDirectMessages).set({
+      body: 'Mensagem apagada',
+      deletedAt,
+      ...(cols.deletedByUid ? { deletedByUid: req.user!.uid } : {}),
+      ...(cols.audioStoragePath ? { audioStoragePath: null } : {}),
+      ...(cols.audioMimeType ? { audioMimeType: null } : {}),
+      ...(cols.audioDurationMs ? { audioDurationMs: null } : {}),
+      ...(cols.attachmentType ? { attachmentType: null } : {}),
+      ...(cols.imageStoragePath ? { imageStoragePath: null } : {}),
+      ...(cols.imageMimeType ? { imageMimeType: null } : {}),
+      ...(cols.imageSizeBytes ? { imageSizeBytes: null } : {}),
+      ...(cols.drawingData ? { drawingData: null } : {}),
+      ...(cols.updatedAt ? { updatedAt: deletedAt } : {}),
+    })
+      .where(and(eq(communicationDirectMessages.id, messageId), eq(communicationDirectMessages.conversationId, conversationId), eq(communicationDirectMessages.authorUid, req.user!.uid), isNull(communicationDirectMessages.deletedAt)))
+      .returning({ id: communicationDirectMessages.id });
+  } else {
+    [deleted] = await db.delete(communicationDirectMessages)
+      .where(and(eq(communicationDirectMessages.id, messageId), eq(communicationDirectMessages.conversationId, conversationId), eq(communicationDirectMessages.authorUid, req.user!.uid)))
+      .returning({ id: communicationDirectMessages.id });
+  }
   if (!deleted) return res.status(404).json({ error: 'Mensagem não encontrada ou já apagada.' });
-  if (message.audioStoragePath) await communicationStorageBucket().file(message.audioStoragePath).delete().catch((error) => console.error('Failed to remove deleted direct-message audio:', error));
-  if (message.imageStoragePath) await deletePrivateFile(message.imageStoragePath).catch((error) => console.error('Failed to remove deleted direct-message image:', error));
+  const audioPath = 'audioStoragePath' in message ? message.audioStoragePath : null;
+  const imagePath = 'imageStoragePath' in message ? message.imageStoragePath : null;
+  if (audioPath) await deletePrivateFile(audioPath).catch((error) => console.error('Failed to remove deleted direct-message audio:', error));
+  if (imagePath) await deletePrivateFile(imagePath).catch((error) => console.error('Failed to remove deleted direct-message image:', error));
   await AuditService.record({ userId: req.user!.uid, userEmail: req.user!.loginName, action: 'DELETE', entity: 'SYSTEM', entityId: String(messageId), details: { type: 'COMMUNICATION_DIRECT_MESSAGE', conversationId } }, req);
   return res.json({ success: true });
 }));
@@ -560,6 +725,8 @@ router.delete('/direct/:id/messages/:messageId', requirePermission('communicatio
 router.get('/direct/:id/messages/:messageId/audio', asyncHandler(async (req, res) => {
   const conversationId = Number(req.params.id), messageId = Number(req.params.messageId);
   if (!Number.isInteger(conversationId) || conversationId < 1 || !Number.isInteger(messageId) || messageId < 1) return res.status(400).json({ error: 'Mensagem inválida.' });
+  const support = await getCommunicationSchemaSupport();
+  if (!support.directMessages.audioStoragePath || !support.directMessages.audioMimeType) return res.status(404).json({ error: 'Áudio não encontrado.' });
   if (!await isDirectMember(conversationId, req.user!.userId)) return res.status(404).json({ error: 'Conversa não encontrada.' });
   const [message] = await db.select({ path: communicationDirectMessages.audioStoragePath, mimeType: communicationDirectMessages.audioMimeType })
     .from(communicationDirectMessages).where(and(eq(communicationDirectMessages.id, messageId), eq(communicationDirectMessages.conversationId, conversationId))).limit(1);
@@ -570,13 +737,15 @@ router.get('/direct/:id/messages/:messageId/audio', asyncHandler(async (req, res
 router.get('/direct/:id/messages/:messageId/image', asyncHandler(async (req, res) => {
   const conversationId = Number(req.params.id), messageId = Number(req.params.messageId);
   if (!Number.isInteger(conversationId) || conversationId < 1 || !Number.isInteger(messageId) || messageId < 1) return res.status(400).json({ error: 'Mensagem inválida.' });
+  const support = await getCommunicationSchemaSupport();
+  if (!support.directMessages.imageStoragePath || !support.directMessages.imageMimeType) return res.status(404).json({ error: 'Imagem não encontrada.' });
   if (!await isDirectMember(conversationId, req.user!.userId)) return res.status(404).json({ error: 'Conversa não encontrada.' });
   const [message] = await db.select({
     path: communicationDirectMessages.imageStoragePath,
     mimeType: communicationDirectMessages.imageMimeType,
-    deletedAt: communicationDirectMessages.deletedAt,
+    ...(support.directMessages.deletedAt ? { deletedAt: communicationDirectMessages.deletedAt } : {}),
   }).from(communicationDirectMessages).where(and(eq(communicationDirectMessages.id, messageId), eq(communicationDirectMessages.conversationId, conversationId))).limit(1);
-  if (!message?.path || !message.mimeType || message.deletedAt) return res.status(404).json({ error: 'Imagem não encontrada.' });
+  if (!message?.path || !message.mimeType || ('deletedAt' in message && message.deletedAt)) return res.status(404).json({ error: 'Imagem não encontrada.' });
   return streamPrivateFile(message.path, message.mimeType, `chat-direct-${messageId}`, res, () => {
     if (!res.headersSent) res.status(503).json({ error: 'Não foi possível carregar a imagem.' });
     else res.destroy();
@@ -588,10 +757,15 @@ router.put('/direct/:id/messages/:messageId/drawing', requirePermission('communi
   if (!Number.isSafeInteger(conversationId) || conversationId < 1 || !Number.isSafeInteger(messageId) || messageId < 1) {
     return res.status(400).json({ error: 'Mensagem ou conversa inválida.' });
   }
+  const support = await getCommunicationSchemaSupport();
+  const cols = support.directMessages;
+  if (!cols.drawingData || !cols.imageStoragePath) {
+    return res.status(503).json({ error: 'Anotações em imagens não estão disponíveis no momento.' });
+  }
   if (!await isDirectMember(conversationId, req.user!.userId)) return res.status(404).json({ error: 'Conversa não encontrada.' });
-  const [message] = await db.select().from(communicationDirectMessages)
+  const [message] = await db.select(directMessageSelectCols(cols)).from(communicationDirectMessages)
     .where(and(eq(communicationDirectMessages.id, messageId), eq(communicationDirectMessages.conversationId, conversationId))).limit(1);
-  if (!message || message.deletedAt || !message.imageStoragePath) {
+  if (!message || ('deletedAt' in message && message.deletedAt) || !('imageStoragePath' in message && message.imageStoragePath)) {
     return res.status(404).json({ error: 'Imagem não encontrada nesta conversa.' });
   }
   let sanitized;
@@ -601,10 +775,11 @@ router.put('/direct/:id/messages/:messageId/drawing', requirePermission('communi
     return res.status(400).json({ error: err instanceof MediaValidationError ? err.message : 'Anotação inválida.' });
   }
   const [updated] = await db.update(communicationDirectMessages).set({
-    attachmentType: sanitized.strokes.length > 0 ? 'DRAWING' : 'IMAGE',
+    ...(cols.attachmentType ? { attachmentType: sanitized.strokes.length > 0 ? 'DRAWING' : 'IMAGE' } : {}),
     drawingData: sanitized as unknown as Record<string, unknown>,
-    updatedAt: new Date(),
-  }).where(and(eq(communicationDirectMessages.id, messageId), eq(communicationDirectMessages.conversationId, conversationId))).returning();
+    ...(cols.updatedAt ? { updatedAt: new Date() } : {}),
+  }).where(and(eq(communicationDirectMessages.id, messageId), eq(communicationDirectMessages.conversationId, conversationId)))
+    .returning(directMessageSelectCols(cols));
   await AuditService.record({
     userId: req.user!.uid,
     userEmail: req.user!.loginName,
@@ -684,13 +859,16 @@ router.post('/direct/messages', requirePermission('communications:write'), allow
       [conversation] = await tx.select().from(communicationDirectConversations).where(eq(communicationDirectConversations.directKey, directKey)).limit(1);
     }
     if (!conversation) throw new Error('Não foi possível iniciar a conversa.');
-    await tx.insert(communicationDirectMembers).values([
-      { conversationId: conversation.id, userId: req.user!.userId },
-      { conversationId: conversation.id, userId: recipientId },
-    ]).onConflictDoNothing();
-    const [message] = await tx.insert(communicationDirectMessages).values({
-      conversationId: conversation.id, body, authorUid: req.user!.uid, authorName: req.user!.name,
-    }).returning(directMessageSelectCols(support.directMessages));
+    await insertDirectMembers(tx, conversation.id, [req.user!.userId, recipientId]);
+    const message = await insertMessageRow(
+      tx,
+      'communication_direct_messages',
+      'conversation_id',
+      'conversation_id AS "conversationId"',
+      conversation.id,
+      support.directMessages,
+      { body, authorUid: req.user!.uid, authorName: req.user!.name },
+    );
     return { conversationId: conversation.id, message: publicMessage(message) };
   });
   return res.status(201).json(result);
@@ -707,38 +885,66 @@ router.post('/direct/:id/messages', requirePermission('communications:write'), a
       .where(and(eq(communicationDirectMessages.id, replyToMessageId), eq(communicationDirectMessages.conversationId, id))).limit(1);
     if (!Number.isInteger(replyToMessageId) || !source) return res.status(400).json({ error: 'A mensagem respondida não pertence a esta conversa.' });
   }
-  const [message] = await db.insert(communicationDirectMessages).values({
-    conversationId: id,
-    body,
-    ...(support.directMessages.replyToMessageId ? { replyToMessageId } : {}),
-    authorUid: req.user!.uid,
-    authorName: req.user!.name,
-  }).returning(directMessageSelectCols(support.directMessages));
+  const message = await insertMessageRow(
+    db,
+    'communication_direct_messages',
+    'conversation_id',
+    'conversation_id AS "conversationId"',
+    id,
+    support.directMessages,
+    {
+      body,
+      ...(support.directMessages.replyToMessageId ? { replyToMessageId } : {}),
+      authorUid: req.user!.uid,
+      authorName: req.user!.name,
+    },
+  );
   return res.status(201).json(publicMessage(message));
 }));
 
 router.post('/direct/:id/audio', requirePermission('communications:write'), express.raw({ type: 'audio/*', limit: MAX_AUDIO_BYTES }), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Conversa inválida.' });
+  const support = await getCommunicationSchemaSupport();
+  const cols = support.directMessages;
+  if (!cols.audioStoragePath || !cols.audioMimeType || !cols.audioDurationMs) {
+    return res.status(503).json({ error: 'Envio de áudio não está disponível no momento.' });
+  }
   if (!await isDirectMember(id, req.user!.userId)) return res.status(404).json({ error: 'Conversa não encontrada.' });
   const audio = validatedAudioBody(req, res);
   if (!audio) return;
   const extension = audio.mimeType === 'audio/ogg' ? 'ogg' : audio.mimeType === 'audio/mp4' ? 'm4a' : audio.mimeType === 'audio/mpeg' ? 'mp3' : 'webm';
   const objectPath = `communications/direct/${id}/${randomUUID()}.${extension}`;
-  const file = communicationStorageBucket().file(objectPath);
-  await file.save(audio.buffer, { resumable: false, metadata: { contentType: audio.mimeType, cacheControl: 'private, no-store' } });
+  const storedPath = await savePrivateFile(objectPath, audio.buffer, audio.mimeType);
   try {
-    const [message] = await db.insert(communicationDirectMessages).values({
-      conversationId: id, body: 'Mensagem de áudio', authorUid: req.user!.uid, authorName: req.user!.name,
-      audioStoragePath: objectPath, audioMimeType: audio.mimeType, audioDurationMs: audio.durationMs,
-    }).returning();
+    const message = await insertMessageRow(
+      db,
+      'communication_direct_messages',
+      'conversation_id',
+      'conversation_id AS "conversationId"',
+      id,
+      cols,
+      {
+        body: 'Mensagem de áudio',
+        authorUid: req.user!.uid,
+        authorName: req.user!.name,
+        audioStoragePath: storedPath,
+        audioMimeType: audio.mimeType,
+        audioDurationMs: audio.durationMs,
+      },
+    );
     return res.status(201).json(publicMessage(message));
-  } catch (error) { await file.delete().catch(() => undefined); throw error; }
+  } catch (error) { await deletePrivateFile(storedPath).catch(() => undefined); throw error; }
 }));
 
 router.post('/direct/:id/image', requirePermission('communications:write'), express.raw({ type: IMAGE_RAW_TYPES, limit: MAX_IMAGE_BYTES }), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Conversa inválida.' });
+  const support = await getCommunicationSchemaSupport();
+  const cols = support.directMessages;
+  if (!cols.imageStoragePath || !cols.imageMimeType) {
+    return res.status(503).json({ error: 'Envio de imagens não está disponível no momento.' });
+  }
   if (!await isDirectMember(id, req.user!.userId)) return res.status(404).json({ error: 'Conversa não encontrada.' });
   if (!Buffer.isBuffer(req.body)) return res.status(415).json({ error: 'Envie uma imagem PNG, JPEG ou WebP de até 5 MB.' });
   let validated;
@@ -753,16 +959,23 @@ router.post('/direct/:id/image', requirePermission('communications:write'), expr
   const objectPath = `communications/direct/${id}/${randomUUID()}.${validated.extension}`;
   const storedPath = await savePrivateFile(objectPath, req.body, validated.mimeType);
   try {
-    const [message] = await db.insert(communicationDirectMessages).values({
-      conversationId: id,
-      body: caption,
-      authorUid: req.user!.uid,
-      authorName: req.user!.name,
-      attachmentType: 'IMAGE',
-      imageStoragePath: storedPath,
-      imageMimeType: validated.mimeType,
-      imageSizeBytes: req.body.length,
-    }).returning();
+    const message = await insertMessageRow(
+      db,
+      'communication_direct_messages',
+      'conversation_id',
+      'conversation_id AS "conversationId"',
+      id,
+      cols,
+      {
+        body: caption,
+        authorUid: req.user!.uid,
+        authorName: req.user!.name,
+        ...(cols.attachmentType ? { attachmentType: 'IMAGE' } : {}),
+        imageStoragePath: storedPath,
+        imageMimeType: validated.mimeType,
+        ...(cols.imageSizeBytes ? { imageSizeBytes: req.body.length } : {}),
+      },
+    );
     await AuditService.record({
       userId: req.user!.uid,
       userEmail: req.user!.loginName,
@@ -846,8 +1059,16 @@ router.get('/groups', asyncHandler(async (req, res) => {
 router.patch('/groups/:id/clear', requirePermission('communications:write'), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'Grupo inválido.' });
+  const support = await getCommunicationSchemaSupport();
+  if (!await isGroupMember(id, req.user!.userId)) return res.status(404).json({ error: 'Grupo não encontrado.' });
+  if (!support.groupMembersHistoryClearedAt) {
+    return res.status(503).json({ error: 'Limpar histórico não está disponível antes da atualização do banco de dados.' });
+  }
   const clearedAt = new Date();
-  const [membership] = await db.update(communicationGroupMembers).set({ historyClearedAt: clearedAt, lastReadAt: clearedAt }).where(and(
+  const [membership] = await db.update(communicationGroupMembers).set({
+    historyClearedAt: clearedAt,
+    ...(support.groupMembersLastReadAt ? { lastReadAt: clearedAt } : {}),
+  }).where(and(
     eq(communicationGroupMembers.groupId, id), eq(communicationGroupMembers.userId, req.user!.userId),
   )).returning({ id: communicationGroupMembers.id });
   if (!membership) return res.status(404).json({ error: 'Grupo não encontrado.' });
@@ -857,20 +1078,24 @@ router.patch('/groups/:id/clear', requirePermission('communications:write'), asy
 router.delete('/groups/:id', requirePermission('communications:write'), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'Grupo inválido.' });
+  const support = await getCommunicationSchemaSupport();
+  const cols = support.groupMessages;
   const [group] = await db.select({ name: communicationGroups.name, sector: communicationGroups.sector, createdByUid: communicationGroups.createdByUid })
     .from(communicationGroups).where(eq(communicationGroups.id, id)).limit(1);
   if (!group) return res.status(404).json({ error: 'Grupo não encontrado.' });
   if (group.createdByUid !== req.user!.uid) return res.status(403).json({ error: 'Somente quem criou o grupo pode apagá-lo.' });
-  const mediaRows = await db.select({
-    audioPath: communicationMessages.audioStoragePath,
-    imagePath: communicationMessages.imageStoragePath,
-  }).from(communicationMessages).where(eq(communicationMessages.groupId, id));
+  const mediaRows = (cols.audioStoragePath || cols.imageStoragePath)
+    ? await db.select({
+      ...(cols.audioStoragePath ? { audioPath: communicationMessages.audioStoragePath } : {}),
+      ...(cols.imageStoragePath ? { imagePath: communicationMessages.imageStoragePath } : {}),
+    }).from(communicationMessages).where(eq(communicationMessages.groupId, id))
+    : [];
   await AuditService.record({ userId: req.user!.uid, userEmail: req.user!.loginName, action: 'DELETE', entity: 'SYSTEM', entityId: String(id), details: { type: 'COMMUNICATION_GROUP', groupName: group.name, sector: group.sector } }, req);
   await db.delete(communicationGroups).where(eq(communicationGroups.id, id));
-  const audioPaths = mediaRows.flatMap(row => row.audioPath ? [row.audioPath] : []);
-  const imagePaths = mediaRows.flatMap(row => row.imagePath ? [row.imagePath] : []);
+  const audioPaths = mediaRows.flatMap((row) => ('audioPath' in row && row.audioPath) ? [row.audioPath] : []);
+  const imagePaths = mediaRows.flatMap((row) => ('imagePath' in row && row.imagePath) ? [row.imagePath] : []);
   if (audioPaths.length) {
-    const results = await Promise.allSettled(audioPaths.map(path => communicationStorageBucket().file(path).delete()));
+    const results = await Promise.allSettled(audioPaths.map(path => deletePrivateFile(path)));
     results.filter(result => result.status === 'rejected').forEach(() => console.error('Failed to remove audio files from deleted communication group:', id));
   }
   if (imagePaths.length) {
@@ -923,12 +1148,19 @@ router.put('/groups/:id/messages/:messageId/reactions', requirePermission('commu
   const groupId = Number(req.params.id), messageId = Number(req.params.messageId);
   const emoji = typeof req.body.emoji === 'string' ? req.body.emoji : '';
   if (!Number.isSafeInteger(groupId) || groupId < 1 || !Number.isSafeInteger(messageId) || messageId < 1 || !REACTION_EMOJIS.has(emoji)) return res.status(400).json({ error: 'Reação inválida.' });
+  const support = await getCommunicationSchemaSupport();
+  if (!support.hasReactionsTable) return res.status(503).json({ error: 'Reações não estão disponíveis no momento.' });
   if (!await isGroupMember(groupId, req.user!.userId)) return res.status(404).json({ error: 'Grupo não encontrado.' });
-  const [message] = await db.select({ id: communicationMessages.id, deletedAt: communicationMessages.deletedAt }).from(communicationMessages)
+  const [message] = await db.select({
+    id: communicationMessages.id,
+    ...(support.groupMessages.deletedAt ? { deletedAt: communicationMessages.deletedAt } : {}),
+  }).from(communicationMessages)
     .where(and(eq(communicationMessages.id, messageId), eq(communicationMessages.groupId, groupId))).limit(1);
-  if (!message || message.deletedAt) return res.status(404).json({ error: 'Mensagem não encontrada.' });
+  if (!message || ('deletedAt' in message && message.deletedAt)) return res.status(404).json({ error: 'Mensagem não encontrada.' });
   await db.insert(communicationMessageReactions).values({ groupMessageId: messageId, userId: req.user!.userId, emoji }).onConflictDoNothing();
-  await db.update(communicationMessages).set({ updatedAt: new Date() }).where(eq(communicationMessages.id, messageId));
+  if (support.groupMessages.updatedAt) {
+    await db.update(communicationMessages).set({ updatedAt: new Date() }).where(eq(communicationMessages.id, messageId));
+  }
   return res.json({ success: true });
 }));
 
@@ -936,46 +1168,64 @@ router.delete('/groups/:id/messages/:messageId/reactions', requirePermission('co
   const groupId = Number(req.params.id), messageId = Number(req.params.messageId);
   const emoji = typeof req.body.emoji === 'string' ? req.body.emoji : '';
   if (!Number.isSafeInteger(groupId) || groupId < 1 || !Number.isSafeInteger(messageId) || messageId < 1 || !REACTION_EMOJIS.has(emoji)) return res.status(400).json({ error: 'Reação inválida.' });
+  const support = await getCommunicationSchemaSupport();
+  if (!support.hasReactionsTable) return res.status(503).json({ error: 'Reações não estão disponíveis no momento.' });
   if (!await isGroupMember(groupId, req.user!.userId)) return res.status(404).json({ error: 'Grupo não encontrado.' });
   const [message] = await db.select({ id: communicationMessages.id }).from(communicationMessages)
     .where(and(eq(communicationMessages.id, messageId), eq(communicationMessages.groupId, groupId))).limit(1);
   if (!message) return res.status(404).json({ error: 'Mensagem não encontrada.' });
   await db.delete(communicationMessageReactions).where(and(eq(communicationMessageReactions.groupMessageId, messageId), eq(communicationMessageReactions.userId, req.user!.userId), eq(communicationMessageReactions.emoji, emoji)));
-  await db.update(communicationMessages).set({ updatedAt: new Date() }).where(and(eq(communicationMessages.id, messageId), eq(communicationMessages.groupId, groupId)));
+  if (support.groupMessages.updatedAt) {
+    await db.update(communicationMessages).set({ updatedAt: new Date() }).where(and(eq(communicationMessages.id, messageId), eq(communicationMessages.groupId, groupId)));
+  }
   return res.json({ success: true });
 }));
 
 router.delete('/groups/:id/messages/:messageId', requirePermission('communications:write'), asyncHandler(async (req, res) => {
   const groupId = Number(req.params.id), messageId = Number(req.params.messageId);
   if (!Number.isSafeInteger(groupId) || groupId < 1 || !Number.isSafeInteger(messageId) || messageId < 1) return res.status(400).json({ error: 'Mensagem ou grupo inválido.' });
+  const support = await getCommunicationSchemaSupport();
+  const cols = support.groupMessages;
   if (!await isGroupMember(groupId, req.user!.userId)) return res.status(404).json({ error: 'Grupo não encontrado.' });
   const [message] = await db.select({
     id: communicationMessages.id,
     authorUid: communicationMessages.authorUid,
-    audioStoragePath: communicationMessages.audioStoragePath,
-    imageStoragePath: communicationMessages.imageStoragePath,
-    deletedAt: communicationMessages.deletedAt,
+    ...(cols.audioStoragePath ? { audioStoragePath: communicationMessages.audioStoragePath } : {}),
+    ...(cols.imageStoragePath ? { imageStoragePath: communicationMessages.imageStoragePath } : {}),
+    ...(cols.deletedAt ? { deletedAt: communicationMessages.deletedAt } : {}),
   }).from(communicationMessages).where(and(eq(communicationMessages.id, messageId), eq(communicationMessages.groupId, groupId))).limit(1);
-  if (!message || message.authorUid !== req.user!.uid || message.deletedAt) return res.status(404).json({ error: 'Mensagem não encontrada ou sem permissão para apagá-la.' });
+  if (!message || message.authorUid !== req.user!.uid || ('deletedAt' in message && message.deletedAt)) {
+    return res.status(404).json({ error: 'Mensagem não encontrada ou sem permissão para apagá-la.' });
+  }
   const deletedAt = new Date();
-  const [deleted] = await db.update(communicationMessages).set({
-    body: 'Mensagem apagada',
-    deletedAt,
-    deletedByUid: req.user!.uid,
-    audioStoragePath: null,
-    audioMimeType: null,
-    audioDurationMs: null,
-    attachmentType: null,
-    imageStoragePath: null,
-    imageMimeType: null,
-    imageSizeBytes: null,
-    drawingData: null,
-    updatedAt: deletedAt,
-  })
-    .where(and(eq(communicationMessages.id, messageId), eq(communicationMessages.groupId, groupId), eq(communicationMessages.authorUid, req.user!.uid), isNull(communicationMessages.deletedAt))).returning({ id: communicationMessages.id });
+  let deleted: { id: number } | undefined;
+  if (cols.deletedAt) {
+    [deleted] = await db.update(communicationMessages).set({
+      body: 'Mensagem apagada',
+      deletedAt,
+      ...(cols.deletedByUid ? { deletedByUid: req.user!.uid } : {}),
+      ...(cols.audioStoragePath ? { audioStoragePath: null } : {}),
+      ...(cols.audioMimeType ? { audioMimeType: null } : {}),
+      ...(cols.audioDurationMs ? { audioDurationMs: null } : {}),
+      ...(cols.attachmentType ? { attachmentType: null } : {}),
+      ...(cols.imageStoragePath ? { imageStoragePath: null } : {}),
+      ...(cols.imageMimeType ? { imageMimeType: null } : {}),
+      ...(cols.imageSizeBytes ? { imageSizeBytes: null } : {}),
+      ...(cols.drawingData ? { drawingData: null } : {}),
+      ...(cols.updatedAt ? { updatedAt: deletedAt } : {}),
+    })
+      .where(and(eq(communicationMessages.id, messageId), eq(communicationMessages.groupId, groupId), eq(communicationMessages.authorUid, req.user!.uid), isNull(communicationMessages.deletedAt)))
+      .returning({ id: communicationMessages.id });
+  } else {
+    [deleted] = await db.delete(communicationMessages)
+      .where(and(eq(communicationMessages.id, messageId), eq(communicationMessages.groupId, groupId), eq(communicationMessages.authorUid, req.user!.uid)))
+      .returning({ id: communicationMessages.id });
+  }
   if (!deleted) return res.status(404).json({ error: 'Mensagem não encontrada ou já apagada.' });
-  if (message.audioStoragePath) await communicationStorageBucket().file(message.audioStoragePath).delete().catch((error) => console.error('Failed to remove deleted group-message audio:', error));
-  if (message.imageStoragePath) await deletePrivateFile(message.imageStoragePath).catch((error) => console.error('Failed to remove deleted group-message image:', error));
+  const audioPath = 'audioStoragePath' in message ? message.audioStoragePath : null;
+  const imagePath = 'imageStoragePath' in message ? message.imageStoragePath : null;
+  if (audioPath) await deletePrivateFile(audioPath).catch((error) => console.error('Failed to remove deleted group-message audio:', error));
+  if (imagePath) await deletePrivateFile(imagePath).catch((error) => console.error('Failed to remove deleted group-message image:', error));
   await AuditService.record({ userId: req.user!.uid, userEmail: req.user!.loginName, action: 'DELETE', entity: 'SYSTEM', entityId: String(messageId), details: { type: 'COMMUNICATION_GROUP_MESSAGE', groupId } }, req);
   return res.json({ success: true });
 }));
@@ -983,6 +1233,8 @@ router.delete('/groups/:id/messages/:messageId', requirePermission('communicatio
 router.get('/groups/:id/messages/:messageId/audio', asyncHandler(async (req, res) => {
   const groupId = Number(req.params.id), messageId = Number(req.params.messageId);
   if (!Number.isInteger(groupId) || groupId < 1 || !Number.isInteger(messageId) || messageId < 1) return res.status(400).json({ error: 'Mensagem inválida.' });
+  const support = await getCommunicationSchemaSupport();
+  if (!support.groupMessages.audioStoragePath || !support.groupMessages.audioMimeType) return res.status(404).json({ error: 'Áudio não encontrado.' });
   if (!await isGroupMember(groupId, req.user!.userId)) return res.status(404).json({ error: 'Grupo não encontrado.' });
   const [message] = await db.select({ path: communicationMessages.audioStoragePath, mimeType: communicationMessages.audioMimeType })
     .from(communicationMessages).where(and(eq(communicationMessages.id, messageId), eq(communicationMessages.groupId, groupId))).limit(1);
@@ -993,13 +1245,15 @@ router.get('/groups/:id/messages/:messageId/audio', asyncHandler(async (req, res
 router.get('/groups/:id/messages/:messageId/image', asyncHandler(async (req, res) => {
   const groupId = Number(req.params.id), messageId = Number(req.params.messageId);
   if (!Number.isInteger(groupId) || groupId < 1 || !Number.isInteger(messageId) || messageId < 1) return res.status(400).json({ error: 'Mensagem inválida.' });
+  const support = await getCommunicationSchemaSupport();
+  if (!support.groupMessages.imageStoragePath || !support.groupMessages.imageMimeType) return res.status(404).json({ error: 'Imagem não encontrada.' });
   if (!await isGroupMember(groupId, req.user!.userId)) return res.status(404).json({ error: 'Grupo não encontrado.' });
   const [message] = await db.select({
     path: communicationMessages.imageStoragePath,
     mimeType: communicationMessages.imageMimeType,
-    deletedAt: communicationMessages.deletedAt,
+    ...(support.groupMessages.deletedAt ? { deletedAt: communicationMessages.deletedAt } : {}),
   }).from(communicationMessages).where(and(eq(communicationMessages.id, messageId), eq(communicationMessages.groupId, groupId))).limit(1);
-  if (!message?.path || !message.mimeType || message.deletedAt) return res.status(404).json({ error: 'Imagem não encontrada.' });
+  if (!message?.path || !message.mimeType || ('deletedAt' in message && message.deletedAt)) return res.status(404).json({ error: 'Imagem não encontrada.' });
   return streamPrivateFile(message.path, message.mimeType, `chat-group-${messageId}`, res, () => {
     if (!res.headersSent) res.status(503).json({ error: 'Não foi possível carregar a imagem.' });
     else res.destroy();
@@ -1011,10 +1265,15 @@ router.put('/groups/:id/messages/:messageId/drawing', requirePermission('communi
   if (!Number.isSafeInteger(groupId) || groupId < 1 || !Number.isSafeInteger(messageId) || messageId < 1) {
     return res.status(400).json({ error: 'Mensagem ou grupo inválido.' });
   }
+  const support = await getCommunicationSchemaSupport();
+  const cols = support.groupMessages;
+  if (!cols.drawingData || !cols.imageStoragePath) {
+    return res.status(503).json({ error: 'Anotações em imagens não estão disponíveis no momento.' });
+  }
   if (!await isGroupMember(groupId, req.user!.userId)) return res.status(404).json({ error: 'Grupo não encontrado.' });
-  const [message] = await db.select().from(communicationMessages)
+  const [message] = await db.select(groupMessageSelectCols(cols)).from(communicationMessages)
     .where(and(eq(communicationMessages.id, messageId), eq(communicationMessages.groupId, groupId))).limit(1);
-  if (!message || message.deletedAt || !message.imageStoragePath) {
+  if (!message || ('deletedAt' in message && message.deletedAt) || !('imageStoragePath' in message && message.imageStoragePath)) {
     return res.status(404).json({ error: 'Imagem não encontrada neste grupo.' });
   }
   let sanitized;
@@ -1024,10 +1283,11 @@ router.put('/groups/:id/messages/:messageId/drawing', requirePermission('communi
     return res.status(400).json({ error: err instanceof MediaValidationError ? err.message : 'Anotação inválida.' });
   }
   const [updated] = await db.update(communicationMessages).set({
-    attachmentType: sanitized.strokes.length > 0 ? 'DRAWING' : 'IMAGE',
+    ...(cols.attachmentType ? { attachmentType: sanitized.strokes.length > 0 ? 'DRAWING' : 'IMAGE' } : {}),
     drawingData: sanitized as unknown as Record<string, unknown>,
-    updatedAt: new Date(),
-  }).where(and(eq(communicationMessages.id, messageId), eq(communicationMessages.groupId, groupId))).returning();
+    ...(cols.updatedAt ? { updatedAt: new Date() } : {}),
+  }).where(and(eq(communicationMessages.id, messageId), eq(communicationMessages.groupId, groupId)))
+    .returning(groupMessageSelectCols(cols));
   await AuditService.record({
     userId: req.user!.uid,
     userEmail: req.user!.loginName,
@@ -1093,7 +1353,7 @@ router.post('/groups', requirePermission('communications:manage'), allowBodyFiel
   if (validUsers.length !== memberIds.length) return res.status(400).json({ error: 'Um ou mais participantes não estão ativos.' });
   const group = await db.transaction(async (tx) => {
     const [created] = await tx.insert(communicationGroups).values({ name, sector, createdByUid: req.user!.uid }).returning();
-    await tx.insert(communicationGroupMembers).values([req.user!.userId, ...memberIds].map((userId) => ({ groupId: created.id, userId, addedByUid: req.user!.uid })));
+    await insertGroupMembers(tx, created.id, [req.user!.userId, ...memberIds], req.user!.uid);
     return created;
   });
   return res.status(201).json(group);
@@ -1109,37 +1369,65 @@ router.post('/groups/:id/messages', requirePermission('communications:write'), a
       .where(and(eq(communicationMessages.id, replyToMessageId), eq(communicationMessages.groupId, id))).limit(1);
     if (!Number.isInteger(replyToMessageId) || !source) return res.status(400).json({ error: 'A mensagem respondida não pertence a este grupo.' });
   }
-  const [message] = await db.insert(communicationMessages).values({
-    groupId: id,
-    body,
-    ...(support.groupMessages.replyToMessageId ? { replyToMessageId } : {}),
-    authorUid: req.user!.uid,
-    authorName: req.user!.name,
-  }).returning(groupMessageSelectCols(support.groupMessages));
+  const message = await insertMessageRow(
+    db,
+    'communication_messages',
+    'group_id',
+    'group_id AS "groupId"',
+    id,
+    support.groupMessages,
+    {
+      body,
+      ...(support.groupMessages.replyToMessageId ? { replyToMessageId } : {}),
+      authorUid: req.user!.uid,
+      authorName: req.user!.name,
+    },
+  );
   return res.status(201).json(publicMessage(message));
 }));
 router.post('/groups/:id/audio', requirePermission('communications:write'), express.raw({ type: 'audio/*', limit: MAX_AUDIO_BYTES }), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Grupo inválido.' });
+  const support = await getCommunicationSchemaSupport();
+  const cols = support.groupMessages;
+  if (!cols.audioStoragePath || !cols.audioMimeType || !cols.audioDurationMs) {
+    return res.status(503).json({ error: 'Envio de áudio não está disponível no momento.' });
+  }
   if (!await isGroupMember(id, req.user!.userId)) return res.status(404).json({ error: 'Grupo não encontrado.' });
   const audio = validatedAudioBody(req, res);
   if (!audio) return;
   const extension = audio.mimeType === 'audio/ogg' ? 'ogg' : audio.mimeType === 'audio/mp4' ? 'm4a' : audio.mimeType === 'audio/mpeg' ? 'mp3' : 'webm';
   const objectPath = `communications/groups/${id}/${randomUUID()}.${extension}`;
-  const file = communicationStorageBucket().file(objectPath);
-  await file.save(audio.buffer, { resumable: false, metadata: { contentType: audio.mimeType, cacheControl: 'private, no-store' } });
+  const storedPath = await savePrivateFile(objectPath, audio.buffer, audio.mimeType);
   try {
-    const [message] = await db.insert(communicationMessages).values({
-      groupId: id, body: 'Mensagem de áudio', authorUid: req.user!.uid, authorName: req.user!.name,
-      audioStoragePath: objectPath, audioMimeType: audio.mimeType, audioDurationMs: audio.durationMs,
-    }).returning();
+    const message = await insertMessageRow(
+      db,
+      'communication_messages',
+      'group_id',
+      'group_id AS "groupId"',
+      id,
+      cols,
+      {
+        body: 'Mensagem de áudio',
+        authorUid: req.user!.uid,
+        authorName: req.user!.name,
+        audioStoragePath: storedPath,
+        audioMimeType: audio.mimeType,
+        audioDurationMs: audio.durationMs,
+      },
+    );
     return res.status(201).json(publicMessage(message));
-  } catch (error) { await file.delete().catch(() => undefined); throw error; }
+  } catch (error) { await deletePrivateFile(storedPath).catch(() => undefined); throw error; }
 }));
 
 router.post('/groups/:id/image', requirePermission('communications:write'), express.raw({ type: IMAGE_RAW_TYPES, limit: MAX_IMAGE_BYTES }), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Grupo inválido.' });
+  const support = await getCommunicationSchemaSupport();
+  const cols = support.groupMessages;
+  if (!cols.imageStoragePath || !cols.imageMimeType) {
+    return res.status(503).json({ error: 'Envio de imagens não está disponível no momento.' });
+  }
   if (!await isGroupMember(id, req.user!.userId)) return res.status(404).json({ error: 'Grupo não encontrado.' });
   if (!Buffer.isBuffer(req.body)) return res.status(415).json({ error: 'Envie uma imagem PNG, JPEG ou WebP de até 5 MB.' });
   let validated;
@@ -1154,16 +1442,23 @@ router.post('/groups/:id/image', requirePermission('communications:write'), expr
   const objectPath = `communications/groups/${id}/${randomUUID()}.${validated.extension}`;
   const storedPath = await savePrivateFile(objectPath, req.body, validated.mimeType);
   try {
-    const [message] = await db.insert(communicationMessages).values({
-      groupId: id,
-      body: caption,
-      authorUid: req.user!.uid,
-      authorName: req.user!.name,
-      attachmentType: 'IMAGE',
-      imageStoragePath: storedPath,
-      imageMimeType: validated.mimeType,
-      imageSizeBytes: req.body.length,
-    }).returning();
+    const message = await insertMessageRow(
+      db,
+      'communication_messages',
+      'group_id',
+      'group_id AS "groupId"',
+      id,
+      cols,
+      {
+        body: caption,
+        authorUid: req.user!.uid,
+        authorName: req.user!.name,
+        ...(cols.attachmentType ? { attachmentType: 'IMAGE' } : {}),
+        imageStoragePath: storedPath,
+        imageMimeType: validated.mimeType,
+        ...(cols.imageSizeBytes ? { imageSizeBytes: req.body.length } : {}),
+      },
+    );
     await AuditService.record({
       userId: req.user!.uid,
       userEmail: req.user!.loginName,

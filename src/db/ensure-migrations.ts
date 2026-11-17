@@ -15,6 +15,7 @@ const INCREMENTAL_SQL_FILES = [
   '20261113_chat_image_drawings.sql',
   '20261113_occurrences_intelligent.sql',
   '20261114_notifications_push.sql',
+  '20261117_private_media_storage.sql',
 ] as const;
 
 const REQUIRED_COLUMNS: Array<[string, string]> = [
@@ -43,6 +44,7 @@ const REQUIRED_COLUMNS: Array<[string, string]> = [
   ['notifications', 'id'],
   ['push_subscriptions', 'endpoint'],
   ['notification_preferences', 'scope'],
+  ['private_media_objects', 'object_path'],
 ];
 
 async function hasAllRequiredColumns(): Promise<boolean> {

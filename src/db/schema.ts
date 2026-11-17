@@ -600,6 +600,18 @@ export const communicationMessageReactions = pgTable("communication_message_reac
   index("communication_message_reactions_direct_idx").on(table.directMessageId),
 ]);
 
+// Private media objects (chat/occurrence images and voice notes) persisted when no external GCS bucket is active.
+export const privateMediaObjects = pgTable("private_media_objects", {
+  id: serial("id").primaryKey(),
+  objectPath: text("object_path").notNull(),
+  mimeType: text("mime_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  dataBase64: text("data_base64").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("private_media_objects_path_uidx").on(table.objectPath),
+]);
+
 // Relations
 export const productionOrdersRelations = relations(productionOrders, ({ one, many }) => ({
   item: one(inventoryItems, {

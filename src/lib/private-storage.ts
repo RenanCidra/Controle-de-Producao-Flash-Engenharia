@@ -1,12 +1,15 @@
 import { createReadStream } from 'node:fs';
 import { copyFile, mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { eq } from 'drizzle-orm';
 import type { Response } from 'express';
-import { communicationStorageBucket } from './communication-storage.ts';
+import { db, withDbRetry } from '../db/index.ts';
+import { privateMediaObjects } from '../db/schema.ts';
 
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const LOCAL_PREFIX = 'local:';
+const PG_PREFIX = 'pg:';
 const PRIVATE_LOCAL_ROOT = path.resolve(process.cwd(), '.private-storage');
 
 export type DrawingTool = 'pen' | 'arrow' | 'circle' | 'text';
@@ -41,6 +44,11 @@ function sanitizeRelativeStoragePath(objectPath: string): string {
     throw new MediaValidationError('Caminho de armazenamento inválido.');
   }
   return normalized;
+}
+
+function sanitizeDownloadFilename(filename: string): string {
+  const clean = String(filename || 'arquivo').replace(/[^a-zA-Z0-9._-]/g, '_');
+  return clean || 'arquivo';
 }
 
 function resolveLocalPath(objectPath: string): string {
@@ -192,23 +200,59 @@ export function validateDrawingData(input: unknown): DrawingOverlayData {
   };
 }
 
+async function saveToPostgresMedia(cleanRel: string, buffer: Buffer, mimeType: string): Promise<string> {
+  const dataBase64 = buffer.toString('base64');
+  await withDbRetry(() =>
+    db
+      .insert(privateMediaObjects)
+      .values({
+        objectPath: cleanRel,
+        mimeType,
+        sizeBytes: buffer.length,
+        dataBase64,
+      })
+      .onConflictDoUpdate({
+        target: privateMediaObjects.objectPath,
+        set: {
+          mimeType,
+          sizeBytes: buffer.length,
+          dataBase64,
+        },
+      }),
+  );
+  return `${PG_PREFIX}${cleanRel}`;
+}
+
+async function readFromPostgresMedia(storedPath: string): Promise<{ buffer: Buffer; mimeType: string }> {
+  const cleanRel = sanitizeRelativeStoragePath(storedPath.startsWith(PG_PREFIX) ? storedPath.slice(PG_PREFIX.length) : storedPath);
+  const [row] = await withDbRetry(() =>
+    db
+      .select({
+        mimeType: privateMediaObjects.mimeType,
+        dataBase64: privateMediaObjects.dataBase64,
+      })
+      .from(privateMediaObjects)
+      .where(eq(privateMediaObjects.objectPath, cleanRel))
+      .limit(1),
+  );
+  if (!row) {
+    throw new Error('Arquivo de mídia privado não encontrado.');
+  }
+  return {
+    buffer: Buffer.from(row.dataBase64, 'base64'),
+    mimeType: row.mimeType,
+  };
+}
+
 export async function savePrivateFile(objectPath: string, buffer: Buffer, mimeType: string): Promise<string> {
   const cleanRel = sanitizeRelativeStoragePath(objectPath);
   const preferLocal = process.env.PRIVATE_STORAGE_MODE === 'local';
 
   if (!preferLocal) {
     try {
-      const file = communicationStorageBucket().file(cleanRel);
-      await file.save(buffer, {
-        resumable: false,
-        metadata: { contentType: mimeType, cacheControl: 'private, no-store' },
-      });
-      return cleanRel;
-    } catch (error) {
-      if (process.env.NODE_ENV === 'production') {
-        throw error;
-      }
-      // Em desenvolvimento/preview sem credenciais GCS, armazena fora de public/ e dist/.
+      return await saveToPostgresMedia(cleanRel, buffer, mimeType);
+    } catch (pgError) {
+      console.warn('Could not persist private media in PostgreSQL, falling back to local disk:', (pgError as { code?: string; message?: string })?.code || pgError);
     }
   }
 
@@ -222,14 +266,15 @@ export async function readPrivateFileBuffer(storedPath: string): Promise<Buffer>
   if (storedPath.startsWith(LOCAL_PREFIX)) {
     return readFile(resolveLocalPath(storedPath));
   }
+  if (storedPath.startsWith(PG_PREFIX)) {
+    const media = await readFromPostgresMedia(storedPath);
+    return media.buffer;
+  }
   try {
-    const [buffer] = await communicationStorageBucket().file(sanitizeRelativeStoragePath(storedPath)).download();
-    return buffer;
-  } catch (error) {
-    const localCandidate = resolveLocalPath(storedPath);
-    return readFile(localCandidate).catch(() => {
-      throw error;
-    });
+    const media = await readFromPostgresMedia(storedPath);
+    return media.buffer;
+  } catch {
+    return readFile(resolveLocalPath(storedPath));
   }
 }
 
@@ -252,7 +297,11 @@ export async function deletePrivateFile(storedPath: string): Promise<void> {
     await unlink(resolveLocalPath(storedPath)).catch(() => undefined);
     return;
   }
-  await communicationStorageBucket().file(sanitizeRelativeStoragePath(storedPath)).delete().catch(() => undefined);
+  const cleanRel = sanitizeRelativeStoragePath(storedPath.startsWith(PG_PREFIX) ? storedPath.slice(PG_PREFIX.length) : storedPath);
+  await withDbRetry(() =>
+    db.delete(privateMediaObjects).where(eq(privateMediaObjects.objectPath, cleanRel)),
+  ).catch(() => undefined);
+  await unlink(resolveLocalPath(cleanRel)).catch(() => undefined);
 }
 
 export async function streamPrivateFile(
@@ -262,13 +311,14 @@ export async function streamPrivateFile(
   res: Response,
   onError: (error: unknown) => void,
 ) {
+  const safeFilename = sanitizeDownloadFilename(filename);
   try {
     if (storedPath.startsWith(LOCAL_PREFIX)) {
       const localFull = resolveLocalPath(storedPath);
       const info = await stat(localFull);
       res.setHeader('Content-Type', mimeType);
       res.setHeader('Content-Length', String(info.size));
-      res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+      res.setHeader('Content-Disposition', `inline; filename="${safeFilename}"`);
       res.setHeader('Cache-Control', 'private, no-store');
       res.setHeader('X-Content-Type-Options', 'nosniff');
       const stream = createReadStream(localFull);
@@ -277,16 +327,13 @@ export async function streamPrivateFile(
       return;
     }
 
-    const file = communicationStorageBucket().file(sanitizeRelativeStoragePath(storedPath));
-    const [metadata] = await file.getMetadata();
-    res.setHeader('Content-Type', mimeType);
-    res.setHeader('Content-Length', String(metadata.size || 0));
-    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    const media = await readFromPostgresMedia(storedPath);
+    res.setHeader('Content-Type', mimeType || media.mimeType);
+    res.setHeader('Content-Length', String(media.buffer.length));
+    res.setHeader('Content-Disposition', `inline; filename="${safeFilename}"`);
     res.setHeader('Cache-Control', 'private, no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    const stream = file.createReadStream();
-    stream.on('error', onError);
-    stream.pipe(res);
+    res.end(media.buffer);
   } catch (error) {
     onError(error);
   }
